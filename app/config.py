@@ -228,6 +228,23 @@ class Settings(BaseSettings):
     REMNAWAVE_AUTO_SYNC_TIMES: str = '03:00'
     CABINET_REMNA_SUB_CONFIG: str | None = None  # UUID конфига страницы подписки из RemnaWave
 
+    # Компаньон-аккаунт на отдельном "лимитном" сервере: вместе с основным
+    # (безлимитным) панельным пользователем создаётся второй, с фиксированной
+    # квотой трафика на LIMITED_COMPANION_SQUAD_UUID. Их подписки склеиваются
+    # в одну ссылку внешним сервисом subscription-merger на стороне панели —
+    # см. SUBSCRIPTION_MERGER_URL/TOKEN. Бот про сам мердж ничего не знает,
+    # только создаёт/обновляет/отключает оба панельных аккаунта синхронно и
+    # регистрирует пару в mappings.json мерджера.
+    LIMITED_COMPANION_ENABLED: bool = False
+    LIMITED_COMPANION_SQUAD_UUID: str | None = None
+    LIMITED_COMPANION_TRAFFIC_GB: int = 50
+    # Публичный URL и общий секрет эндпоинта регистрации subscription-merger
+    # (внутренний адрес панели, например http://remnawave-nginx:8081 или
+    # http://subscription-merger:8080 — смотря как эндпоинт добавлен на панели).
+    SUBSCRIPTION_MERGER_URL: str | None = None
+    SUBSCRIPTION_MERGER_TOKEN: str | None = None
+    SUBSCRIPTION_MERGER_REQUEST_TIMEOUT: int = 10
+
     # RemnaWave incoming webhooks (real-time event delivery from backend)
     REMNAWAVE_WEBHOOK_ENABLED: bool = False
     REMNAWAVE_WEBHOOK_PATH: str = '/remnawave-webhook'
@@ -4067,6 +4084,9 @@ class Settings(BaseSettings):
 
     def is_web_api_enabled(self) -> bool:
         return bool(self.WEB_API_ENABLED)
+
+    def is_limited_companion_enabled(self) -> bool:
+        return bool(self.LIMITED_COMPANION_ENABLED and self.LIMITED_COMPANION_SQUAD_UUID)
 
     def get_web_api_allowed_origins(self) -> list[str]:
         raw = (self.WEB_API_ALLOWED_ORIGINS or '').split(',')

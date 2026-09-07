@@ -2515,6 +2515,13 @@ class Subscription(Base):
         String(16), nullable=False, unique=True, server_default=''
     )  # Permanent short ID for username suffix
 
+    # Компаньон-аккаунт на "лимитном" сервере (см. LIMITED_COMPANION_ENABLED):
+    # отдельный панельный пользователь с фиксированной квотой трафика, чья
+    # подписка склеивается с основной сервисом subscription-merger на стороне
+    # панели. NULL, пока функция выключена или компаньон ещё не создан.
+    limited_companion_remnawave_id = Column(BigInteger, nullable=True)
+    limited_companion_short_uuid = Column(String(255), nullable=True)
+
     # Тариф (для режима продаж "Тарифы")
     tariff_id = Column(Integer, ForeignKey('tariffs.id', ondelete='RESTRICT'), nullable=True, index=True)
 

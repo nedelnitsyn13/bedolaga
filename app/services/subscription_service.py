@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
+import aiohttp
 import structlog
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -293,6 +294,8 @@ class SubscriptionService:
                     user.remnawave_id = updated_user.id
 
                 await db.commit()
+
+                await self._sync_limited_companion_user(api, db, user, subscription, updated_user)
 
                 logger.info('✅ Создан/обновлен RemnaWave пользователь для подписки', subscription_id=subscription.id)
                 logger.info('🔗 Ссылка на подписку', subscription_url=updated_user.subscription_url)
@@ -685,6 +688,158 @@ class SubscriptionService:
             await self._reset_user_traffic(api, updated_user.id, user, reset_reason)
         return updated_user
 
+    async def _sync_limited_companion_user(
+        self,
+        api: RemnaWaveAPI,
+        db: AsyncSession,
+        user: User,
+        subscription: Subscription,
+        main_user: RemnaWaveUser,
+    ) -> None:
+        """Создаёт/обновляет компаньон-аккаунт на лимитном сервере вслед за основным.
+
+        Компаньон зеркалит статус и срок действия основного панельного пользователя
+        (см. LIMITED_COMPANION_ENABLED) и держит собственную фиксированную квоту
+        трафика на LIMITED_COMPANION_SQUAD_UUID. Их подписки склеивает в одну
+        ссылку внешний сервис subscription-merger на стороне панели — бот только
+        создаёт/обновляет оба панельных аккаунта и сообщает мерджеру пару
+        идентификаторов. Любая ошибка здесь логируется и проглатывается:
+        основная подписка уже сохранена и не должна пострадать из-за проблем
+        с лимитным сервером или недоступности мерджера.
+        """
+        if not settings.is_limited_companion_enabled():
+            return
+
+        try:
+            common_kwargs = dict(
+                status=main_user.status,
+                expire_at=main_user.expire_at,
+                traffic_limit_bytes=self._gb_to_bytes(settings.LIMITED_COMPANION_TRAFFIC_GB),
+                traffic_limit_strategy=TrafficLimitStrategy.MONTH,
+                telegram_id=user.telegram_id,
+                email=user.email,
+                active_internal_squads=[settings.LIMITED_COMPANION_SQUAD_UUID],
+            )
+
+            companion_user: RemnaWaveUser | None = None
+            if subscription.limited_companion_remnawave_id:
+                try:
+                    companion_user = await api.get_user_by_id(subscription.limited_companion_remnawave_id)
+                except Exception:
+                    companion_user = None
+
+            description = f'Limited companion for {main_user.username} (#{main_user.id})'
+
+            if companion_user:
+                companion_user = await api.update_user(
+                    user_id=companion_user.id,
+                    description=description,
+                    **common_kwargs,
+                )
+            else:
+                companion_username = settings.build_remnawave_subscription_username(
+                    full_name=user.full_name,
+                    username=user.username,
+                    telegram_id=user.telegram_id,
+                    email=user.email,
+                    user_id=user.id,
+                    suffix='_lim',
+                )
+                companion_user = await api.create_user(
+                    username=companion_username,
+                    description=description,
+                    **common_kwargs,
+                )
+                subscription.limited_companion_remnawave_id = companion_user.id
+
+            subscription.limited_companion_short_uuid = companion_user.short_uuid
+            await db.flush((subscription,))
+            await db.commit()
+
+            # Перекрёстная ссылка в описании основного аккаунта — по запросу видно
+            # прямо в панели, какой лимитный юзер к нему привязан. Отдельный,
+            # не блокирующий шаг: неудача не должна откатывать уже сохранённую связь.
+            main_description = settings.format_remnawave_user_description(
+                full_name=user.full_name,
+                username=user.username,
+                telegram_id=user.telegram_id,
+                email=user.email,
+                user_id=user.id,
+            )
+            main_description = f'{main_description} | limited: {companion_user.username}'
+            try:
+                await api.update_user(user_id=main_user.id, description=main_description)
+            except Exception as error:
+                logger.warning(
+                    '⚠️ Не удалось обновить описание основного аккаунта ссылкой на компаньон',
+                    subscription_id=subscription.id,
+                    error=error,
+                )
+
+            await self._register_limited_companion_mapping(
+                main_short_uuid=main_user.short_uuid,
+                limited_short_uuid=companion_user.short_uuid,
+                username=user.username or user.full_name or str(user.telegram_id),
+                key_id=main_user.id,
+                is_trial=bool(subscription.is_trial),
+                next_reset_at=main_user.expire_at,
+            )
+        except Exception as error:
+            await db.rollback()
+            logger.warning(
+                '⚠️ Не удалось синхронизировать компаньон-аккаунт лимитного сервера',
+                subscription_id=subscription.id,
+                error=error,
+            )
+
+    async def _register_limited_companion_mapping(
+        self,
+        *,
+        main_short_uuid: str,
+        limited_short_uuid: str,
+        username: str,
+        key_id: int,
+        is_trial: bool,
+        next_reset_at: datetime | None,
+    ) -> None:
+        """Регистрирует пару основной/лимитный short_uuid в subscription-merger.
+
+        Мерджер живёт на стороне панели и сам не умеет узнавать о новых парах —
+        ждёт их регистрации через HTTP. Недоступность мерджера не должна ронять
+        подписку: ошибки только логируются.
+        """
+        if not settings.SUBSCRIPTION_MERGER_URL or not settings.SUBSCRIPTION_MERGER_TOKEN:
+            return
+
+        payload = {
+            'main_short_uuid': main_short_uuid,
+            'limited_token': limited_short_uuid,
+            'username': username,
+            'key_id': key_id,
+            'is_trial': is_trial,
+            'next_reset_at': next_reset_at.isoformat() if next_reset_at else None,
+        }
+        url = settings.SUBSCRIPTION_MERGER_URL.rstrip('/') + '/register'
+        headers = {'Authorization': f'Bearer {settings.SUBSCRIPTION_MERGER_TOKEN}'}
+        timeout = aiohttp.ClientTimeout(total=settings.SUBSCRIPTION_MERGER_REQUEST_TIMEOUT)
+        try:
+            async with (
+                aiohttp.ClientSession(timeout=timeout) as session,
+                session.post(url, json=payload, headers=headers) as response,
+            ):
+                if response.status >= 400:
+                    body = await response.text()
+                    logger.warning(
+                        '⚠️ subscription-merger отклонил регистрацию компаньон-маппинга',
+                        status=response.status,
+                        body=body[:500],
+                    )
+        except Exception as error:
+            logger.warning(
+                '⚠️ Не удалось зарегистрировать компаньон-маппинг в subscription-merger',
+                error=error,
+            )
+
     async def update_remnawave_user(
         self,
         db: AsyncSession,
@@ -880,6 +1035,8 @@ class SubscriptionService:
                 subscription.subscription_url = updated_user.subscription_url
                 subscription.subscription_crypto_link = updated_user.happ_crypto_link
                 await db.commit()
+
+                await self._sync_limited_companion_user(api, db, user, subscription, updated_user)
 
                 status_text = 'активным' if is_actually_active else 'истёкшим'
                 logger.info(
