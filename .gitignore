@@ -18,6 +18,7 @@
 !alembic.ini
 !release-please-config.json
 !.release-please-manifest.json
+!CLAUDE.md
 
 # Документация
 !README.md
@@ -50,8 +51,13 @@
 !locales/**
 !.github/
 !.github/**
+!.claude/
+!.claude/**
 
 # ========== BLACKLIST: игнорируемые внутри папок ==========
+
+# Graphify generated/local working state
+graphify-out/
 
 # Python
 __pycache__/
