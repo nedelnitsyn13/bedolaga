@@ -1,50 +1,66 @@
 ---
 name: graphify
-description: "Use for any question about a codebase, its architecture, file relationships, or project content — especially when graphify-out/ exists, where the question should be treated as a graphify query first. Turns any input into a persistent knowledge graph with god nodes, community detection, and query/path/explain tools."
+description: "Use for non-trivial questions about the codebase, architecture, file relationships, dependencies, or cross-module behavior. Prefer the repository knowledge graph before broad source exploration."
 ---
 
 # Graphify
 
-Use the official Graphify CLI to inspect repository architecture before broad code exploration.
+Graphify is an architecture/dependency map for this repository. It is a navigation aid, not proof of correctness or security.
+
+## Bootstrap in Claude Code
+
+Claude Code may run in a fresh remote environment where the `graphify` executable is not installed. Do not assume the production server has it.
+
+If `graphify` is unavailable, use the isolated runner supplied by the official package:
+
+```bash
+uvx --from graphifyy graphify --version
+```
+
+Use the same `uvx --from graphifyy graphify` prefix for Graphify commands in a fresh environment. Do not install Graphify on a production server just to make this repository skill work.
+
+## First build
+
+If `graphify-out/graph.json` does not exist, build a code-only graph from the repository root:
+
+```bash
+uvx --from graphifyy graphify . --code-only
+```
+
+A code-only graph does not require an API key.
 
 ## Existing graph
 
-If `graphify-out/graph.json` exists in the repository root and the user is asking an architecture/codebase question, start with:
+When `graphify-out/graph.json` exists, use the graph before broad raw-file exploration for architecture or dependency questions:
 
 ```bash
-graphify query "<question>"
+uvx --from graphifyy graphify query "<question>"
+uvx --from graphifyy graphify path "<A>" "<B>"
+uvx --from graphifyy graphify explain "<concept>"
 ```
 
-Use:
+Do not rebuild the graph for every ordinary question.
+
+## Updating the graph
+
+After substantial source changes, or when explicitly asked to refresh the architecture map:
 
 ```bash
-graphify path "<A>" "<B>"
-graphify explain "<concept>"
+uvx --from graphifyy graphify . --update --no-viz
 ```
 
-for dependency paths and focused node explanations.
+## Project integration
 
-Do not rebuild the graph for ordinary questions when `graphify-out/graph.json` already exists.
+The Graphify skill is committed to this repository so Claude Code can discover it from GitHub. The generated graph is intentionally local working state and must not be committed:
 
-## Rebuild / update
+- `graphify-out/`
+- generated HTML/report artifacts under `graphify-out/`
 
-For explicit refreshes or after substantial repository changes:
+## Security-sensitive changes
 
-```bash
-graphify . --update --no-viz
-```
+For payment, YooKassa/webhook, balance, subscription renewal, authentication, authorization, idempotency, or device-limit changes:
 
-For a first build:
-
-```bash
-graphify . --code-only
-```
-
-Graphify is structural and does not require an API key for code-only extraction.
-
-## Working rules
-
-- Treat Graphify as an architecture map, not as proof that an implementation is correct or secure.
-- Verify important conclusions in the source code and tests.
-- For payment, webhook, authentication, authorization, idempotency, subscription, and device-limit changes, use Graphify to trace affected modules before editing.
-- Do not commit generated `graphify-out/` artifacts.
+1. Use Graphify to trace affected modules and dependencies before editing.
+2. Verify important conclusions in source code and tests.
+3. Check idempotency, replay behavior, authorization, ownership, and server-side amount validation.
+4. Add regression tests for changed failure/retry paths.
