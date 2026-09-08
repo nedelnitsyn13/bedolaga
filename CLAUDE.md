@@ -4,8 +4,7 @@
 
 - Work only in the current repository and feature branches.
 - Never modify production servers, production databases, or production configuration directly.
-- For non-trivial changes, first inspect the affected architecture and dependencies with Graphify when `graphify-out/graph.json` exists.
-- Prefer `graphify query`, `graphify path`, and `graphify explain` for cross-module architecture questions instead of broad raw-file searches.
+- For non-trivial changes, inspect the affected architecture and dependencies with Graphify before broad raw-file exploration.
 - Before changing behavior, inspect existing tests for the affected component and extend them when the behavior changes.
 - After changes, run the narrowest relevant tests first, then the broader test suite when practical.
 - Keep payment, webhook, authentication, authorization, idempotency, and subscription/device-limit changes especially conservative.
@@ -14,29 +13,34 @@
 
 ## Graphify
 
-Graphify is the repository architecture map. If `graphify-out/graph.json` exists, use it before exploring a large or cross-module part of the codebase.
+Graphify is the repository architecture map. It runs in the Claude Code working environment; the production server is not part of this workflow.
 
-Typical commands:
-
-```bash
-graphify query "how does <concept> work?"
-graphify path "<A>" "<B>"
-graphify explain "<concept>"
-graphify . --update --no-viz
-```
-
-If Graphify is not installed in the current environment, install the official package with:
+If `graphify-out/graph.json` does not exist, bootstrap Graphify without requiring a global installation:
 
 ```bash
-uv tool install graphifyy
+uvx --from graphifyy graphify . --code-only
 ```
 
-The CLI command is `graphify`.
+For an existing graph, use:
+
+```bash
+uvx --from graphifyy graphify query "how does <concept> work?"
+uvx --from graphifyy graphify path "<A>" "<B>"
+uvx --from graphifyy graphify explain "<concept>"
+```
+
+After substantial source changes or an explicit refresh:
+
+```bash
+uvx --from graphifyy graphify . --update --no-viz
+```
+
+`graphifyy` is the official package name; the CLI command is `graphify`. Using `uvx --from graphifyy` is preferred in remote/fresh Claude Code environments because it does not require installing Graphify on the production server.
 
 Generated Graphify data is local working state and must not be committed:
 
 - `graphify-out/`
-- `.claudeignore` should exclude `graphify-out/` from Claude context when present.
+- generated HTML/report artifacts under `graphify-out/`
 
 ## Python / tests
 
