@@ -18,13 +18,20 @@ fields on the MAIN subscription (``limited_companion_remnawave_id`` /
       ``Subscription.remnawave_id``, so any future real re-sync of that
       panel identity would collide with it.
 
-This script finds those pairs by squad membership and folds each companion
-row into its sibling's ``limited_companion_*`` fields, then deletes the now
--redundant standalone row. Because ``write_companion_account`` (used by
-``_sync_limited_companion_user`` going forward) never creates a second
-``Subscription`` row, EVERY row whose ``connected_squads`` contains the
-limited-companion squad UUID is, by construction, a migration leftover —
-never a legitimately-created companion.
+Pairing key: legacy ``vpn_keys.is_primary`` — NOT ``squad_uuid``. An earlier
+version of this script matched by squad membership, on the assumption that
+the legacy schema put companion keys on a dedicated squad; in practice a real
+legacy database had exactly one ``squad_uuid`` value across every row
+(main and companion alike), so that signal does not exist here. The legacy
+schema does carry a real primary/companion flag though: ``is_primary`` (1 for
+the main key, 0 for the limited-server companion). This script re-reads the
+same legacy SQLite source ``migrate_shopbot`` was pointed at, groups
+``vpn_keys`` by the legacy ``user_id`` (telegram_id, real or synthetic),
+splits each group by ``is_primary``, and uses each side's
+``remnawave_user_id`` to find the two ``Subscription`` rows migrate_shopbot
+already created (matched on ``Subscription.remnawave_id``) — then folds the
+companion's identity into the main row's ``limited_companion_*`` fields and
+deletes the now-redundant standalone row.
 
 Pairing is conservative on purpose: a user with more than one candidate on
 either side of the split is left untouched and reported, rather than guessed
@@ -32,8 +39,8 @@ at. This is live production panel-identity data; a wrong link corrupts
 which panel account the bot manages for that user going forward.
 
 Usage:
-    python -m scripts.reconcile_limited_companions              # dry run
-    python -m scripts.reconcile_limited_companions --apply       # persist
+    python -m scripts.reconcile_limited_companions --source /path/to/users.db              # dry run
+    python -m scripts.reconcile_limited_companions --source /path/to/users.db --apply       # persist
 """
 
 from __future__ import annotations
@@ -42,6 +49,7 @@ import argparse
 import asyncio
 import json
 import os
+import sqlite3
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
@@ -61,74 +69,104 @@ logger = structlog.get_logger(__name__)
 @dataclass
 class ReconcileReport:
     dry_run: bool
-    users_with_limited_rows: int = 0
+    legacy_companion_rows: int = 0
     pairs_linked: int = 0
     skipped_already_linked: int = 0
-    skipped_ambiguous_multiple_limited: int = 0
+    skipped_ambiguous_multiple_companion: int = 0
     skipped_ambiguous_multiple_main: int = 0
-    skipped_orphan_no_main: int = 0
+    skipped_companion_not_migrated: int = 0
+    skipped_main_not_migrated: int = 0
+    skipped_no_panel_link: int = 0
     unresolved_lines: list = field(default_factory=list)
 
     def as_dict(self) -> dict:
         return {k: v for k, v in self.__dict__.items() if k != 'unresolved_lines'}
 
 
-def _has_squad(subscription: Subscription, squad_uuid: str) -> bool:
-    squads = subscription.connected_squads or []
-    return squad_uuid in squads
+def _load_legacy_vpn_keys(source_path: Path) -> list[dict]:
+    uri = f'file:{source_path}?mode=ro'
+    conn = sqlite3.connect(uri, uri=True)
+    conn.row_factory = sqlite3.Row
+    try:
+        rows = conn.execute('SELECT user_id, is_primary, remnawave_user_id, key_id FROM vpn_keys').fetchall()
+    finally:
+        conn.close()
+    return [dict(r) for r in rows]
 
 
-async def _reconcile(db, squad_uuid: str, *, apply: bool) -> ReconcileReport:
+async def _reconcile(db, legacy_vpn_keys: list[dict], *, apply: bool) -> ReconcileReport:
     report = ReconcileReport(dry_run=not apply)
 
-    rows = (await db.execute(select(Subscription))).scalars().all()
+    by_user: dict[int, list[dict]] = {}
+    for row in legacy_vpn_keys:
+        by_user.setdefault(row['user_id'], []).append(row)
 
-    by_user: dict[int, list[Subscription]] = {}
-    for row in rows:
-        by_user.setdefault(row.user_id, []).append(row)
+    async def _sub_by_remnawave_id(remnawave_id: int) -> Subscription | None:
+        return (
+            await db.execute(select(Subscription).where(Subscription.remnawave_id == remnawave_id))
+        ).scalar_one_or_none()
 
-    for user_id, subs in by_user.items():
-        limited = [s for s in subs if _has_squad(s, squad_uuid)]
-        if not limited:
+    for legacy_user_id, keys in by_user.items():
+        companions = [k for k in keys if not k['is_primary']]
+        if not companions:
             continue
-        report.users_with_limited_rows += 1
+        report.legacy_companion_rows += len(companions)
 
-        main = [s for s in subs if s not in limited]
+        primaries = [k for k in keys if k['is_primary']]
 
-        if len(limited) > 1:
-            report.skipped_ambiguous_multiple_limited += 1
+        if len(companions) > 1:
+            report.skipped_ambiguous_multiple_companion += 1
             report.unresolved_lines.append(
-                f'user_id={user_id}: {len(limited)} companion-squad subscriptions '
-                f'(ids={[s.id for s in limited]}) — skipped, needs manual review'
+                f'legacy user_id={legacy_user_id}: {len(companions)} companion (is_primary=0) '
+                f'vpn_keys (key_id={[k["key_id"] for k in companions]}) — skipped, needs manual review'
             )
             continue
 
-        limited_sub = limited[0]
+        companion_key = companions[0]
 
-        if not main:
-            report.skipped_orphan_no_main += 1
-            report.unresolved_lines.append(
-                f'user_id={user_id}: companion subscription id={limited_sub.id} has no sibling '
-                f'main subscription — skipped, needs manual review'
-            )
-            continue
-
-        if len(main) > 1:
+        if len(primaries) != 1:
             report.skipped_ambiguous_multiple_main += 1
             report.unresolved_lines.append(
-                f'user_id={user_id}: {len(main)} candidate main subscriptions '
-                f'(ids={[s.id for s in main]}) for companion id={limited_sub.id} — skipped, needs manual review'
+                f'legacy user_id={legacy_user_id}: {len(primaries)} primary (is_primary=1) vpn_keys '
+                f'for companion key_id={companion_key["key_id"]} — skipped, needs manual review'
             )
             continue
 
-        main_sub = main[0]
+        main_key = primaries[0]
+
+        companion_remnawave_id = companion_key['remnawave_user_id']
+        main_remnawave_id = main_key['remnawave_user_id']
+        if not companion_remnawave_id or not main_remnawave_id:
+            report.skipped_no_panel_link += 1
+            report.unresolved_lines.append(
+                f'legacy user_id={legacy_user_id}: companion key_id={companion_key["key_id"]} or main '
+                f'key_id={main_key["key_id"]} has no remnawave_user_id — skipped, needs manual review'
+            )
+            continue
+
+        limited_sub = await _sub_by_remnawave_id(companion_remnawave_id)
+        if limited_sub is None:
+            # Companion key wasn't migrated as its own Subscription (e.g. skipped as
+            # already-expired by migrate_shopbot) — nothing to fold in, not an error.
+            report.skipped_companion_not_migrated += 1
+            continue
+
+        main_sub = await _sub_by_remnawave_id(main_remnawave_id)
+        if main_sub is None:
+            report.skipped_main_not_migrated += 1
+            report.unresolved_lines.append(
+                f'legacy user_id={legacy_user_id}: companion Subscription id={limited_sub.id} exists but '
+                f'main key (remnawave_id={main_remnawave_id}) was not migrated — leftover companion left '
+                f'untouched, needs manual review'
+            )
+            continue
 
         if main_sub.limited_companion_remnawave_id:
             report.skipped_already_linked += 1
             report.unresolved_lines.append(
-                f'user_id={user_id}: main subscription id={main_sub.id} already has a companion '
-                f'linked (remnawave_id={main_sub.limited_companion_remnawave_id}); leftover companion '
-                f'subscription id={limited_sub.id} left untouched — needs manual review'
+                f'legacy user_id={legacy_user_id}: main Subscription id={main_sub.id} already has a '
+                f'companion linked (remnawave_id={main_sub.limited_companion_remnawave_id}); leftover '
+                f'companion Subscription id={limited_sub.id} left untouched — needs manual review'
             )
             continue
 
@@ -146,12 +184,14 @@ def _print_report(report: ReconcileReport) -> None:
     print('=' * 70)
     print('  DRY RUN — ничего не записано' if report.dry_run else '  APPLIED')
     print('=' * 70)
-    print(f'  пользователей с лимитными строками : {report.users_with_limited_rows}')
-    print(f'  пар связано                        : {report.pairs_linked}')
-    print(f'  пропущено (уже связано)            : {report.skipped_already_linked}')
-    print(f'  пропущено (несколько лимитных)     : {report.skipped_ambiguous_multiple_limited}')
-    print(f'  пропущено (несколько основных)     : {report.skipped_ambiguous_multiple_main}')
-    print(f'  пропущено (нет основной подписки)  : {report.skipped_orphan_no_main}')
+    print(f'  лимитных ключей в легаси (is_primary=0)      : {report.legacy_companion_rows}')
+    print(f'  пар связано                                  : {report.pairs_linked}')
+    print(f'  пропущено (уже связано)                      : {report.skipped_already_linked}')
+    print(f'  пропущено (несколько лимитных на пользователя): {report.skipped_ambiguous_multiple_companion}')
+    print(f'  пропущено (несколько основных на пользователя): {report.skipped_ambiguous_multiple_main}')
+    print(f'  пропущено (лимитный ключ не мигрирован)      : {report.skipped_companion_not_migrated}')
+    print(f'  пропущено (основной ключ не мигрирован)      : {report.skipped_main_not_migrated}')
+    print(f'  пропущено (нет remnawave_user_id)            : {report.skipped_no_panel_link}')
     print()
     if report.unresolved_lines:
         print(f'  !! строк с замечаниями: {len(report.unresolved_lines)} (первые 30)')
@@ -178,21 +218,25 @@ def _write_audit(report: ReconcileReport, *, committed: bool) -> str | None:
     return str(path)
 
 
-async def _run(args: argparse.Namespace) -> int:
+async def _run(args: argparse.Namespace, source_path: Path) -> int:
     await bot_configuration_service.initialize(sync_web_api_token=False)
 
-    squad_uuid = settings.LIMITED_COMPANION_SQUAD_UUID
     logger.info(
         'reconcile_limited_companions: конфигурация загружена',
         limited_companion_enabled=settings.LIMITED_COMPANION_ENABLED,
-        limited_companion_squad_uuid=squad_uuid,
+        limited_companion_squad_uuid=settings.LIMITED_COMPANION_SQUAD_UUID,
     )
-    if not squad_uuid:
-        print('  !! LIMITED_COMPANION_SQUAD_UUID не задан в конфигурации -- нечего искать, выход.')
-        return 2
+    if not settings.is_limited_companion_enabled():
+        print(
+            '  !! LIMITED_COMPANION_ENABLED/LIMITED_COMPANION_SQUAD_UUID не заданы -- '
+            'без них подписки со связанным компаньоном не будут синхронизированы вперёд, продолжаю всё равно.'
+        )
+
+    legacy_vpn_keys = _load_legacy_vpn_keys(source_path)
+    print(f'  источник: {len(legacy_vpn_keys)} vpn_keys')
 
     async with AsyncSessionLocal() as db:
-        report = await _reconcile(db, squad_uuid, apply=args.apply)
+        report = await _reconcile(db, legacy_vpn_keys, apply=args.apply)
         if args.apply:
             await db.commit()
         else:
@@ -213,10 +257,16 @@ def main() -> int:
             'the limited_companion_* fields of their main sibling subscription'
         )
     )
+    parser.add_argument('--source', required=True, help='path to the legacy users.db SQLite file')
     parser.add_argument('--apply', action='store_true', help='persist changes (default is a dry run)')
     args = parser.parse_args()
 
-    return asyncio.run(_run(args))
+    source_path = Path(args.source).expanduser()
+    if not source_path.exists():
+        print(f'  !! файл не найден: {source_path}')
+        return 2
+
+    return asyncio.run(_run(args, source_path))
 
 
 if __name__ == '__main__':
