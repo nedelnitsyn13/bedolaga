@@ -2837,6 +2837,12 @@ def get_add_traffic_limited_keyboard(
     какой подписке относится — sub_id зашит прямо в callback_data (``alt:{gb}:{sub_id}``),
     как это уже принято для ``sm:``/``st:`` в этом файле. Безлимитный пакет (gb=0)
     здесь не предлагается — у лимитного сервера фиксированная тарификация по ГБ.
+
+    Цена всегда за один месяц, а не пропорционально остатку подписки: трафик
+    компаньона сбрасывается каждые 30 дней, так что оплата "за все оставшиеся
+    дни подписки" не имеет смысла — докупленный ГБ всё равно действует только
+    до следующего сброса. ``subscription_end_date`` принимается ради обратной
+    совместимости сигнатуры, но больше не влияет на цену.
     """
     from app.config import settings
 
@@ -2845,14 +2851,7 @@ def get_add_traffic_limited_keyboard(
     use_russian_fallback = language_code in {'ru', 'fa'}
     back_cb = f'sm:{sub_id}' if settings.is_multi_tariff_enabled() else 'menu_subscription'
 
-    if subscription_end_date:
-        now = datetime.now(UTC)
-        days_left = max(1, math.ceil((subscription_end_date - now).total_seconds() / 86400))
-        price_multiplier = days_left / 30
-        period_text = f' (за {days_left} дн.)' if days_left > 1 else ' (за 1 день)'
-    else:
-        price_multiplier = 1
-        period_text = ''
+    period_text = ' (за 30 дн.)'
 
     packages = settings.get_traffic_topup_packages()
     enabled_packages = [pkg for pkg in packages if pkg['enabled'] and pkg['price'] > 0 and pkg['gb'] > 0]
@@ -2878,9 +2877,8 @@ def get_add_traffic_limited_keyboard(
             price_per_month,
             discount_percent,
         )
-        total_price = int(discounted_per_month * price_multiplier)
-        total_price = max(100, total_price) if total_price > 0 else 0
-        total_discount = int(discount_per_month * price_multiplier)
+        total_price = max(100, discounted_per_month) if discounted_per_month > 0 else 0
+        total_discount = discount_per_month
 
         if use_russian_fallback:
             text = f'📊 +{gb} ГБ трафика - {total_price // 100} ₽{period_text}'

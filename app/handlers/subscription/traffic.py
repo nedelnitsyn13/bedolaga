@@ -829,14 +829,18 @@ async def add_traffic_limited(callback: types.CallbackQuery, db_user: User, db: 
     if subscription is None:
         return
 
+    # Цена всегда за один месяц, а не пропорционально остатку подписки:
+    # трафик компаньона сбрасывается каждые 30 дней (см. LIMITED_COMPANION_ENABLED),
+    # так что оплата "за все оставшиеся дни подписки" не имеет смысла — докупленный
+    # ГБ всё равно действует только до следующего сброса.
     period_hint_days = _get_period_hint_from_subscription(subscription)
     discounted_per_month, discount_per_month, traffic_discount_pct = PricingEngine.calculate_traffic_discount(
         base_price,
         db_user,
         period_hint_days,
     )
-    price, charged_days = calculate_prorated_price(discounted_per_month, subscription.end_date)
-    total_discount_value = int(discount_per_month * charged_days / 30)
+    price = max(100, discounted_per_month) if discounted_per_month > 0 else 0
+    total_discount_value = discount_per_month
 
     if price > 0 and db_user.balance_kopeks < price:
         missing_kopeks = price - db_user.balance_kopeks
