@@ -122,6 +122,23 @@ class TrafficPackageResponse(BaseModel):
     discount_kopeks: int | None = None
 
 
+class LimitedCompanionTrafficResponse(BaseModel):
+    """Usage/limit for the limited-companion server's own traffic pool.
+
+    Separate from the main subscription's traffic_used_gb/traffic_limit_gb —
+    see LIMITED_COMPANION_ENABLED. ``available=False`` (all other fields at
+    their defaults) means this subscription has no companion linked, or the
+    feature is disabled.
+    """
+
+    available: bool
+    used_gb: float = 0.0
+    base_limit_gb: int = 0
+    purchased_gb: int = 0
+    total_limit_gb: int = 0
+    used_percent: float = 0.0
+
+
 class TrafficPurchaseRequest(BaseModel):
     """Request to purchase additional traffic."""
 

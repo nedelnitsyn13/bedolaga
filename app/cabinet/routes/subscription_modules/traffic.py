@@ -5,6 +5,9 @@ POST /subscription/traffic
 PUT /subscription/traffic
 POST /subscription/refresh-traffic
 POST /subscription/traffic/save-cart
+GET /subscription/limited-traffic
+GET /subscription/limited-traffic-packages
+POST /subscription/limited-traffic
 """
 
 from __future__ import annotations
@@ -31,6 +34,7 @@ from app.utils.cache import RateLimitCache, cache, cache_key
 
 from ...dependencies import get_cabinet_db, get_current_cabinet_user
 from ...schemas.subscription import (
+    LimitedCompanionTrafficResponse,
     TrafficPackageResponse,
     TrafficPurchaseRequest,
 )
@@ -858,3 +862,206 @@ async def refresh_traffic(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail='Failed to refresh traffic data',
         )
+
+
+# ============ Limited Companion Traffic ============
+#
+# A subscription with a linked limited-companion server (see
+# LIMITED_COMPANION_ENABLED) has a SECOND, independent traffic pool on its
+# companion panel account — never reflected in the main
+# traffic_used_gb/traffic_limit_gb above. Mirrors
+# app/handlers/subscription/traffic.py::handle_add_traffic_limited /
+# add_traffic_limited (the aiogram bot's implementation of this same feature).
+#
+# Pricing is always flat per month (period_hint_days=30), never prorated to
+# the subscription's remaining days like the main traffic endpoints above:
+# the companion account resets its usage every 30 days
+# (TrafficLimitStrategy.MONTH), so charging "for all remaining subscription
+# days" would overcharge for a top-up that lapses at the next reset anyway.
+
+
+@router.get('/limited-traffic', response_model=LimitedCompanionTrafficResponse)
+async def get_limited_companion_traffic(
+    user: User = Depends(get_current_cabinet_user),
+    db: AsyncSession = Depends(get_cabinet_db),
+    subscription_id: int | None = QueryParam(None, description='Subscription ID for multi-tariff'),
+):
+    """Current usage/limit for the limited-companion server's traffic pool."""
+    subscription = await resolve_subscription(db, user, subscription_id)
+    if (
+        not subscription
+        or not settings.is_limited_companion_enabled()
+        or not subscription.limited_companion_remnawave_id
+    ):
+        return LimitedCompanionTrafficResponse(available=False)
+
+    base_limit_gb = settings.LIMITED_COMPANION_TRAFFIC_GB
+    purchased_gb = subscription.limited_companion_purchased_traffic_gb or 0
+    total_limit_gb = base_limit_gb + purchased_gb
+    used_gb = subscription.limited_companion_traffic_used_gb or 0.0
+    used_percent = round(min(100.0, (used_gb / total_limit_gb) * 100), 1) if total_limit_gb > 0 else 0.0
+
+    return LimitedCompanionTrafficResponse(
+        available=True,
+        used_gb=round(used_gb, 2),
+        base_limit_gb=base_limit_gb,
+        purchased_gb=purchased_gb,
+        total_limit_gb=total_limit_gb,
+        used_percent=used_percent,
+    )
+
+
+@router.get('/limited-traffic-packages', response_model=list[TrafficPackageResponse])
+async def get_limited_companion_traffic_packages(
+    user: User = Depends(get_current_cabinet_user),
+    db: AsyncSession = Depends(get_cabinet_db),
+    subscription_id: int | None = QueryParam(None, description='Subscription ID for multi-tariff'),
+):
+    """Packages for topping up the limited-companion server's traffic (flat monthly price)."""
+    subscription = await resolve_subscription(db, user, subscription_id)
+    if (
+        not subscription
+        or not settings.is_limited_companion_enabled()
+        or not subscription.limited_companion_remnawave_id
+        or not settings.is_traffic_topup_enabled()
+    ):
+        return []
+
+    packages = settings.get_traffic_topup_packages()
+    result = []
+    for pkg in packages:
+        if not pkg.get('enabled', True) or pkg['gb'] <= 0 or pkg['price'] <= 0:
+            continue
+
+        discount = _apply_addon_discount(user, 'traffic', pkg['price'], 30)
+        percent = discount['percent']
+        final_price = discount['discounted']
+        if 0 < percent < 100 and final_price > 0:
+            final_price = max(100, final_price)
+        has_discount = percent > 0
+
+        result.append(
+            TrafficPackageResponse(
+                gb=pkg['gb'],
+                price_kopeks=final_price,
+                price_rubles=final_price / 100,
+                is_unlimited=False,
+                discount_percent=percent,
+                base_price_kopeks=pkg['price'] if has_discount else None,
+                discount_kopeks=(pkg['price'] - final_price) if has_discount else None,
+            )
+        )
+
+    return result
+
+
+@router.post('/limited-traffic')
+async def purchase_limited_companion_traffic(
+    request: TrafficPurchaseRequest,
+    user: User = Depends(get_current_cabinet_user),
+    db: AsyncSession = Depends(get_cabinet_db),
+    subscription_id: int | None = QueryParam(None, description='Subscription ID for multi-tariff'),
+):
+    """Purchase additional traffic for the limited-companion server."""
+    if getattr(user, 'restriction_subscription', False):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail='Subscription purchases are restricted for this account',
+        )
+
+    subscription = await resolve_subscription(db, user, subscription_id)
+    if not subscription:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='No subscription found')
+
+    if not settings.is_limited_companion_enabled() or not subscription.limited_companion_remnawave_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='Limited companion server is not available for this subscription',
+        )
+
+    if not settings.is_traffic_topup_enabled():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='Traffic top-up feature is disabled',
+        )
+
+    packages = settings.get_traffic_topup_packages()
+    matching_pkg = next((pkg for pkg in packages if pkg['gb'] == request.gb and pkg.get('enabled', True)), None)
+    if not matching_pkg or matching_pkg['price'] <= 0:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Invalid traffic package')
+    base_price_kopeks = matching_pkg['price']
+
+    # Lock user row to prevent TOCTOU on promo-offer state
+    from app.database.crud.user import lock_user_for_pricing
+
+    user = await lock_user_for_pricing(db, user.id)
+    subscription = await resolve_subscription(db, user, subscription_id)
+    if not subscription:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='No subscription found')
+
+    discount_result = _apply_addon_discount(user, 'traffic', base_price_kopeks, 30)
+    final_price = discount_result['discounted']
+    traffic_discount_percent = discount_result['percent']
+    discount_value = discount_result['discount']
+    if traffic_discount_percent < 100 and final_price > 0:
+        final_price = max(100, final_price)
+
+    if final_price > 0 and user.balance_kopeks < final_price:
+        missing = final_price - user.balance_kopeks
+        raise HTTPException(
+            status_code=status.HTTP_402_PAYMENT_REQUIRED,
+            detail={
+                'code': 'insufficient_funds',
+                'message': f'Недостаточно средств. Не хватает {settings.format_price(missing, round_kopeks=False)}',
+                'missing_amount': missing,
+            },
+        )
+
+    description = f'Докупка {request.gb} ГБ трафика (лимитный сервер)'
+    if traffic_discount_percent > 0:
+        description += f' (скидка {traffic_discount_percent}%)'
+
+    success = await subtract_user_balance(db, user, final_price, description)
+    if not success:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail='Failed to charge balance')
+
+    subscription.limited_companion_purchased_traffic_gb = (
+        subscription.limited_companion_purchased_traffic_gb or 0
+    ) + request.gb
+    await db.commit()
+
+    subscription_service = SubscriptionService()
+    synced = await subscription_service.resync_limited_companion(db, subscription)
+    if not synced:
+        logger.error(
+            'Оплаченный трафик лимитного сервера не удалось применить в панели',
+            subscription_id=subscription.id,
+        )
+
+    await create_transaction(
+        db=db,
+        user_id=user.id,
+        type=TransactionType.SUBSCRIPTION_PAYMENT,
+        amount_kopeks=final_price,
+        description=description,
+    )
+
+    await db.refresh(user)
+    await db.refresh(subscription)
+
+    response: dict[str, Any] = {
+        'success': True,
+        'message': 'Limited companion traffic purchased successfully',
+        'gb_added': request.gb,
+        'new_purchased_traffic_gb': subscription.limited_companion_purchased_traffic_gb,
+        'new_total_limit_gb': settings.LIMITED_COMPANION_TRAFFIC_GB + subscription.limited_companion_purchased_traffic_gb,
+        'amount_paid_kopeks': final_price,
+        'new_balance_kopeks': user.balance_kopeks,
+    }
+
+    if traffic_discount_percent > 0:
+        response['discount_percent'] = traffic_discount_percent
+        response['discount_kopeks'] = discount_value
+        response['base_price_kopeks'] = base_price_kopeks
+
+    return response
