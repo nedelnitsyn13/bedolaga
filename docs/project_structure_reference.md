@@ -2820,6 +2820,9 @@
 - `scripts/reconcile_traffic_limits.py` — Python-модуль
   Классы: `ReconcileReport` (1 методов)
   Функции: `main`
+- `scripts/reconcile_trial_flag.py` — Python-модуль
+  Классы: `ReconcileReport` (1 методов)
+  Функции: `main`
 
 ## tests
 
