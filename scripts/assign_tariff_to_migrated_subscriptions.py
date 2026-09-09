@@ -63,6 +63,7 @@ class AssignReport:
     tariff_name: str
     subscriptions_found: int = 0
     assigned: int = 0
+    skipped_duplicate_user: int = 0
     unresolved_lines: list = field(default_factory=list)
 
     def as_dict(self) -> dict:
@@ -87,7 +88,25 @@ async def _assign(db, tariff, *, apply: bool) -> AssignReport:
     )
     report.subscriptions_found = len(subscriptions)
 
+    # DB enforces uq_subscriptions_user_tariff_active: a user can have at most
+    # one subscription per tariff_id. A user with more than one matching
+    # subscription here (e.g. several legacy vpn_keys imported as separate
+    # rows) can only have ONE of them labelled with this tariff — the rest
+    # are left with tariff_id=None and reported for manual review, exactly
+    # as they were before this script ran.
+    seen_user_ids: set[int] = set()
+
     for subscription in subscriptions:
+        if subscription.user_id in seen_user_ids:
+            report.skipped_duplicate_user += 1
+            report.unresolved_lines.append(
+                f'subscription id={subscription.id} user_id={subscription.user_id} '
+                f'remnawave_id={subscription.remnawave_id}: SKIPPED — user already has another '
+                f'subscription assigned to tariff_id={tariff.id} in this run '
+                f'(uq_subscriptions_user_tariff_active only allows one per user); left tariff_id=None'
+            )
+            continue
+
         report.unresolved_lines.append(
             f'subscription id={subscription.id} user_id={subscription.user_id} '
             f'remnawave_id={subscription.remnawave_id}: tariff_id None -> {tariff.id} '
@@ -95,6 +114,7 @@ async def _assign(db, tariff, *, apply: bool) -> AssignReport:
         )
         subscription.tariff_id = tariff.id
         report.assigned += 1
+        seen_user_ids.add(subscription.user_id)
 
     await db.flush()
     return report
@@ -108,6 +128,7 @@ def _print_report(report: AssignReport) -> None:
     print(f'  тариф                                  : #{report.tariff_id} "{report.tariff_name}"')
     print(f'  найдено подписок без тарифа (мигрированные): {report.subscriptions_found}')
     print(f'  проставлен tariff_id                   : {report.assigned}')
+    print(f'  пропущено (у юзера уже 2+ подписки)    : {report.skipped_duplicate_user}')
     print()
     if report.unresolved_lines:
         print(f'  строк с деталями: {len(report.unresolved_lines)} (первые 30)')
