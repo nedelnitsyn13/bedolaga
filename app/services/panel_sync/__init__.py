@@ -30,6 +30,7 @@ from app.services.panel_sync.writer import (
     patch_panel_account,
     patch_panel_squads,
     push_subscription,
+    write_companion_account,
 )
 
 
@@ -56,4 +57,5 @@ __all__ = [
     'read_panel_user',
     'resolve_panel_identity',
     'stale_panel_expire_at',
+    'write_companion_account',
 ]

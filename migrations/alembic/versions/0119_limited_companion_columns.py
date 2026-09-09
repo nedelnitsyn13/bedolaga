@@ -6,16 +6,16 @@
 панельный id и shortUuid этого второго аккаунта, чтобы бот мог найти и
 обновить/отключить его вместе с основным без повторного поиска по панели.
 
-Revision ID: 0115
-Revises: 0114
+Revision ID: 0119
+Revises: 0118
 """
 
 from alembic import op
 import sqlalchemy as sa
 
 
-revision = '0115'
-down_revision = '0114'
+revision = '0119'
+down_revision = '0118'
 branch_labels = None
 depends_on = None
 

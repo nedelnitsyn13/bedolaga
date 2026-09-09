@@ -304,3 +304,46 @@ async def patch_panel_squads(
         active_internal_squads=squads,
         external_squad_uuid=external_squad_uuid,
     )
+
+
+async def write_companion_account(
+    api,
+    *,
+    user_id: int | None,
+    username: str | None = None,
+    status,
+    expire_at,
+    traffic_limit_bytes: int,
+    traffic_limit_strategy,
+    telegram_id: int | None,
+    email: str | None,
+    active_internal_squads: list[str],
+    description: str,
+    update_call=None,
+    create_call=None,
+) -> RemnaWaveUser:
+    """Создать/обновить панельный аккаунт, у которого нет своей строки Subscription.
+
+    Для компаньон-аккаунтов лимитного сервера (LIMITED_COMPANION_ENABLED): их
+    identity живёт в дополнительных колонках ОСНОВНОЙ подписки
+    (``limited_companion_remnawave_id``/``limited_companion_short_uuid``), а не в
+    ``subscription.remnawave_id``. ``push_subscription`` сюда не подходит — его
+    ``_record_identity`` пишет именно в эти "не те" колонки и увёл бы identity
+    основной подписки. Здесь только запись в панель; куда сохранить
+    id/short_uuid ответа решает вызывающий.
+    """
+    update = update_call or api.update_user
+    create = create_call or api.create_user
+    kwargs = dict(
+        status=status,
+        expire_at=expire_at,
+        traffic_limit_bytes=traffic_limit_bytes,
+        traffic_limit_strategy=traffic_limit_strategy,
+        telegram_id=telegram_id,
+        email=email,
+        active_internal_squads=active_internal_squads,
+        description=description,
+    )
+    if user_id:
+        return await update(user_id=user_id, **kwargs)
+    return await create(username=username, **kwargs)

@@ -172,7 +172,7 @@ def _load_source(source_path: Path) -> dict:
     }
 
 
-async def _migrate(  # noqa: PLR0915 - linear one-shot migration, splitting hurts readability more than it helps
+async def _migrate(
     db,
     data: dict,
     *,
@@ -498,7 +498,7 @@ def _write_audit(report: MigrationReport, *, committed: bool) -> str | None:
     return str(path)
 
 
-async def _run(args: argparse.Namespace) -> int:
+async def _run(args: argparse.Namespace, source_path: Path) -> int:
     await bot_configuration_service.initialize(sync_web_api_token=False)
     logger.info(
         'migrate_shopbot: конфигурация загружена',
@@ -512,10 +512,6 @@ async def _run(args: argparse.Namespace) -> int:
             'отображать/управлять только одной. Включите мультитариф перед --apply.'
         )
 
-    source_path = Path(args.source).expanduser()
-    if not source_path.exists():
-        print(f'  !! файл не найден: {source_path}')
-        return 2
     data = _load_source(source_path)
     print(
         f'  источник: {len(data["users"])} users, {len(data["vpn_keys"])} vpn_keys, '
@@ -556,7 +552,13 @@ def main() -> int:
     )
     parser.add_argument('--limit', type=int, default=None, help='only process the first N legacy users (smoke test)')
     args = parser.parse_args()
-    return asyncio.run(_run(args))
+
+    source_path = Path(args.source).expanduser()
+    if not source_path.exists():
+        print(f'  !! файл не найден: {source_path}')
+        return 2
+
+    return asyncio.run(_run(args, source_path))
 
 
 if __name__ == '__main__':

@@ -25,6 +25,7 @@ from app.services.panel_sync import (
     is_subscription_live,
     patch_panel_account,
     push_subscription,
+    write_companion_account,
 )
 from app.utils.subscription_utils import (
     resolve_hwid_device_limit_for_payload,
@@ -589,16 +590,6 @@ class SubscriptionService:
             return
 
         try:
-            common_kwargs = dict(
-                status=main_user.status,
-                expire_at=main_user.expire_at,
-                traffic_limit_bytes=self._gb_to_bytes(settings.LIMITED_COMPANION_TRAFFIC_GB),
-                traffic_limit_strategy=TrafficLimitStrategy.MONTH,
-                telegram_id=user.telegram_id,
-                email=user.email,
-                active_internal_squads=[settings.LIMITED_COMPANION_SQUAD_UUID],
-            )
-
             companion_user: RemnaWaveUser | None = None
             if subscription.limited_companion_remnawave_id:
                 try:
@@ -608,13 +599,8 @@ class SubscriptionService:
 
             description = f'Limited companion for {main_user.username} (#{main_user.id})'
 
-            if companion_user:
-                companion_user = await api.update_user(
-                    user_id=companion_user.id,
-                    description=description,
-                    **common_kwargs,
-                )
-            else:
+            companion_username = None
+            if not companion_user:
                 companion_username = settings.build_remnawave_subscription_username(
                     full_name=user.full_name,
                     username=user.username,
@@ -623,11 +609,21 @@ class SubscriptionService:
                     user_id=user.id,
                     suffix='_lim',
                 )
-                companion_user = await api.create_user(
-                    username=companion_username,
-                    description=description,
-                    **common_kwargs,
-                )
+
+            companion_user = await write_companion_account(
+                api,
+                user_id=companion_user.id if companion_user else None,
+                username=companion_username,
+                status=main_user.status,
+                expire_at=main_user.expire_at,
+                traffic_limit_bytes=self._gb_to_bytes(settings.LIMITED_COMPANION_TRAFFIC_GB),
+                traffic_limit_strategy=TrafficLimitStrategy.MONTH,
+                telegram_id=user.telegram_id,
+                email=user.email,
+                active_internal_squads=[settings.LIMITED_COMPANION_SQUAD_UUID],
+                description=description,
+            )
+            if not subscription.limited_companion_remnawave_id:
                 subscription.limited_companion_remnawave_id = companion_user.id
 
             subscription.limited_companion_short_uuid = companion_user.short_uuid
@@ -646,7 +642,7 @@ class SubscriptionService:
             )
             main_description = f'{main_description} | limited: {companion_user.username}'
             try:
-                await api.update_user(user_id=main_user.id, description=main_description)
+                await patch_panel_account(api, user_id=main_user.id, description=main_description)
             except Exception as error:
                 logger.warning(
                     '⚠️ Не удалось обновить описание основного аккаунта ссылкой на компаньон',
