@@ -144,7 +144,6 @@ def _build_subscription_detail_keyboard(sub_id: int, sub=None) -> types.InlineKe
             and sub is not None
             and getattr(sub, 'limited_companion_remnawave_id', None)
             and settings.is_traffic_topup_enabled()
-            and not settings.is_traffic_topup_blocked()
         ):
             buttons.append(
                 [

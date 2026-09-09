@@ -766,13 +766,9 @@ async def handle_add_traffic_limited(
         )
         return
 
-    if settings.is_traffic_topup_blocked():
-        await callback.answer(
-            texts.t('TRAFFIC_FIXED_MODE', '⚠️ В текущем режиме трафик фиксированный и не может быть изменен'),
-            show_alert=True,
-        )
-        return
-
+    # Note: unlike the main-key flow, TRAFFIC_SELECTION_MODE=fixed does NOT
+    # block this — the companion's traffic pool is independent of the main
+    # subscription's fixed-traffic tariff, so top-up stays available here.
     current_limit = settings.LIMITED_COMPANION_TRAFFIC_GB + (subscription.limited_companion_purchased_traffic_gb or 0)
     period_hint_days = _get_period_hint_from_subscription(subscription)
     traffic_discount_percent = PricingEngine.get_addon_discount_percent(db_user, 'traffic', period_hint_days)
@@ -818,10 +814,6 @@ async def add_traffic_limited(callback: types.CallbackQuery, db_user: User, db: 
             texts.t('LIMITED_COMPANION_UNAVAILABLE', '⚠️ Лимитный сервер недоступен для этой подписки'),
             show_alert=True,
         )
-        return
-
-    if settings.is_traffic_topup_blocked():
-        await callback.answer('⚠️ В текущем режиме трафик фиксированный', show_alert=True)
         return
 
     base_price = settings.get_traffic_topup_price(traffic_gb)

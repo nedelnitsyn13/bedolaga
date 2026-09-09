@@ -708,7 +708,6 @@ def get_main_menu_keyboard(
             and settings.is_limited_companion_enabled()
             and getattr(subscription, 'limited_companion_remnawave_id', None)
             and settings.is_traffic_topup_enabled()
-            and not settings.is_traffic_topup_blocked()
         ):
             paired_buttons.append(
                 InlineKeyboardButton(
@@ -1316,7 +1315,6 @@ def get_subscription_keyboard(
                 and settings.is_limited_companion_enabled()
                 and getattr(subscription, 'limited_companion_remnawave_id', None)
                 and settings.is_traffic_topup_enabled()
-                and not settings.is_traffic_topup_blocked()
             ):
                 keyboard.append(
                     [
