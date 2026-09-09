@@ -1,39 +1,37 @@
 #!/usr/bin/env python
-"""One-shot backfill for ``device_limit`` on subscriptions imported by ``migrate_shopbot``.
+"""One-shot backfill for ``Subscription.traffic_limit_gb`` from the live Remnawave panel.
 
-``migrate_shopbot`` has no way to know each legacy user's real per-key device
-tier (the legacy schema doesn't track it), so every imported ``Subscription``
-was created with the same ``settings.DEFAULT_DEVICE_LIMIT`` fallback (see its
-own "Known limitations" docstring). The REAL device limit for each user has
-lived in the Remnawave panel the whole time — it's just never been pulled
-back into bedolaga's DB.
+Same gap as ``reconcile_device_limits.py``, different field: ``migrate_shopbot``
+set every imported subscription's ``traffic_limit_gb`` from the legacy
+``vpn_keys.traffic_limit_bytes`` column — a snapshot of the OLD shopbot's own
+SQLite row, not necessarily the real, current panel value at cutover time.
 
-This matters before ``REMNAWAVE_AUTO_SYNC_ENABLED`` is turned on: that flag
-pushes bedolaga's DB state TO the panel, so until this backfill runs, turning
-it on would overwrite every migrated user's real panel device limit with the
-wrong default.
+The regular "Из панели" bulk sync / ``REMNAWAVE_AUTO_SYNC_ENABLED`` background
+job (``BULK_SNAPSHOT`` policy, see ``app/services/panel_sync/projection.py``)
+deliberately does NOT pull ``trafficLimitBytes`` back from the panel during
+routine passes — that field is normally owned by the bot's own tariff/purchase
+logic, and blindly trusting the panel there would let an admin's one-off panel
+tweak silently override a paying customer's purchased traffic tier. Only an
+explicit "panel wins" action (``ADMIN_PULL``) touches it, and only per-user
+from the admin UI — there is no bulk equivalent, hence this one-off script for
+the migrated cohort specifically.
 
-This script does the opposite direction, once: for every active/trial/limited
-``Subscription`` row that has a ``remnawave_id`` (i.e. every migrated
-subscription still in use), it reads the current ``hwidDeviceLimit`` from the
-live panel and writes it onto ``Subscription.device_limit``. Rows whose panel
-value already matches, or where the panel identity can't be resolved, are
-reported and left untouched rather than guessed at.
-
-Note: this only pulls ``device_limit``. Wallet balances were migrated as a
-final snapshot by ``migrate_shopbot`` and are not re-synced here — the legacy
-bot has since been shut down, so that snapshot is final.
+Panel semantics: ``trafficLimitBytes=0`` means unlimited, matching how
+``migrate_shopbot`` itself already treats a legacy 0 value (0 GB = unlimited
+in bedolaga too) — so no special-casing is needed here, unlike the device
+limit's None/0 distinction.
 
 Scope: only subscriptions with ``tariff_id IS NULL``. A tariffed subscription's
-device_limit is governed by its ``Tariff.device_limit``, not the panel —
+traffic_limit_gb is governed by its ``Tariff.traffic_limit_gb``, not the panel —
 overwriting it from a live panel read would fight the tariff system for any
 subscription that has since been assigned one. ``migrate_shopbot`` leaves
-``tariff_id`` NULL on every subscription it imports, so this filter targets
-exactly the migrated cohort.
+``tariff_id`` NULL on every subscription it imports (no legacy-plan ->
+tariff mapping exists), so this filter targets exactly the migrated cohort
+and never touches a tariff-governed subscription.
 
 Usage:
-    python -m scripts.reconcile_device_limits              # dry run
-    python -m scripts.reconcile_device_limits --apply       # persist
+    python -m scripts.reconcile_traffic_limits              # dry run
+    python -m scripts.reconcile_traffic_limits --apply       # persist
 """
 
 from __future__ import annotations
@@ -64,6 +62,8 @@ _ACTIVE_STATUSES = (
     SubscriptionStatus.LIMITED.value,
 )
 
+_BYTES_PER_GB = 1024**3
+
 
 @dataclass
 class ReconcileReport:
@@ -72,7 +72,6 @@ class ReconcileReport:
     updated: int = 0
     already_correct: int = 0
     skipped_panel_not_found: int = 0
-    skipped_no_panel_limit: int = 0
     unresolved_lines: list = field(default_factory=list)
 
     def as_dict(self) -> dict:
@@ -116,29 +115,18 @@ async def _reconcile(db, api, *, apply: bool) -> ReconcileReport:
             )
             continue
 
-        real_limit = panel_user.hwid_device_limit
-        # 0 is a real panel value ("unlimited devices"), not "unset" — only
-        # None means the panel gave us nothing to act on. See
-        # coerce_panel_device_limit()'s own docstring for why a naive falsy
-        # check here would silently overwrite unlimited-device subscriptions
-        # with the wrong default.
-        if real_limit is None:
-            report.skipped_no_panel_limit += 1
-            report.unresolved_lines.append(
-                f'subscription id={subscription.id} remnawave_id={subscription.remnawave_id}: '
-                f'panel has no hwidDeviceLimit set — left untouched (device_limit={subscription.device_limit})'
-            )
-            continue
+        real_limit_bytes = panel_user.traffic_limit_bytes or 0
+        real_limit_gb = real_limit_bytes // _BYTES_PER_GB if real_limit_bytes > 0 else 0
 
-        if subscription.device_limit == real_limit:
+        if subscription.traffic_limit_gb == real_limit_gb:
             report.already_correct += 1
             continue
 
         report.unresolved_lines.append(
             f'subscription id={subscription.id} remnawave_id={subscription.remnawave_id}: '
-            f'device_limit {subscription.device_limit} -> {real_limit}'
+            f'traffic_limit_gb {subscription.traffic_limit_gb} -> {real_limit_gb}'
         )
-        subscription.device_limit = real_limit
+        subscription.traffic_limit_gb = real_limit_gb
         report.updated += 1
 
     await db.flush()
@@ -151,10 +139,9 @@ def _print_report(report: ReconcileReport) -> None:
     print('  DRY RUN — ничего не записано' if report.dry_run else '  APPLIED')
     print('=' * 70)
     print(f'  подписок проверено                     : {report.subscriptions_checked}')
-    print(f'  обновлено (device_limit из панели)     : {report.updated}')
-    print(f'  уже совпадало                          : {report.already_correct}')
-    print(f'  пропущено (не найдено в панели)        : {report.skipped_panel_not_found}')
-    print(f'  пропущено (в панели нет hwidDeviceLimit): {report.skipped_no_panel_limit}')
+    print(f'  обновлено (traffic_limit_gb из панели)  : {report.updated}')
+    print(f'  уже совпадало                           : {report.already_correct}')
+    print(f'  пропущено (не найдено в панели)         : {report.skipped_panel_not_found}')
     print()
     if report.unresolved_lines:
         print(f'  строк с деталями: {len(report.unresolved_lines)} (первые 30)')
@@ -167,7 +154,7 @@ def _write_audit(report: ReconcileReport, *, committed: bool) -> str | None:
     directory = Path(os.environ.get('MIGRATION_AUDIT_DIR') or settings.LOG_DIR or 'logs')
     suffix = 'apply' if committed else 'dryrun'
     stamp = datetime.now(UTC).strftime('%Y%m%d-%H%M%S')
-    path = directory / f'reconcile_device_limits_{suffix}_{stamp}.json'
+    path = directory / f'reconcile_traffic_limits_{suffix}_{stamp}.json'
     try:
         directory.mkdir(parents=True, exist_ok=True)
         payload = report.as_dict()
@@ -176,7 +163,7 @@ def _write_audit(report: ReconcileReport, *, committed: bool) -> str | None:
         with path.open('w', encoding='utf-8') as handle:
             json.dump(payload, handle, ensure_ascii=False, indent=2, default=str)
     except OSError as error:
-        logger.warning('reconcile_device_limits: не удалось записать отчёт', path=str(path), error=str(error))
+        logger.warning('reconcile_traffic_limits: не удалось записать отчёт', path=str(path), error=str(error))
         return None
     return str(path)
 
@@ -203,8 +190,8 @@ async def _run(args: argparse.Namespace) -> int:
 def main() -> int:
     parser = argparse.ArgumentParser(
         description=(
-            'Backfill Subscription.device_limit from the live Remnawave panel for subscriptions '
-            'imported by migrate_shopbot with the DEFAULT_DEVICE_LIMIT fallback'
+            'Backfill Subscription.traffic_limit_gb from the live Remnawave panel for subscriptions '
+            'imported by migrate_shopbot from a stale legacy snapshot'
         )
     )
     parser.add_argument('--apply', action='store_true', help='persist changes (default is a dry run)')

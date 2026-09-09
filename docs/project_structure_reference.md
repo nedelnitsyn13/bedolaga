@@ -2814,6 +2814,9 @@
 - `scripts/reconcile_limited_companions.py` — Python-модуль
   Классы: `ReconcileReport` (1 методов)
   Функции: `main`
+- `scripts/reconcile_traffic_limits.py` — Python-модуль
+  Классы: `ReconcileReport` (1 методов)
+  Функции: `main`
 
 ## tests
 
