@@ -109,7 +109,12 @@ async def _reconcile(db, api, *, apply: bool) -> ReconcileReport:
             continue
 
         real_limit = panel_user.hwid_device_limit
-        if not real_limit:
+        # 0 is a real panel value ("unlimited devices"), not "unset" — only
+        # None means the panel gave us nothing to act on. See
+        # coerce_panel_device_limit()'s own docstring for why a naive falsy
+        # check here would silently overwrite unlimited-device subscriptions
+        # with the wrong default.
+        if real_limit is None:
             report.skipped_no_panel_limit += 1
             report.unresolved_lines.append(
                 f'subscription id={subscription.id} remnawave_id={subscription.remnawave_id}: '
