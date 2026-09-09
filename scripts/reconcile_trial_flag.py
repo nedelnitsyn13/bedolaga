@@ -49,15 +49,32 @@ from app.services.system_settings_service import bot_configuration_service
 logger = structlog.get_logger(__name__)
 
 
-def _load_legacy_total_spent(source_path: Path) -> dict[int, float]:
+@dataclass
+class LegacyTotals:
+    by_telegram_id: dict[int, float]
+    by_email: dict[str, float]
+
+
+def _load_legacy_total_spent(source_path: Path) -> LegacyTotals:
     uri = f'file:{source_path}?mode=ro'
     conn = sqlite3.connect(uri, uri=True)
     conn.row_factory = sqlite3.Row
     try:
-        rows = conn.execute('SELECT telegram_id, total_spent FROM users').fetchall()
+        rows = conn.execute('SELECT telegram_id, auth_email, total_spent FROM users').fetchall()
     finally:
         conn.close()
-    return {row['telegram_id']: row['total_spent'] or 0.0 for row in rows}
+
+    by_telegram_id: dict[int, float] = {}
+    by_email: dict[str, float] = {}
+    for row in rows:
+        total_spent = row['total_spent'] or 0.0
+        if row['telegram_id'] is not None:
+            by_telegram_id[row['telegram_id']] = total_spent
+        auth_email = (row['auth_email'] or '').strip().lower()
+        if auth_email:
+            by_email[auth_email] = total_spent
+
+    return LegacyTotals(by_telegram_id=by_telegram_id, by_email=by_email)
 
 
 @dataclass
@@ -73,9 +90,14 @@ class ReconcileReport:
         return {k: v for k, v in self.__dict__.items() if k != 'unresolved_lines'}
 
 
-async def _reconcile(db, legacy_total_spent: dict[int, float], *, apply: bool) -> ReconcileReport:
+async def _reconcile(db, legacy_totals: LegacyTotals, *, apply: bool) -> ReconcileReport:
     report = ReconcileReport(dry_run=not apply)
 
+    # No status filter: migrate_shopbot sets is_trial straight from the legacy
+    # vpn_keys.is_trial flag, but status can have drifted to ACTIVE/LIMITED
+    # since (e.g. a panel sync), leaving is_trial=True stranded on a
+    # non-TRIAL-status subscription — the cabinet badge is driven by
+    # is_trial alone, so that case needs fixing too.
     rows = (
         (
             await db.execute(
@@ -84,7 +106,6 @@ async def _reconcile(db, legacy_total_spent: dict[int, float], *, apply: bool) -
                 .where(
                     Subscription.remnawave_id.is_not(None),
                     Subscription.is_trial.is_(True),
-                    Subscription.status == SubscriptionStatus.TRIAL.value,
                 )
             )
         )
@@ -93,21 +114,31 @@ async def _reconcile(db, legacy_total_spent: dict[int, float], *, apply: bool) -
     report.subscriptions_checked = len(rows)
 
     for subscription, user in rows:
-        if user.telegram_id is None or user.telegram_id not in legacy_total_spent:
+        total_spent = None
+        if user.telegram_id is not None and user.telegram_id in legacy_totals.by_telegram_id:
+            total_spent = legacy_totals.by_telegram_id[user.telegram_id]
+        elif user.email:
+            total_spent = legacy_totals.by_email.get(user.email.strip().lower())
+
+        if total_spent is None:
             report.skipped_no_legacy_match += 1
             continue
 
-        total_spent = legacy_total_spent[user.telegram_id]
         if total_spent <= 0:
             report.left_as_trial += 1
             continue
 
+        old_status = subscription.status
+        new_status = (
+            SubscriptionStatus.ACTIVE.value if old_status == SubscriptionStatus.TRIAL.value else old_status
+        )
         report.unresolved_lines.append(
-            f'subscription id={subscription.id} user_id={user.id} telegram_id={user.telegram_id}: '
-            f'is_trial True -> False, status TRIAL -> ACTIVE (legacy total_spent={total_spent:.2f} ₽)'
+            f'subscription id={subscription.id} user_id={user.id} '
+            f'telegram_id={user.telegram_id} email={user.email}: '
+            f'is_trial True -> False, status {old_status} -> {new_status} (legacy total_spent={total_spent:.2f} ₽)'
         )
         subscription.is_trial = False
-        subscription.status = SubscriptionStatus.ACTIVE.value
+        subscription.status = new_status
         report.fixed += 1
 
     await db.flush()
@@ -152,11 +183,11 @@ def _write_audit(report: ReconcileReport, *, committed: bool) -> str | None:
 async def _run(args: argparse.Namespace, source_path: Path) -> int:
     await bot_configuration_service.initialize(sync_web_api_token=False)
 
-    legacy_total_spent = _load_legacy_total_spent(source_path)
-    print(f'  источник: {len(legacy_total_spent)} users')
+    legacy_totals = _load_legacy_total_spent(source_path)
+    print(f'  источник: {len(legacy_totals.by_telegram_id)} users (+{len(legacy_totals.by_email)} по email)')
 
     async with AsyncSessionLocal() as db:
-        report = await _reconcile(db, legacy_total_spent, apply=args.apply)
+        report = await _reconcile(db, legacy_totals, apply=args.apply)
         if args.apply:
             await db.commit()
         else:
