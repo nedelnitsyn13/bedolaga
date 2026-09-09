@@ -320,7 +320,7 @@ async def _get_or_create_default_promo_group(db: AsyncSession) -> PromoGroup:
 
 async def create_user_no_commit(
     db: AsyncSession,
-    telegram_id: int,
+    telegram_id: int | None,
     username: str = None,
     first_name: str = None,
     last_name: str = None,

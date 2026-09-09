@@ -9,6 +9,24 @@ existing panel identity — no Remnawave API calls, no new panel accounts) and
 the referral graph (``referred_by`` + historical ``referral_reward_events`` for
 stats).
 
+Email-only users (legacy ``users.auth_email`` set): the legacy schema has no
+nullable-``telegram_id`` concept — ``telegram_id`` is its primary key — so
+users who registered through the web/email flow got a synthetic integer
+there instead of a real Telegram id. bedolaga has a real email-auth user
+type (``User.auth_type='email'``, ``telegram_id=NULL``), so these rows are
+migrated as such rather than carrying the synthetic id over as if it were a
+real ``telegram_id`` — importing it as-is would risk the bot later trying to
+message a real Telegram account that happens to hold that same numeric id
+(nothing reserves any id range for these synthetic values).
+``auth_pass`` is only carried over into ``password_hash`` when it is
+recognisably a bcrypt hash (bedolaga verifies passwords with bcrypt); a
+legacy hash in any other format is left NULL and reported so the user knows
+to reset their password once. ``email_verification_source`` is deliberately
+set to ``'legacy_migration'`` rather than left NULL or ``'cabinet'`` — both
+of those are treated as a trusted verification source for ADMIN_EMAILS
+auto-escalation (see ``rbac_bootstrap_service.is_user_admin_by_env``), and a
+row copied out of an unaudited legacy database is not proof of ownership.
+
 SAFETY BOUNDARY — read this before running ``--apply``:
     This script only ever CREATES data for a legacy ``telegram_id`` that does
     NOT already exist as a bedolaga user. If a bedolaga user with that
@@ -73,7 +91,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import structlog
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from app.config import settings
 from app.database.crud.subscription import generate_unique_short_id
@@ -105,12 +123,41 @@ _DEPOSIT_METHOD_MAP = {
     'Admin': PaymentMethod.MANUAL,
 }
 
+# email_verification_source for migrated email-only users: deliberately NOT
+# 'cabinet' and NOT left NULL — both of those are treated as a trusted proof
+# of ownership for ADMIN_EMAILS auto-escalation (see
+# rbac_bootstrap_service.TRUSTED_EMAIL_VERIFICATION_SOURCES /
+# is_user_admin_by_env). A row copied out of an unaudited legacy database is
+# not that proof, so this must stay outside the trusted set.
+_LEGACY_EMAIL_VERIFICATION_SOURCE = 'legacy_migration'
+
+_BCRYPT_PREFIXES = ('$2a$', '$2b$', '$2y$')
+
+
+def _looks_like_bcrypt_hash(value: str | None) -> bool:
+    """True if ``value`` has the shape of a bcrypt hash bedolaga can verify.
+
+    bedolaga hashes passwords with bcrypt (app/cabinet/auth/password_utils.py)
+    and bcrypt hashes are self-describing/portable strings, so a legacy hash
+    in this exact shape can be copied over as-is and the old password keeps
+    working. Anything else (plaintext, md5, a home-grown scheme) must NOT be
+    copied into password_hash: bcrypt.checkpw() would just always fail
+    against it (safe, no security hole), but leaving stale-looking data there
+    could mislead an admin into thinking the account has a working hash when
+    it does not.
+    """
+    return bool(value) and len(value) == 60 and value.startswith(_BCRYPT_PREFIXES)
+
 
 @dataclass
 class MigrationReport:
     dry_run: bool
     users_created: int = 0
     users_skipped_existing: int = 0
+    users_email_created: int = 0
+    users_email_skipped_existing: int = 0
+    users_email_password_carried: int = 0
+    users_email_password_needs_reset: int = 0
     users_referrer_unresolved: int = 0
     subscriptions_created: int = 0
     subscriptions_skipped_owner_exists: int = 0
@@ -189,31 +236,67 @@ async def _migrate(
     old_telegram_ids = [u['telegram_id'] for u in old_users]
     old_users_by_tg = {u['telegram_id']: u for u in old_users}
 
+    # Email-only registrations (auth_email set): the legacy PK is a synthetic
+    # int for these, never a real Telegram id, so "already migrated" can only
+    # be detected by email — a lookup by that synthetic telegram_id would
+    # never match a real bedolaga row and this script would try to insert a
+    # duplicate on every re-run, crashing on the email unique constraint.
+    old_emails = [row['auth_email'].strip().lower() for row in old_users if row.get('auth_email')]
+
     existing_rows = (
-        (
-            await db.execute(
-                select(User.id, User.telegram_id).where(User.telegram_id.in_(old_telegram_ids))
-            )
-        )
-        .all()
+        (await db.execute(select(User.id, User.telegram_id).where(User.telegram_id.in_(old_telegram_ids)))).all()
         if old_telegram_ids
         else []
     )
     telegram_to_new_id: dict[int, int] = {tid: uid for uid, tid in existing_rows}
+
+    existing_email_rows = (
+        (await db.execute(select(User.id, User.email).where(func.lower(User.email).in_(old_emails)))).all()
+        if old_emails
+        else []
+    )
+    email_to_new_id: dict[str, int] = {email.lower(): uid for uid, email in existing_email_rows if email}
+
     newly_created_telegram_ids: set[int] = set()
 
     # ---- Pass 1: create missing users -------------------------------------------------
     for row in old_users:
         tg_id = row['telegram_id']
-        if tg_id in telegram_to_new_id:
+        auth_email = (row.get('auth_email') or '').strip().lower() or None
+
+        if auth_email:
+            if auth_email in email_to_new_id:
+                report.users_email_skipped_existing += 1
+                # Still needed so passes 2-5 (which join on the legacy telegram_id
+                # PK, real or synthetic) can resolve this row's existing bedolaga id.
+                telegram_to_new_id[tg_id] = email_to_new_id[auth_email]
+                continue
+        elif tg_id in telegram_to_new_id:
             report.users_skipped_existing += 1
             continue
 
         user = await create_user_no_commit(
             db,
-            telegram_id=tg_id,
+            telegram_id=None if auth_email else tg_id,
             username=row.get('username'),
         )
+
+        if auth_email:
+            user.auth_type = 'email'
+            user.email = auth_email
+            user.email_verified = True
+            user.email_verification_source = _LEGACY_EMAIL_VERIFICATION_SOURCE
+            auth_pass = row.get('auth_pass')
+            if _looks_like_bcrypt_hash(auth_pass):
+                user.password_hash = auth_pass
+                report.users_email_password_carried += 1
+            else:
+                report.users_email_password_needs_reset += 1
+                report.unresolved_lines.append(
+                    f'user email={auth_email}: auth_pass is not a bcrypt hash, '
+                    f'password not carried over — user must reset their password'
+                )
+
         balance_kopeks = round((row.get('balance') or 0.0) * 100)
         total_spent = row.get('total_spent') or 0.0
         user.balance_kopeks = balance_kopeks
@@ -227,7 +310,11 @@ async def _migrate(
 
         telegram_to_new_id[tg_id] = user.id
         newly_created_telegram_ids.add(tg_id)
-        report.users_created += 1
+        if auth_email:
+            email_to_new_id[auth_email] = user.id
+            report.users_email_created += 1
+        else:
+            report.users_created += 1
 
     # ---- Pass 2: resolve referred_by for the users we just created --------------------
     for row in old_users:
@@ -251,7 +338,9 @@ async def _migrate(
     now = datetime.now(UTC)
     existing_remnawave_ids = {
         rid
-        for (rid,) in (await db.execute(select(Subscription.remnawave_id).where(Subscription.remnawave_id.is_not(None)))).all()
+        for (rid,) in (
+            await db.execute(select(Subscription.remnawave_id).where(Subscription.remnawave_id.is_not(None)))
+        ).all()
     }
     seen_remnawave_ids: set[int] = set(existing_remnawave_ids)
 
@@ -275,7 +364,9 @@ async def _migrate(
             continue
         if remnawave_id in seen_remnawave_ids:
             report.subscriptions_skipped_duplicate_remnawave_id += 1
-            report.unresolved_lines.append(f'vpn_key #{key.get("key_id")}: remnawave_id={remnawave_id} already imported')
+            report.unresolved_lines.append(
+                f'vpn_key #{key.get("key_id")}: remnawave_id={remnawave_id} already imported'
+            )
             continue
 
         end_date = _parse_sqlite_dt(key.get('expire_at'))
@@ -452,6 +543,10 @@ def _print_report(report: MigrationReport) -> None:
     print('=' * 70)
     print(f'  пользователей создано          : {report.users_created}')
     print(f'  пользователей пропущено (уже есть): {report.users_skipped_existing}')
+    print(f'  email-пользователей создано    : {report.users_email_created}')
+    print(f'  email-пользователей пропущено (уже есть): {report.users_email_skipped_existing}')
+    print(f'  email-пользователей: пароль перенесён   : {report.users_email_password_carried}')
+    print(f'  email-пользователей: нужен сброс пароля : {report.users_email_password_needs_reset}')
     print(f'  рефереров не разрешено         : {report.users_referrer_unresolved}')
     print()
     print(f'  подписок создано               : {report.subscriptions_created}')
