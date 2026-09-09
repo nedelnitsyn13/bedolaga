@@ -4,43 +4,52 @@
 ``migrate_shopbot`` imports every legacy ``vpn_keys`` row as its own
 independent multi-tariff ``Subscription`` — including "limited server"
 companion keys, which the legacy bot never modelled as a distinct concept in
-its own schema (that link lived entirely in the external
-``subscription-merger`` service). bedolaga itself models a companion as two
-fields on the MAIN subscription (``limited_companion_remnawave_id`` /
-``limited_companion_short_uuid``, see ``LIMITED_COMPANION_ENABLED`` and
-``SubscriptionService._sync_limited_companion_user``), not as a second
-``Subscription`` row. Left unreconciled, a migrated companion key:
+its own DB. bedolaga models a companion as two fields on the MAIN
+subscription (``limited_companion_remnawave_id`` / ``limited_companion_short_uuid``,
+see ``LIMITED_COMPANION_ENABLED`` and ``SubscriptionService._sync_limited_companion_user``),
+not as a second ``Subscription`` row. Left unreconciled, a migrated companion
+identity:
     - is invisible to ``_sync_limited_companion_user``, so it stops being
       kept in sync with the main account's status/expiry on renewal;
-    - shows up as a bogus second, independent subscription in the bot UI
-      and cabinet;
-    - permanently occupies the partial unique index on
-      ``Subscription.remnawave_id``, so any future real re-sync of that
-      panel identity would collide with it.
+    - if it happens to also exist as a leftover standalone ``Subscription``
+      row, shows up as a bogus second subscription in the bot UI/cabinet and
+      permanently occupies the partial unique index on
+      ``Subscription.remnawave_id``.
 
-Pairing key: legacy ``vpn_keys.is_primary`` — NOT ``squad_uuid``. An earlier
-version of this script matched by squad membership, on the assumption that
-the legacy schema put companion keys on a dedicated squad; in practice a real
-legacy database had exactly one ``squad_uuid`` value across every row
-(main and companion alike), so that signal does not exist here. The legacy
-schema does carry a real primary/companion flag though: ``is_primary`` (1 for
-the main key, 0 for the limited-server companion). This script re-reads the
-same legacy SQLite source ``migrate_shopbot`` was pointed at, groups
-``vpn_keys`` by the legacy ``user_id`` (telegram_id, real or synthetic),
-splits each group by ``is_primary``, and uses each side's
-``remnawave_user_id`` to find the two ``Subscription`` rows migrate_shopbot
-already created (matched on ``Subscription.remnawave_id``) — then folds the
-companion's identity into the main row's ``limited_companion_*`` fields and
-deletes the now-redundant standalone row.
+Source of truth: the external ``subscription-merger`` service's own
+``mappings.json`` — NOT the legacy bot's local ``vpn_keys`` table. Two earlier
+versions of this script tried the local DB first (squad membership, then
+``vpn_keys.is_primary``); both undercounted by an order of magnitude (21
+locally-flagged companion keys vs. 326 real panel accounts on the dedicated
+squad) because most companion accounts were created directly by the merger
+and never wrote back to the bot's own DB. ``mappings.json`` is a dict keyed by
+the MAIN key's ``short_uuid``, with each value carrying ``limited_token`` (the
+companion's ``short_uuid``) — this is the exact registration payload
+``SubscriptionService._register_limited_companion_mapping`` sends going
+forward, so old and new bot writes share the same shape.
 
-Pairing is conservative on purpose: a user with more than one candidate on
-either side of the split is left untouched and reported, rather than guessed
-at. This is live production panel-identity data; a wrong link corrupts
-which panel account the bot manages for that user going forward.
+For each mapping entry this script:
+    1. Finds the bedolaga ``Subscription`` whose ``remnawave_short_uuid``
+       equals the main key's short_uuid.
+    2. Resolves the companion's numeric panel id — first by checking whether
+       a leftover standalone ``Subscription`` row exists for
+       ``limited_token`` (a companion that WAS separately migrated by
+       ``migrate_shopbot`` via a legacy ``vpn_keys`` row; that row is then
+       folded in and deleted), otherwise by asking the live Remnawave panel
+       (``GET /api/users/by-short-uuid/{limited_token}``) — most companions
+       only exist in the panel, never in bedolaga's DB at all.
+    3. Writes ``limited_companion_remnawave_id``/``limited_companion_short_uuid``
+       onto the main subscription.
+
+Pairing is conservative on purpose: a main subscription that can't be found,
+or a companion identity the panel doesn't recognise, is reported and left
+untouched rather than guessed at. This is live production panel-identity
+data; a wrong link corrupts which panel account the bot manages for that
+user going forward.
 
 Usage:
-    python -m scripts.reconcile_limited_companions --source /path/to/users.db              # dry run
-    python -m scripts.reconcile_limited_companions --source /path/to/users.db --apply       # persist
+    python -m scripts.reconcile_limited_companions --mappings /path/to/mappings.json              # dry run
+    python -m scripts.reconcile_limited_companions --mappings /path/to/mappings.json --apply       # persist
 """
 
 from __future__ import annotations
@@ -49,7 +58,6 @@ import argparse
 import asyncio
 import json
 import os
-import sqlite3
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
@@ -60,6 +68,7 @@ from sqlalchemy import select
 from app.config import settings
 from app.database.database import AsyncSessionLocal
 from app.database.models import Subscription
+from app.services.remnawave_service import RemnaWaveService
 from app.services.system_settings_service import bot_configuration_service
 
 
@@ -69,110 +78,80 @@ logger = structlog.get_logger(__name__)
 @dataclass
 class ReconcileReport:
     dry_run: bool
-    legacy_companion_rows: int = 0
+    mapping_entries: int = 0
     pairs_linked: int = 0
+    linked_via_local_subscription: int = 0
+    linked_via_panel_lookup: int = 0
     skipped_already_linked: int = 0
-    skipped_ambiguous_multiple_companion: int = 0
-    skipped_ambiguous_multiple_main: int = 0
-    skipped_companion_not_migrated: int = 0
-    skipped_main_not_migrated: int = 0
-    skipped_no_panel_link: int = 0
+    skipped_main_not_found: int = 0
+    skipped_companion_not_found: int = 0
     unresolved_lines: list = field(default_factory=list)
 
     def as_dict(self) -> dict:
         return {k: v for k, v in self.__dict__.items() if k != 'unresolved_lines'}
 
 
-def _load_legacy_vpn_keys(source_path: Path) -> list[dict]:
-    uri = f'file:{source_path}?mode=ro'
-    conn = sqlite3.connect(uri, uri=True)
-    conn.row_factory = sqlite3.Row
-    try:
-        rows = conn.execute('SELECT user_id, is_primary, remnawave_user_id, key_id FROM vpn_keys').fetchall()
-    finally:
-        conn.close()
-    return [dict(r) for r in rows]
+def _load_mappings(path: Path) -> dict:
+    with path.open('r', encoding='utf-8') as handle:
+        return json.load(handle)
 
 
-async def _reconcile(db, legacy_vpn_keys: list[dict], *, apply: bool) -> ReconcileReport:
+async def _reconcile(db, api, mappings: dict, *, apply: bool) -> ReconcileReport:
     report = ReconcileReport(dry_run=not apply)
+    report.mapping_entries = len(mappings)
 
-    by_user: dict[int, list[dict]] = {}
-    for row in legacy_vpn_keys:
-        by_user.setdefault(row['user_id'], []).append(row)
+    for main_short_uuid, info in mappings.items():
+        limited_token = (info or {}).get('limited_token')
+        if not limited_token:
+            continue
 
-    async def _sub_by_remnawave_id(remnawave_id: int) -> Subscription | None:
-        return (
-            await db.execute(select(Subscription).where(Subscription.remnawave_id == remnawave_id))
+        main_sub = (
+            await db.execute(select(Subscription).where(Subscription.remnawave_short_uuid == main_short_uuid))
         ).scalar_one_or_none()
-
-    for legacy_user_id, keys in by_user.items():
-        companions = [k for k in keys if not k['is_primary']]
-        if not companions:
-            continue
-        report.legacy_companion_rows += len(companions)
-
-        primaries = [k for k in keys if k['is_primary']]
-
-        if len(companions) > 1:
-            report.skipped_ambiguous_multiple_companion += 1
-            report.unresolved_lines.append(
-                f'legacy user_id={legacy_user_id}: {len(companions)} companion (is_primary=0) '
-                f'vpn_keys (key_id={[k["key_id"] for k in companions]}) — skipped, needs manual review'
-            )
-            continue
-
-        companion_key = companions[0]
-
-        if len(primaries) != 1:
-            report.skipped_ambiguous_multiple_main += 1
-            report.unresolved_lines.append(
-                f'legacy user_id={legacy_user_id}: {len(primaries)} primary (is_primary=1) vpn_keys '
-                f'for companion key_id={companion_key["key_id"]} — skipped, needs manual review'
-            )
-            continue
-
-        main_key = primaries[0]
-
-        companion_remnawave_id = companion_key['remnawave_user_id']
-        main_remnawave_id = main_key['remnawave_user_id']
-        if not companion_remnawave_id or not main_remnawave_id:
-            report.skipped_no_panel_link += 1
-            report.unresolved_lines.append(
-                f'legacy user_id={legacy_user_id}: companion key_id={companion_key["key_id"]} or main '
-                f'key_id={main_key["key_id"]} has no remnawave_user_id — skipped, needs manual review'
-            )
-            continue
-
-        limited_sub = await _sub_by_remnawave_id(companion_remnawave_id)
-        if limited_sub is None:
-            # Companion key wasn't migrated as its own Subscription (e.g. skipped as
-            # already-expired by migrate_shopbot) — nothing to fold in, not an error.
-            report.skipped_companion_not_migrated += 1
-            continue
-
-        main_sub = await _sub_by_remnawave_id(main_remnawave_id)
         if main_sub is None:
-            report.skipped_main_not_migrated += 1
-            report.unresolved_lines.append(
-                f'legacy user_id={legacy_user_id}: companion Subscription id={limited_sub.id} exists but '
-                f'main key (remnawave_id={main_remnawave_id}) was not migrated — leftover companion left '
-                f'untouched, needs manual review'
-            )
+            report.skipped_main_not_found += 1
             continue
 
         if main_sub.limited_companion_remnawave_id:
             report.skipped_already_linked += 1
+            continue
+
+        # A companion that migrate_shopbot also happened to import as its own
+        # standalone row (legacy vpn_keys.is_primary=0) — fold it in without a
+        # panel round-trip, and delete the now-redundant row.
+        limited_sub = (
+            await db.execute(select(Subscription).where(Subscription.remnawave_short_uuid == limited_token))
+        ).scalar_one_or_none()
+
+        if limited_sub is not None:
+            main_sub.limited_companion_remnawave_id = limited_sub.remnawave_id
+            main_sub.limited_companion_short_uuid = limited_sub.remnawave_short_uuid
+            await db.delete(limited_sub)
+            report.linked_via_local_subscription += 1
+            report.pairs_linked += 1
+            continue
+
+        try:
+            companion_user = await api.get_user_by_short_uuid(limited_token)
+        except Exception as error:
+            report.skipped_companion_not_found += 1
             report.unresolved_lines.append(
-                f'legacy user_id={legacy_user_id}: main Subscription id={main_sub.id} already has a '
-                f'companion linked (remnawave_id={main_sub.limited_companion_remnawave_id}); leftover '
-                f'companion Subscription id={limited_sub.id} left untouched — needs manual review'
+                f'main_short_uuid={main_short_uuid}: panel lookup for limited_token={limited_token} '
+                f'failed ({error}) — skipped, needs manual review'
             )
             continue
 
-        main_sub.limited_companion_remnawave_id = limited_sub.remnawave_id
-        main_sub.limited_companion_short_uuid = limited_sub.remnawave_short_uuid
-        await db.delete(limited_sub)
+        if companion_user is None:
+            report.skipped_companion_not_found += 1
+            report.unresolved_lines.append(
+                f'main_short_uuid={main_short_uuid}: limited_token={limited_token} not found in the panel '
+                f'— skipped, needs manual review'
+            )
+            continue
+
+        main_sub.limited_companion_remnawave_id = companion_user.id
+        main_sub.limited_companion_short_uuid = companion_user.short_uuid or limited_token
+        report.linked_via_panel_lookup += 1
         report.pairs_linked += 1
 
     await db.flush()
@@ -184,14 +163,13 @@ def _print_report(report: ReconcileReport) -> None:
     print('=' * 70)
     print('  DRY RUN — ничего не записано' if report.dry_run else '  APPLIED')
     print('=' * 70)
-    print(f'  лимитных ключей в легаси (is_primary=0)      : {report.legacy_companion_rows}')
-    print(f'  пар связано                                  : {report.pairs_linked}')
-    print(f'  пропущено (уже связано)                      : {report.skipped_already_linked}')
-    print(f'  пропущено (несколько лимитных на пользователя): {report.skipped_ambiguous_multiple_companion}')
-    print(f'  пропущено (несколько основных на пользователя): {report.skipped_ambiguous_multiple_main}')
-    print(f'  пропущено (лимитный ключ не мигрирован)      : {report.skipped_companion_not_migrated}')
-    print(f'  пропущено (основной ключ не мигрирован)      : {report.skipped_main_not_migrated}')
-    print(f'  пропущено (нет remnawave_user_id)            : {report.skipped_no_panel_link}')
+    print(f'  записей в mappings.json                : {report.mapping_entries}')
+    print(f'  пар связано                            : {report.pairs_linked}')
+    print(f'    из них через локальную Subscription  : {report.linked_via_local_subscription}')
+    print(f'    из них через живой запрос в панель   : {report.linked_via_panel_lookup}')
+    print(f'  пропущено (уже связано)                : {report.skipped_already_linked}')
+    print(f'  пропущено (основная подписка не найдена): {report.skipped_main_not_found}')
+    print(f'  пропущено (компаньон не найден в панели): {report.skipped_companion_not_found}')
     print()
     if report.unresolved_lines:
         print(f'  !! строк с замечаниями: {len(report.unresolved_lines)} (первые 30)')
@@ -218,7 +196,7 @@ def _write_audit(report: ReconcileReport, *, committed: bool) -> str | None:
     return str(path)
 
 
-async def _run(args: argparse.Namespace, source_path: Path) -> int:
+async def _run(args: argparse.Namespace, mappings_path: Path) -> int:
     await bot_configuration_service.initialize(sync_web_api_token=False)
 
     logger.info(
@@ -232,11 +210,12 @@ async def _run(args: argparse.Namespace, source_path: Path) -> int:
             'без них подписки со связанным компаньоном не будут синхронизированы вперёд, продолжаю всё равно.'
         )
 
-    legacy_vpn_keys = _load_legacy_vpn_keys(source_path)
-    print(f'  источник: {len(legacy_vpn_keys)} vpn_keys')
+    mappings = _load_mappings(mappings_path)
+    print(f'  источник: {len(mappings)} записей в mappings.json')
 
-    async with AsyncSessionLocal() as db:
-        report = await _reconcile(db, legacy_vpn_keys, apply=args.apply)
+    remnawave_service = RemnaWaveService()
+    async with AsyncSessionLocal() as db, remnawave_service.get_api_client() as api:
+        report = await _reconcile(db, api, mappings, apply=args.apply)
         if args.apply:
             await db.commit()
         else:
@@ -253,20 +232,20 @@ async def _run(args: argparse.Namespace, source_path: Path) -> int:
 def main() -> int:
     parser = argparse.ArgumentParser(
         description=(
-            'Fold migrate_shopbot-imported "limited server" companion Subscription rows into '
-            'the limited_companion_* fields of their main sibling subscription'
+            'Link migrated main subscriptions to their limited-server companion identity, '
+            'using the subscription-merger mappings.json as the source of truth'
         )
     )
-    parser.add_argument('--source', required=True, help='path to the legacy users.db SQLite file')
+    parser.add_argument('--mappings', required=True, help='path to the subscription-merger mappings.json file')
     parser.add_argument('--apply', action='store_true', help='persist changes (default is a dry run)')
     args = parser.parse_args()
 
-    source_path = Path(args.source).expanduser()
-    if not source_path.exists():
-        print(f'  !! файл не найден: {source_path}')
+    mappings_path = Path(args.mappings).expanduser()
+    if not mappings_path.exists():
+        print(f'  !! файл не найден: {mappings_path}')
         return 2
 
-    return asyncio.run(_run(args, source_path))
+    return asyncio.run(_run(args, mappings_path))
 
 
 if __name__ == '__main__':
