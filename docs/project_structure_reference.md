@@ -2793,6 +2793,9 @@
 - `scripts/__init__.py` — Python-модуль
   Классы: нет
   Функции: нет
+- `scripts/assign_tariff_to_migrated_subscriptions.py` — Python-модуль
+  Классы: `AssignReport` (1 методов)
+  Функции: `main`
 - `scripts/backfill_remnawave_ids.py` — Python-модуль
   Классы: нет
   Функции: `main`
