@@ -468,6 +468,9 @@ class Settings(BaseSettings):
     BLACKLIST_IGNORE_ADMINS: bool = True
 
     DISPOSABLE_EMAIL_CHECK_ENABLED: bool = True
+    # Свои одноразовые домены поверх скачиваемого списка (через запятую, пробел или перенос строки).
+    # Совпадение и по поддоменам: x.mail.tm ловится записью mail.tm. Работает и без скачанного списка.
+    DISPOSABLE_EMAIL_EXTRA_DOMAINS: str = ''
 
     # Настройки перевыпуска подписки (revoke + regenerate link)
     SUBSCRIPTION_REVOKE_ENABLED: bool = True
@@ -1460,6 +1463,17 @@ class Settings(BaseSettings):
     CABINET_PASSWORD_RESET_EXPIRE_HOURS: int = 1
     CABINET_EMAIL_CHANGE_CODE_EXPIRE_MINUTES: int = 15  # Email change verification code expiration
     CABINET_EMAIL_AUTH_ENABLED: bool = True  # Enable email registration/login in cabinet
+    # Регистрация по email с одного IP. Минутное окно ловит всплеск; часовое и суточное —
+    # скрипт, который ждёт минуту и продолжает (волна одноразовых почт за триалами). 0 выключает окно.
+    CABINET_EMAIL_REGISTER_LIMIT_PER_MINUTE: int = 5
+    CABINET_EMAIL_REGISTER_LIMIT_PER_HOUR: int = 10
+    CABINET_EMAIL_REGISTER_LIMIT_PER_DAY: int = 30
+    # Повторная отправка письма подтверждения с экрана «Проверьте почту» (без входа).
+    # Лимит по IP защищает от рассылки чужими руками, лимит по адресу — от заваливания
+    # одного ящика письмами с разных адресов. 0 выключает окно.
+    CABINET_EMAIL_RESEND_LIMIT_PER_MINUTE: int = 2
+    CABINET_EMAIL_RESEND_LIMIT_PER_HOUR: int = 10
+    CABINET_EMAIL_RESEND_PER_ADDRESS_PER_HOUR: int = 5
     # Согласие с офертой и политикой при ПЕРВОЙ авторизации в кабинете (для новых юзеров).
     # False — чекбоксы не показываются и ничего не требуется (прежнее поведение).
     # Гейт сам собой отключается, если ни оферта, ни политика не включены для веба:
@@ -1520,6 +1534,14 @@ class Settings(BaseSettings):
     BAN_SYSTEM_API_URL: str | None = None  # e.g., http://ban-server:8000
     BAN_SYSTEM_API_TOKEN: str | None = None
     BAN_SYSTEM_REQUEST_TIMEOUT: int = 30
+
+    # bschekbot — BSCHEKER: проверка хостов глазами мобильных операторов
+    BSCHEK_ENABLED: bool = False
+    BSCHEK_API_URL: str = 'https://bsbord.com/v1'
+    BSCHEK_API_KEY: str | None = None  # bsk_live_…, выпускается вручную в кабинете bschekbot
+    BSCHEK_REQUEST_TIMEOUT: int = 200  # синхронный probe идёт до нескольких минут
+    BSCHEK_REFERENCE_SUBSCRIPTION: str | None = None  # shortUuid эталонной подписки панели
+    BSCHEK_JOB_COST_LIMIT_KOPEKS: int = 0  # потолок цены одной задачи, 0 — без потолка
 
     # SOCKS5 proxy for routing bot traffic to Telegram API
     # Format: socks5://user:password@host:port or socks5://host:port
@@ -1736,11 +1758,11 @@ class Settings(BaseSettings):
 
     def get_proxy_url(self) -> str | None:
         """Return SOCKS5 proxy URL or None."""
-        return self.PROXY_URL if self.PROXY_URL else None
+        return self.PROXY_URL or None
 
     def get_telegram_api_url(self) -> str | None:
         """Return custom Telegram Bot API server URL or None."""
-        return self.TELEGRAM_API_URL if self.TELEGRAM_API_URL else None
+        return self.TELEGRAM_API_URL or None
 
     def get_nalogo_proxy_url(self) -> str | None:
         """Return SOCKS proxy URL for nalogo or None.
@@ -2870,7 +2892,7 @@ class Settings(BaseSettings):
 
     def get_severpay_display_name(self) -> str:
         name = (self.SEVERPAY_DISPLAY_NAME or '').strip()
-        return name if name else 'SeverPay'
+        return name or 'SeverPay'
 
     def get_severpay_display_name_html(self) -> str:
         return html.escape(self.get_severpay_display_name())
@@ -2958,7 +2980,7 @@ class Settings(BaseSettings):
 
     def get_paypear_display_name(self) -> str:
         name = (self.PAYPEAR_DISPLAY_NAME or '').strip()
-        return name if name else 'PayPear'
+        return name or 'PayPear'
 
     def get_paypear_display_name_html(self) -> str:
         return html.escape(self.get_paypear_display_name())
@@ -2972,7 +2994,7 @@ class Settings(BaseSettings):
 
     def get_rollypay_display_name(self) -> str:
         name = (self.ROLLYPAY_DISPLAY_NAME or '').strip()
-        return name if name else 'RollyPay'
+        return name or 'RollyPay'
 
     def get_rollypay_display_name_html(self) -> str:
         return html.escape(self.get_rollypay_display_name())
@@ -2995,7 +3017,7 @@ class Settings(BaseSettings):
 
     def get_overpay_display_name(self) -> str:
         name = (self.OVERPAY_DISPLAY_NAME or '').strip()
-        return name if name else 'Overpay'
+        return name or 'Overpay'
 
     def get_overpay_display_name_html(self) -> str:
         return html.escape(self.get_overpay_display_name())
@@ -3032,7 +3054,7 @@ class Settings(BaseSettings):
 
     def get_aurapay_display_name(self) -> str:
         name = (self.AURAPAY_DISPLAY_NAME or '').strip()
-        return name if name else 'AuraPay'
+        return name or 'AuraPay'
 
     def get_aurapay_display_name_html(self) -> str:
         return html.escape(self.get_aurapay_display_name())
@@ -3077,7 +3099,7 @@ class Settings(BaseSettings):
 
     def get_antilopay_display_name(self) -> str:
         name = (self.ANTILOPAY_DISPLAY_NAME or '').strip()
-        return name if name else 'Antilopay'
+        return name or 'Antilopay'
 
     def get_antilopay_display_name_html(self) -> str:
         return html.escape(self.get_antilopay_display_name())
@@ -3121,7 +3143,7 @@ class Settings(BaseSettings):
 
     def get_jupiter_display_name(self) -> str:
         name = (self.JUPITER_DISPLAY_NAME or '').strip()
-        return name if name else 'Jupiter'
+        return name or 'Jupiter'
 
     def get_jupiter_display_name_html(self) -> str:
         return html.escape(self.get_jupiter_display_name())
@@ -3258,7 +3280,7 @@ class Settings(BaseSettings):
 
     def get_donut_display_name(self) -> str:
         name = (self.DONUT_DISPLAY_NAME or '').strip()
-        return name if name else 'Donut'
+        return name or 'Donut'
 
     def get_donut_display_name_html(self) -> str:
         return html.escape(self.get_donut_display_name())
@@ -3309,7 +3331,7 @@ class Settings(BaseSettings):
 
     def get_lava_display_name(self) -> str:
         name = (self.LAVA_DISPLAY_NAME or '').strip()
-        return name if name else 'Lava'
+        return name or 'Lava'
 
     def get_lava_display_name_html(self) -> str:
         return html.escape(self.get_lava_display_name())
@@ -3350,7 +3372,7 @@ class Settings(BaseSettings):
 
     def get_etoplatezhi_display_name(self) -> str:
         name = (self.ETOPLATEZHI_DISPLAY_NAME or '').strip()
-        return name if name else 'Etoplatezhi'
+        return name or 'Etoplatezhi'
 
     def get_etoplatezhi_display_name_html(self) -> str:
         return html.escape(self.get_etoplatezhi_display_name())
@@ -3380,7 +3402,7 @@ class Settings(BaseSettings):
 
     def get_kassa_ai_sbp_display_name(self) -> str:
         name = (self.KASSA_AI_SBP_DISPLAY_NAME or '').strip()
-        return name if name else 'СБП (KassaAI)'
+        return name or 'СБП (KassaAI)'
 
     def get_kassa_ai_sbp_display_name_html(self) -> str:
         return html.escape(self.get_kassa_ai_sbp_display_name())
@@ -3390,7 +3412,7 @@ class Settings(BaseSettings):
 
     def get_kassa_ai_card_display_name(self) -> str:
         name = (self.KASSA_AI_CARD_DISPLAY_NAME or '').strip()
-        return name if name else 'Карта (KassaAI)'
+        return name or 'Карта (KassaAI)'
 
     def get_kassa_ai_card_display_name_html(self) -> str:
         return html.escape(self.get_kassa_ai_card_display_name())
@@ -3400,7 +3422,7 @@ class Settings(BaseSettings):
 
     def get_kassa_ai_sberpay_display_name(self) -> str:
         name = (self.KASSA_AI_SBERPAY_DISPLAY_NAME or '').strip()
-        return name if name else 'SberPay (KassaAI)'
+        return name or 'SberPay (KassaAI)'
 
     def get_kassa_ai_sberpay_display_name_html(self) -> str:
         return html.escape(self.get_kassa_ai_sberpay_display_name())
@@ -4320,6 +4342,16 @@ class Settings(BaseSettings):
 
     def get_ban_system_request_timeout(self) -> int:
         return max(1, self.BAN_SYSTEM_REQUEST_TIMEOUT)
+
+    # bschekbot helpers
+    def is_bschek_enabled(self) -> bool:
+        return bool(self.BSCHEK_ENABLED)
+
+    def is_bschek_configured(self) -> bool:
+        return bool(self.BSCHEK_API_KEY)
+
+    def get_bschek_api_url(self) -> str:
+        return (self.BSCHEK_API_URL or 'https://bsbord.com/v1').rstrip('/')
 
     model_config = {'env_file': '.env', 'env_file_encoding': 'utf-8', 'extra': 'ignore'}
 

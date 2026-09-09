@@ -205,6 +205,7 @@ class BotConfigurationService:
         'BAN_NOTIFICATIONS': '🚫 Тексты уведомлений о блокировках',
         'INFO_PAGES': '📄 Инфо-страницы',
         'GRACE_ACCESS': '🛟 Grace-доступ',
+        'BSCHEK': '📶 BSCHEKER (bschekbot)',
     }
 
     CATEGORY_DESCRIPTIONS: dict[str, str] = {
@@ -286,6 +287,10 @@ class BotConfigurationService:
             'Временный ограниченный доступ для истёкших и лимитных подписок. '
             'Здесь ключи лежат по отдельности; связанный экран с проверкой конфигурации и состоянием '
             'сессий — в админке кабинета, раздел «Grace-доступ».'
+        ),
+        'BSCHEK': (
+            'Проверка хостов и конфигов глазами мобильных операторов РФ через bschekbot API: '
+            'ключ, эталонная подписка панели, потолок цены одной задачи.'
         ),
     }
 
@@ -525,6 +530,7 @@ class BotConfigurationService:
         'DISPLAY_NAME_': 'MODERATION',
         'BAN_MSG_': 'BAN_NOTIFICATIONS',
         'GRACE_ACCESS_': 'GRACE_ACCESS',
+        'BSCHEK_': 'BSCHEK',
     }
 
     CHOICES: dict[str, list[ChoiceOption]] = {
@@ -1295,7 +1301,10 @@ class BotConfigurationService:
             ),
             'format': 'Булево значение: выберите "Включить" или "Выключить".',
             'example': 'Выключено по умолчанию.',
-            'warning': 'При включении трафик будет обнуляться при каждом продлении подписки.',
+            'warning': (
+                'При включении трафик будет обнуляться при каждом продлении подписки, '
+                'включая суточное списание — то есть раз в сутки.'
+            ),
         },
         'TELEGRAM_WIDGET_SIZE': {
             'description': 'Размер кнопки виджета Telegram на странице авторизации.',
@@ -2070,12 +2079,27 @@ class BotConfigurationService:
         value: Any,
         *,
         force: bool = False,
+        commit: bool = True,
     ) -> None:
+        """Сохранить настройку в БД и применить к живому процессу.
+
+        Коммит по умолчанию делает сама запись. Раньше запись только флашила, а
+        коммит оставался на вызывающем — и три ручки реферальной программы плюс
+        выключатель писем его не делали. Значение применялось к процессу
+        (админка показывала новое), а в базу не доезжало: сессия кабинета
+        закрывается без коммита. После перезапуска возвращалось старое, сколько
+        ни переключай.
+
+        ``commit=False`` — для пакетной записи, где несколько ключей должны
+        лечь одной транзакцией; такой вызывающий обязан коммитить сам.
+        """
         if cls.is_read_only(key) and not force:
             raise ReadOnlySettingError(f'Setting {key} is read-only')
 
         raw_value = cls.serialize_value(key, value)
         await upsert_system_setting(db, key, raw_value)
+        if commit:
+            await db.commit()
         if cls._is_env_override(key):
             logger.info('Настройка сохранена в БД, но не применена: значение задаётся через окружение', key=key)
             cls._overrides_raw.pop(key, None)
@@ -2098,11 +2122,19 @@ class BotConfigurationService:
         key: str,
         *,
         force: bool = False,
+        commit: bool = True,
     ) -> None:
+        """Убрать настройку из БД и вернуть значение по умолчанию.
+
+        Коммит — как у ``set_value``: по умолчанию свой, ``commit=False`` для
+        пакетной записи.
+        """
         if cls.is_read_only(key) and not force:
             raise ReadOnlySettingError(f'Setting {key} is read-only')
 
         await delete_system_setting(db, key)
+        if commit:
+            await db.commit()
         cls._overrides_raw.pop(key, None)
         if cls._is_env_override(key):
             logger.info('Настройка сброшена в БД, используется значение из окружения', key=key)

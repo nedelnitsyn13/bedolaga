@@ -22,6 +22,7 @@ from app.database.crud.tariff import (
     update_tariff,
 )
 from app.database.models import PromoGroup, Subscription, SubscriptionStatus, Tariff, Transaction, TransactionType, User
+from app.services.panel_sync import patch_panel_squads
 
 from ..dependencies import get_cabinet_db, require_permission
 from ..schemas.tariffs import (
@@ -250,6 +251,8 @@ async def get_tariff(
         tier_level=tariff.tier_level,
         display_order=tariff.display_order,
         period_prices=_period_prices_to_list(tariff.period_prices),
+        highlight_period_days=tariff.highlight_period_days,
+        is_highlighted=tariff.is_highlighted,
         allowed_squads=allowed_squads,
         server_traffic_limits=server_limits_response,
         servers=servers,
@@ -311,6 +314,8 @@ async def create_new_tariff(
         max_device_limit=request.max_device_limit,
         tier_level=request.tier_level,
         period_prices=period_prices_dict,
+        highlight_period_days=request.highlight_period_days,
+        is_highlighted=request.is_highlighted,
         allowed_squads=request.allowed_squads,
         server_traffic_limits=server_limits_dict,
         promo_group_ids=request.promo_group_ids or None,
@@ -372,6 +377,8 @@ async def update_existing_tariff(
         updates['description'] = request.description
     if request.is_active is not None:
         updates['is_active'] = request.is_active
+    if request.is_highlighted is not None:
+        updates['is_highlighted'] = request.is_highlighted
     if request.allow_traffic_topup is not None:
         updates['allow_traffic_topup'] = request.allow_traffic_topup
     if request.traffic_topup_enabled is not None:
@@ -394,6 +401,9 @@ async def update_existing_tariff(
         updates['display_order'] = request.display_order
     if request.period_prices is not None:
         updates['period_prices'] = _period_prices_to_dict(request.period_prices)
+    # 0 снимает выделение: пустое поле означает «не трогать», а не «снять».
+    if 'highlight_period_days' in request.model_fields_set:
+        updates['highlight_period_days'] = request.highlight_period_days or None
     if request.allowed_squads is not None:
         updates['allowed_squads'] = request.allowed_squads
     if request.server_traffic_limits is not None:
@@ -677,12 +687,12 @@ async def _background_sync_squads(tariff_id: int, admin_id: int) -> None:
                         return
                     async with semaphore:
                         try:
-                            await update_panel_user_grace_safe(
+                            await patch_panel_squads(
                                 api,
-                                sub.id,
                                 user_id=remnawave_id,
-                                active_internal_squads=new_squads,
+                                squads=new_squads,
                                 external_squad_uuid=ext_squad_uuid,
+                                update_call=lambda **kwargs: update_panel_user_grace_safe(api, sub.id, **kwargs),
                             )
                             sub.connected_squads = new_squads
                             updated += 1
@@ -803,12 +813,12 @@ async def sync_tariff_squads(
                     return 'skipped'
 
                 try:
-                    await update_panel_user_grace_safe(
+                    await patch_panel_squads(
                         api,
-                        sub.id,
                         user_id=remnawave_id,
-                        active_internal_squads=new_squads,
+                        squads=new_squads,
                         external_squad_uuid=ext_squad_uuid,
+                        update_call=lambda **kwargs: update_panel_user_grace_safe(api, sub.id, **kwargs),
                     )
                     # Update local DB only on successful API call
                     sub.connected_squads = new_squads
