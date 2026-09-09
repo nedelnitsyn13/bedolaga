@@ -610,23 +610,32 @@ class SubscriptionService:
                     suffix='_lim',
                 )
 
+            companion_traffic_gb = settings.LIMITED_COMPANION_TRAFFIC_GB + (
+                subscription.limited_companion_purchased_traffic_gb or 0
+            )
+
             companion_user = await write_companion_account(
                 api,
                 user_id=companion_user.id if companion_user else None,
                 username=companion_username,
                 status=main_user.status,
                 expire_at=main_user.expire_at,
-                traffic_limit_bytes=self._gb_to_bytes(settings.LIMITED_COMPANION_TRAFFIC_GB),
+                traffic_limit_bytes=self._gb_to_bytes(companion_traffic_gb),
                 traffic_limit_strategy=TrafficLimitStrategy.MONTH,
                 telegram_id=user.telegram_id,
                 email=user.email,
                 active_internal_squads=[settings.LIMITED_COMPANION_SQUAD_UUID],
                 description=description,
+                # Докупка устройств должна распространяться и на компаньона — иначе
+                # пользователь платит за лимит на основном ключе, а на лимитном
+                # сервере продолжает действовать старый.
+                hwid_device_limit=resolve_hwid_device_limit_for_payload(subscription),
             )
             if not subscription.limited_companion_remnawave_id:
                 subscription.limited_companion_remnawave_id = companion_user.id
 
             subscription.limited_companion_short_uuid = companion_user.short_uuid
+            subscription.limited_companion_traffic_used_gb = self._bytes_to_gb(companion_user.used_traffic_bytes)
             await db.flush((subscription,))
             await db.commit()
 
@@ -713,6 +722,40 @@ class SubscriptionService:
                 '⚠️ Не удалось зарегистрировать компаньон-маппинг в subscription-merger',
                 error=error,
             )
+
+    async def resync_limited_companion(self, db: AsyncSession, subscription: Subscription) -> bool:
+        """Точечно перечитать/дописать компаньон-аккаунт, не трогая основной.
+
+        Нужен докупке трафика лимитного сервера: пересобирать и пушить весь
+        основной аккаунт ради одного изменившегося поля компаньона — лишний риск
+        для ключа, за который никто в этот момент не платит. Компаньон всё равно
+        зеркалит статус/срок действия основного, поэтому основной аккаунт всё же
+        читается (не пишется) — как единственный источник этих двух полей.
+        """
+        if not settings.is_limited_companion_enabled():
+            return False
+        if not subscription.remnawave_id:
+            return False
+
+        user = await get_user_by_id(db, subscription.user_id)
+        if not user:
+            return False
+
+        try:
+            async with self.get_api_client() as api:
+                main_user = await api.get_user_by_id(subscription.remnawave_id)
+                if not main_user:
+                    return False
+                await self._sync_limited_companion_user(api, db, user, subscription, main_user)
+        except Exception as error:
+            logger.error(
+                '⚠️ Не удалось пересинхронизировать компаньон-аккаунт лимитного сервера',
+                subscription_id=subscription.id,
+                error=error,
+            )
+            return False
+
+        return True
 
     async def update_remnawave_user(
         self,
@@ -1176,6 +1219,20 @@ class SubscriptionService:
 
                 used_gb = self._bytes_to_gb(remnawave_user.used_traffic_bytes)
                 subscription.traffic_used_gb = used_gb
+
+                if settings.is_limited_companion_enabled() and subscription.limited_companion_remnawave_id:
+                    try:
+                        companion_user = await api.get_user_by_id(subscription.limited_companion_remnawave_id)
+                        if companion_user:
+                            subscription.limited_companion_traffic_used_gb = self._bytes_to_gb(
+                                companion_user.used_traffic_bytes
+                            )
+                    except Exception as companion_error:
+                        logger.warning(
+                            '⚠️ Не удалось синхронизировать трафик компаньон-аккаунта',
+                            subscription_id=subscription.id,
+                            error=companion_error,
+                        )
 
                 await db.commit()
 

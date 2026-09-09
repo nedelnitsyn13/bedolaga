@@ -16,6 +16,7 @@ from app.database.models import TransactionType, User
 from app.keyboards.inline import (
     get_add_traffic_keyboard,
     get_add_traffic_keyboard_from_tariff,
+    get_add_traffic_limited_keyboard,
     get_back_keyboard,
     get_countries_keyboard,
     get_devices_keyboard,
@@ -732,6 +733,200 @@ async def add_traffic(callback: types.CallbackQuery, db_user: User, db: AsyncSes
 
     except Exception as e:
         logger.error('Ошибка добавления трафика', error=e)
+        await callback.message.edit_text(texts.ERROR, reply_markup=get_back_keyboard(db_user.language))
+
+    await callback.answer()
+
+
+async def handle_add_traffic_limited(
+    callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext = None
+):
+    """Экран выбора пакета докупки трафика для компаньон-аккаунта лимитного сервера.
+
+    Отдельный от ``handle_add_traffic`` поток: тот работает с ОСНОВНЫМ ключом
+    (subscription.traffic_limit_gb/traffic_used_gb), а у компаньона своя квота,
+    которая на основной подписке даже не отражена (см. LIMITED_COMPANION_ENABLED).
+    """
+    texts = get_texts(db_user.language)
+    subscription, sub_id = await _resolve_subscription(callback, db_user, db, state)
+    if subscription is None:
+        return
+
+    if not settings.is_limited_companion_enabled() or not subscription.limited_companion_remnawave_id:
+        await callback.answer(
+            texts.t('LIMITED_COMPANION_UNAVAILABLE', '⚠️ Лимитный сервер недоступен для этой подписки'),
+            show_alert=True,
+        )
+        return
+
+    if not settings.is_traffic_topup_enabled():
+        await callback.answer(
+            texts.t('TRAFFIC_TOPUP_DISABLED', '⚠️ Функция докупки трафика отключена'),
+            show_alert=True,
+        )
+        return
+
+    if settings.is_traffic_topup_blocked():
+        await callback.answer(
+            texts.t('TRAFFIC_FIXED_MODE', '⚠️ В текущем режиме трафик фиксированный и не может быть изменен'),
+            show_alert=True,
+        )
+        return
+
+    current_limit = settings.LIMITED_COMPANION_TRAFFIC_GB + (subscription.limited_companion_purchased_traffic_gb or 0)
+    period_hint_days = _get_period_hint_from_subscription(subscription)
+    traffic_discount_percent = PricingEngine.get_addon_discount_percent(db_user, 'traffic', period_hint_days)
+
+    prompt_text = (
+        '📈 <b>Докупить трафик — лимитный сервер</b>\n\n'
+        f'Использовано: {texts.format_traffic(subscription.limited_companion_traffic_used_gb or 0, is_limit=False)}\n'
+        f'Текущий лимит: {texts.format_traffic(current_limit)}\n\n'
+        'Выберите дополнительный трафик:'
+    )
+
+    await callback.message.edit_text(
+        prompt_text,
+        reply_markup=get_add_traffic_limited_keyboard(
+            db_user.language,
+            sub_id,
+            subscription.end_date,
+            traffic_discount_percent,
+        ),
+        parse_mode='HTML',
+    )
+    await callback.answer()
+
+
+async def add_traffic_limited(callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext = None):
+    """Списывает деньги и докупает трафик компаньон-аккаунту лимитного сервера.
+
+    callback_data: ``alt:{gb}:{sub_id}`` — цена берётся из того же прайс-листа,
+    что и для основного трафика (settings.get_traffic_topup_price), докупленный
+    объём копится в subscription.limited_companion_purchased_traffic_gb и
+    складывается с LIMITED_COMPANION_TRAFFIC_GB при каждой отправке в панель.
+    """
+    parts = callback.data.split(':')
+    traffic_gb = int(parts[1])
+    texts = get_texts(db_user.language)
+
+    subscription, sub_id = await _resolve_subscription(callback, db_user, db, state)
+    if subscription is None:
+        return
+
+    if not settings.is_limited_companion_enabled() or not subscription.limited_companion_remnawave_id:
+        await callback.answer(
+            texts.t('LIMITED_COMPANION_UNAVAILABLE', '⚠️ Лимитный сервер недоступен для этой подписки'),
+            show_alert=True,
+        )
+        return
+
+    if settings.is_traffic_topup_blocked():
+        await callback.answer('⚠️ В текущем режиме трафик фиксированный', show_alert=True)
+        return
+
+    base_price = settings.get_traffic_topup_price(traffic_gb)
+    if base_price == 0:
+        await callback.answer('⚠️ Цена для этого пакета не настроена', show_alert=True)
+        return
+
+    # Lock user BEFORE price computation to prevent TOCTOU on group discount
+    from app.database.crud.user import lock_user_for_pricing
+
+    db_user = await lock_user_for_pricing(db, db_user.id)
+    subscription, _ = await _resolve_subscription(callback, db_user, db, state)
+    if subscription is None:
+        return
+
+    period_hint_days = _get_period_hint_from_subscription(subscription)
+    discounted_per_month, discount_per_month, traffic_discount_pct = PricingEngine.calculate_traffic_discount(
+        base_price,
+        db_user,
+        period_hint_days,
+    )
+    price, charged_days = calculate_prorated_price(discounted_per_month, subscription.end_date)
+    total_discount_value = int(discount_per_month * charged_days / 30)
+
+    if price > 0 and db_user.balance_kopeks < price:
+        missing_kopeks = price - db_user.balance_kopeks
+        message_text = texts.t(
+            'ADDON_INSUFFICIENT_FUNDS_MESSAGE',
+            (
+                '⚠️ <b>Недостаточно средств</b>\n\n'
+                'Стоимость услуги: {required}\n'
+                'На балансе: {balance}\n'
+                'Не хватает: {missing}\n\n'
+                'Выберите способ пополнения. Сумма подставится автоматически.'
+            ),
+        ).format(
+            required=texts.format_price(price, round_kopeks=False),
+            balance=texts.format_price(db_user.balance_kopeks, round_kopeks=False),
+            missing=texts.format_price(missing_kopeks, round_kopeks=False),
+        )
+
+        await callback.message.edit_text(
+            message_text,
+            reply_markup=get_insufficient_balance_keyboard(db_user.language, amount_kopeks=missing_kopeks),
+            parse_mode='HTML',
+        )
+        await callback.answer()
+        return
+
+    try:
+        success = await subtract_user_balance(
+            db,
+            db_user,
+            price,
+            f'Докупка {traffic_gb} ГБ трафика (лимитный сервер)',
+        )
+
+        if not success:
+            await callback.answer('⚠️ Ошибка списания средств', show_alert=True)
+            return
+
+        subscription.limited_companion_purchased_traffic_gb = (
+            subscription.limited_companion_purchased_traffic_gb or 0
+        ) + traffic_gb
+        await db.commit()
+
+        subscription_service = SubscriptionService()
+        synced = await subscription_service.resync_limited_companion(db, subscription)
+        if not synced:
+            logger.error(
+                'Оплаченный трафик лимитного сервера не удалось применить в панели',
+                subscription_id=subscription.id,
+            )
+
+        await create_transaction(
+            db=db,
+            user_id=db_user.id,
+            type=TransactionType.SUBSCRIPTION_PAYMENT,
+            amount_kopeks=price,
+            description=f'Докупка {traffic_gb} ГБ трафика (лимитный сервер)',
+        )
+
+        await db.refresh(db_user)
+        await db.refresh(subscription)
+
+        new_limit = settings.LIMITED_COMPANION_TRAFFIC_GB + (subscription.limited_companion_purchased_traffic_gb or 0)
+        success_text = '✅ Трафик лимитного сервера успешно добавлен!\n\n'
+        success_text += f'📈 Добавлено: {traffic_gb} ГБ\n'
+        success_text += f'Новый лимит: {texts.format_traffic(new_limit)}'
+
+        if price > 0:
+            success_text += f'\n💰 Списано: {texts.format_price(price)}'
+            if total_discount_value > 0:
+                success_text += f' (скидка {traffic_discount_pct}%: -{texts.format_price(total_discount_value)})'
+
+        await callback.message.edit_text(success_text, reply_markup=get_back_keyboard(db_user.language))
+
+        logger.info(
+            '✅ Пользователь добавил ГБ трафика лимитного сервера',
+            telegram_id=db_user.telegram_id,
+            traffic_gb=traffic_gb,
+        )
+
+    except Exception as e:
+        logger.error('Ошибка докупки трафика лимитного сервера', error=e)
         await callback.message.edit_text(texts.ERROR, reply_markup=get_back_keyboard(db_user.language))
 
     await callback.answer()

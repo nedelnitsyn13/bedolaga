@@ -2550,6 +2550,11 @@ class Subscription(Base):
     # панели. NULL, пока функция выключена или компаньон ещё не создан.
     limited_companion_remnawave_id = Column(BigInteger, nullable=True)
     limited_companion_short_uuid = Column(String(255), nullable=True)
+    # Докупленный сверх LIMITED_COMPANION_TRAFFIC_GB трафик компаньона и последнее
+    # синхронизированное значение использованного — для отдельного отображения
+    # трафика лимитного сервера пользователю, тем же способом, что и у основной.
+    limited_companion_purchased_traffic_gb = Column(Integer, default=0, server_default='0')
+    limited_companion_traffic_used_gb = Column(Float, default=0.0, server_default='0')
 
     # Тариф (для режима продаж "Тарифы")
     tariff_id = Column(Integer, ForeignKey('tariffs.id', ondelete='RESTRICT'), nullable=True, index=True)

@@ -702,6 +702,21 @@ def get_main_menu_keyboard(
                 )
             )
 
+        if (
+            subscription
+            and not subscription.is_trial
+            and settings.is_limited_companion_enabled()
+            and getattr(subscription, 'limited_companion_remnawave_id', None)
+            and settings.is_traffic_topup_enabled()
+            and not settings.is_traffic_topup_blocked()
+        ):
+            paired_buttons.append(
+                InlineKeyboardButton(
+                    text=texts.t('BUY_TRAFFIC_LIMITED_BUTTON', '📈 Докупить трафик (лимитный сервер)'),
+                    callback_data=f'blt:{subscription.id}',
+                )
+            )
+
     keyboard.append([InlineKeyboardButton(text=balance_button_text, callback_data='menu_balance')])
 
     show_trial = (
@@ -1289,6 +1304,25 @@ def get_subscription_keyboard(
                     [
                         InlineKeyboardButton(
                             text=texts.t('BUY_TRAFFIC_BUTTON', '📈 Докупить трафик'), callback_data='buy_traffic'
+                        )
+                    ]
+                )
+
+            # Компаньон лимитного сервера — отдельная кнопка, независимая от лимита
+            # ОСНОВНОГО ключа: тот у этой фичи обычно безлимитный, и показанная выше
+            # кнопка для него уже скрыта условием traffic_limit_gb > 0.
+            if (
+                subscription
+                and settings.is_limited_companion_enabled()
+                and getattr(subscription, 'limited_companion_remnawave_id', None)
+                and settings.is_traffic_topup_enabled()
+                and not settings.is_traffic_topup_blocked()
+            ):
+                keyboard.append(
+                    [
+                        InlineKeyboardButton(
+                            text=texts.t('BUY_TRAFFIC_LIMITED_BUTTON', '📈 Докупить трафик (лимитный сервер)'),
+                            callback_data=f'blt:{subscription.id}',
                         )
                     ]
                 )
@@ -2785,6 +2819,83 @@ def get_add_traffic_keyboard_from_tariff(
                 text += f' (discount {discount_percent}%: -{discount_value // 100}₽)'
 
         buttons.append([InlineKeyboardButton(text=text, callback_data=f'add_traffic_{gb}')])
+
+    buttons.append([InlineKeyboardButton(text=texts.BACK, callback_data=back_cb)])
+
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+
+def get_add_traffic_limited_keyboard(
+    language: str,
+    sub_id: int,
+    subscription_end_date: datetime = None,
+    discount_percent: int = 0,
+) -> InlineKeyboardMarkup:
+    """Пакеты докупки трафика для компаньон-аккаунта лимитного сервера.
+
+    Отдельная клавиатура, а не переиспользование ``get_add_traffic_keyboard``:
+    та кодирует callback_data как ``add_traffic_{gb}`` без sub_id (резолвится
+    через FSM/авто-выбор), а докупка компаньона должна однозначно указывать, к
+    какой подписке относится — sub_id зашит прямо в callback_data (``alt:{gb}:{sub_id}``),
+    как это уже принято для ``sm:``/``st:`` в этом файле. Безлимитный пакет (gb=0)
+    здесь не предлагается — у лимитного сервера фиксированная тарификация по ГБ.
+    """
+    from app.config import settings
+
+    texts = get_texts(language)
+    language_code = (language or DEFAULT_LANGUAGE).split('-')[0].lower()
+    use_russian_fallback = language_code in {'ru', 'fa'}
+    back_cb = f'sm:{sub_id}' if settings.is_multi_tariff_enabled() else 'menu_subscription'
+
+    if subscription_end_date:
+        now = datetime.now(UTC)
+        days_left = max(1, math.ceil((subscription_end_date - now).total_seconds() / 86400))
+        price_multiplier = days_left / 30
+        period_text = f' (за {days_left} дн.)' if days_left > 1 else ' (за 1 день)'
+    else:
+        price_multiplier = 1
+        period_text = ''
+
+    packages = settings.get_traffic_topup_packages()
+    enabled_packages = [pkg for pkg in packages if pkg['enabled'] and pkg['price'] > 0 and pkg['gb'] > 0]
+
+    if not enabled_packages:
+        return InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    InlineKeyboardButton(
+                        text=texts.t('NO_TRAFFIC_PACKAGES', '❌ Нет доступных пакетов'),
+                        callback_data='no_traffic_packages',
+                    )
+                ],
+                [InlineKeyboardButton(text=texts.BACK, callback_data=back_cb)],
+            ]
+        )
+
+    buttons = []
+    for package in enabled_packages:
+        gb = package['gb']
+        price_per_month = package['price']
+        discounted_per_month, discount_per_month = apply_percentage_discount(
+            price_per_month,
+            discount_percent,
+        )
+        total_price = int(discounted_per_month * price_multiplier)
+        total_price = max(100, total_price) if total_price > 0 else 0
+        total_discount = int(discount_per_month * price_multiplier)
+
+        if use_russian_fallback:
+            text = f'📊 +{gb} ГБ трафика - {total_price // 100} ₽{period_text}'
+        else:
+            text = f'📊 +{gb} GB traffic - {total_price // 100} ₽{period_text}'
+
+        if discount_percent > 0 and total_discount > 0:
+            if use_russian_fallback:
+                text += f' (скидка {discount_percent}%: -{total_discount // 100}₽)'
+            else:
+                text += f' (discount {discount_percent}%: -{total_discount // 100}₽)'
+
+        buttons.append([InlineKeyboardButton(text=text, callback_data=f'alt:{gb}:{sub_id}')])
 
     buttons.append([InlineKeyboardButton(text=texts.BACK, callback_data=back_cb)])
 

@@ -139,6 +139,22 @@ def _build_subscription_detail_keyboard(sub_id: int, sub=None) -> types.InlineKe
         buttons.append([types.InlineKeyboardButton(text='📊 Трафик', callback_data=f'st:{sub_id}')])
         buttons.append([types.InlineKeyboardButton(text='📱 Устройства', callback_data=f'sd:{sub_id}')])
 
+        if (
+            settings.is_limited_companion_enabled()
+            and sub is not None
+            and getattr(sub, 'limited_companion_remnawave_id', None)
+            and settings.is_traffic_topup_enabled()
+            and not settings.is_traffic_topup_blocked()
+        ):
+            buttons.append(
+                [
+                    types.InlineKeyboardButton(
+                        text='📈 Докупить трафик (лимитный сервер)',
+                        callback_data=f'blt:{sub_id}',
+                    )
+                ]
+            )
+
     if is_inactive:
         buttons.append([types.InlineKeyboardButton(text='🗑 Удалить подписку', callback_data=f'sub_del:{sub_id}')])
 
@@ -243,6 +259,13 @@ async def show_subscription_detail(
         f'📱 Устройства: {Texts.format_device_limit(subscription.device_limit)}\n'
         f'📅 До: {end_date}\n'
     )
+
+    if settings.is_limited_companion_enabled() and getattr(subscription, 'limited_companion_remnawave_id', None):
+        companion_limit = settings.LIMITED_COMPANION_TRAFFIC_GB + (
+            subscription.limited_companion_purchased_traffic_gb or 0
+        )
+        companion_used = subscription.limited_companion_traffic_used_gb or 0
+        text += f'\n🌐 Лимитный сервер: {companion_used:.1f} / {companion_limit} ГБ\n'
 
     if subscription.subscription_url and not settings.should_hide_subscription_link():
         text += f'\n🔗 <code>{subscription.subscription_url}</code>'

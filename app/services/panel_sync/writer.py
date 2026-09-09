@@ -319,6 +319,7 @@ async def write_companion_account(
     email: str | None,
     active_internal_squads: list[str],
     description: str,
+    hwid_device_limit: int | None = None,
     update_call=None,
     create_call=None,
 ) -> RemnaWaveUser:
@@ -331,6 +332,11 @@ async def write_companion_account(
     ``_record_identity`` пишет именно в эти "не те" колонки и увёл бы identity
     основной подписки. Здесь только запись в панель; куда сохранить
     id/short_uuid ответа решает вызывающий.
+
+    ``hwid_device_limit`` не обязателен: докупка устройств должна применяться и к
+    компаньону тоже (см. _sync_limited_companion_user), но создание нового
+    компаньона допустимо и без явного лимита — тогда панель использует свой
+    дефолт.
     """
     update = update_call or api.update_user
     create = create_call or api.create_user
@@ -344,6 +350,8 @@ async def write_companion_account(
         active_internal_squads=active_internal_squads,
         description=description,
     )
+    if hwid_device_limit is not None:
+        kwargs['hwid_device_limit'] = hwid_device_limit
     if user_id:
         return await update(user_id=user_id, **kwargs)
     return await create(username=username, **kwargs)
