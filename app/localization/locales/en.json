@@ -2052,6 +2052,7 @@
   "TARIFF_PURCHASE_DAYS_BUTTON": "📅 {days} days",
   "TARIFF_PURCHASE_DEVICES_LINE": "📱 Devices: {devices}\n",
   "TARIFF_PURCHASE_DISCOUNT_LINE": "\n🎁 <b>Discount: {percent}%</b>\n",
+  "TARIFF_PURCHASE_COMPANION_TRAFFIC_LINE": "🌐 Limited server: {traffic}\n",
   "TARIFF_PURCHASE_DISCOUNT_SHORT_LINE": "\n🎁 Discount: {percent}% (-{amount})",
   "TARIFF_PURCHASE_ERROR": "❌ An error occurred while placing the subscription",
   "TARIFF_PURCHASE_INFO": "📦 <b>{name}</b>\n\n<b>Parameters:</b>\n• Traffic: {traffic}\n• Devices: {devices}\n",

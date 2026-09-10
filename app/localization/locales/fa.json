@@ -1012,6 +1012,7 @@
   "TARIFF_PURCHASE_DAYS_BUTTON": "📅 {days} روز",
   "TARIFF_PURCHASE_DEVICES_LINE": "📱 دستگاه‌ها: {devices}\n",
   "TARIFF_PURCHASE_DISCOUNT_LINE": "\n🎁 <b>تخفیف: {percent}%</b>\n",
+  "TARIFF_PURCHASE_COMPANION_TRAFFIC_LINE": "🌐 سرور محدود: {traffic}\n",
   "TARIFF_PURCHASE_DISCOUNT_SHORT_LINE": "\n🎁 تخفیف: {percent}% (-{amount})",
   "TARIFF_PURCHASE_ERROR": "❌ هنگام ثبت اشتراک خطایی رخ داد",
   "TARIFF_PURCHASE_INFO": "📦 <b>{name}</b>\n\n<b>مشخصات:</b>\n• ترافیک: {traffic}\n• دستگاه‌ها: {devices}\n",

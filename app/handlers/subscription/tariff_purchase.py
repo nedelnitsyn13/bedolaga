@@ -15,6 +15,7 @@ from app.database.crud.subscription import (
     create_paid_subscription,
     extend_subscription,
     get_active_subscriptions_by_user_id,
+    get_limited_companion_traffic_gb_for_tariff,
     get_subscription_by_id_for_user,
     get_subscription_by_user_id,
 )
@@ -30,6 +31,10 @@ from app.services.tariff_switch_policy import remaining_days_for_switch, should_
 from app.services.user_cart_service import user_cart_service
 from app.utils.decorators import error_handler
 from app.utils.formatting import format_period, format_price_kopeks, format_traffic
+from app.utils.pricing_utils import (
+    tariff_period_extrapolated_price_kopeks,
+    tariff_period_intrinsic_discount_percent,
+)
 from app.utils.promo_offer import get_user_active_promo_discount_percent
 
 
@@ -154,6 +159,35 @@ def _get_user_period_discount(db_user: User, period_days: int) -> tuple[int, int
     return group_discount, personal_discount, display_combined
 
 
+def _compose_discount_percent(*percents: int) -> int:
+    """Комбинирует независимые проценты скидки (не складывает — перемножает остатки).
+
+    Используется, чтобы к собственной скидке тарифа за период (из
+    `period_prices`) добавить скидку промогруппы/промо-оффера без задвоения:
+    100₽ со скидкой 20% и ещё 10% сверху — это 72₽, а не 70₽.
+    """
+    remaining = 100
+    for percent in percents:
+        remaining = remaining * (100 - max(0, min(100, percent)))
+        remaining //= 100
+    return 100 - remaining
+
+
+def _companion_traffic_gb_text(tariff: Tariff, texts) -> str | None:
+    """Трафик лимитного сервера-компаньона для тарифа, если фича включена.
+
+    До покупки пользователь не видел этот трафик нигде — узнавал о нём
+    только на экране уже купленной подписки. `None`, если фича выключена
+    (`settings.is_limited_companion_enabled()`).
+    """
+    if not settings.is_limited_companion_enabled():
+        return None
+    traffic_gb = get_limited_companion_traffic_gb_for_tariff(tariff)
+    if traffic_gb == 0:
+        return '∞'
+    return texts.t('TARIFF_PURCHASE_TRAFFIC_GB', '{traffic} ГБ').format(traffic=traffic_gb)
+
+
 def format_tariffs_list_text(
     tariffs: list[Tariff],
     db_user: User | None = None,
@@ -210,10 +244,14 @@ def format_tariffs_list_text(
                     price=format_price_kopeks(min_price, compact=True), icon=discount_icon
                 )
 
-        # Компактный формат: Название — 250 ГБ / 10 📱 от 179₽🔥
+        companion_traffic = _companion_traffic_gb_text(tariff, texts)
+        companion_suffix = f' · 🌐 {companion_traffic}' if companion_traffic else ''
+
+        # Компактный формат: Название — 250 ГБ / 10 📱 от 179₽🔥 · 🌐 100 ГБ
         purchased_mark = ' ✅' if tariff.id in purchased_tariff_ids else ''
         lines.append(
-            f'<b>{html.escape(tariff.name)}</b>{purchased_mark} — {traffic} / {tariff.device_limit} 📱 {price_text}'
+            f'<b>{html.escape(tariff.name)}</b>{purchased_mark} — {traffic} / {tariff.device_limit} 📱 '
+            f'{price_text}{companion_suffix}'
         )
 
         # Описание тарифа если есть
@@ -268,6 +306,31 @@ def _period_button_text(tariff: Tariff, period: int, price_text: str, texts) -> 
     return label
 
 
+def _period_price_text(tariff: Tariff, period_prices: dict, period: int, price: int, db_user: User | None) -> str:
+    """Текст цены периода со скидкой: своя скидка тарифа за срок + скидка промогруппы/оффера.
+
+    Своя скидка тарифа (period_prices дороже за 30 дней, чем за 360) раньше
+    не отображалась вовсе — бейдж «−X%» считался только от скидки
+    промогруппы, так что у тарифа без личной скидки пользователь просто не
+    видел, что длинный период выгоднее.
+    """
+    intrinsic_percent = tariff_period_intrinsic_discount_percent(period_prices, period)
+
+    group_pct, offer_pct, promo_percent = 0, 0, 0
+    if db_user:
+        group_pct, offer_pct, promo_percent = _get_user_period_discount(db_user, period)
+
+    if promo_percent > 0:
+        price = _apply_promo_discount(price, group_pct, offer_pct)
+
+    combined_percent = _compose_discount_percent(intrinsic_percent, promo_percent)
+    if combined_percent <= 0:
+        return format_price_kopeks(price)
+
+    icon = '🔥' if promo_percent > 0 else ''
+    return f'{format_price_kopeks(price)} {icon}−{combined_percent}%'
+
+
 def get_tariff_periods_keyboard(
     tariff: Tariff,
     language: str,
@@ -281,19 +344,7 @@ def get_tariff_periods_keyboard(
     prices = tariff.period_prices or {}
     for period_str in sorted(prices.keys(), key=int):
         period = int(period_str)
-        price = prices[period_str]
-
-        # Получаем скидку для конкретного периода
-        group_pct, offer_pct, discount_percent = 0, 0, 0
-        if db_user:
-            group_pct, offer_pct, discount_percent = _get_user_period_discount(db_user, period)
-
-        if discount_percent > 0:
-            price = _apply_promo_discount(price, group_pct, offer_pct)
-            price_text = f'{format_price_kopeks(price)} 🔥−{discount_percent}%'
-        else:
-            price_text = format_price_kopeks(price)
-
+        price_text = _period_price_text(tariff, prices, period, prices[period_str], db_user)
         button_text = _period_button_text(tariff, period, price_text, texts)
         buttons.append([InlineKeyboardButton(text=button_text, callback_data=f'tariff_period:{tariff.id}:{period}')])
 
@@ -315,19 +366,7 @@ def get_tariff_periods_keyboard_with_traffic(
     prices = tariff.period_prices or {}
     for period_str in sorted(prices.keys(), key=int):
         period = int(period_str)
-        price = prices[period_str]
-
-        # Получаем скидку для конкретного периода
-        group_pct, offer_pct, discount_percent = 0, 0, 0
-        if db_user:
-            group_pct, offer_pct, discount_percent = _get_user_period_discount(db_user, period)
-
-        if discount_percent > 0:
-            price = _apply_promo_discount(price, group_pct, offer_pct)
-            price_text = f'{format_price_kopeks(price)} 🔥−{discount_percent}%'
-        else:
-            price_text = format_price_kopeks(price)
-
+        price_text = _period_price_text(tariff, prices, period, prices[period_str], db_user)
         button_text = _period_button_text(tariff, period, price_text, texts)
         # Используем другой callback для перехода к настройке трафика
         buttons.append(
@@ -512,6 +551,12 @@ def format_tariff_info_for_user(
         'TARIFF_PURCHASE_INFO',
         '📦 <b>{name}</b>\n\n<b>Параметры:</b>\n• Трафик: {traffic}\n• Устройств: {devices}\n',
     ).format(name=html.escape(tariff.name), traffic=traffic, devices=tariff.device_limit)
+
+    companion_traffic = _companion_traffic_gb_text(tariff, texts)
+    if companion_traffic:
+        text += texts.t('TARIFF_PURCHASE_COMPANION_TRAFFIC_LINE', '🌐 Лимитный сервер: {traffic}\n').format(
+            traffic=companion_traffic
+        )
 
     if tariff.description:
         text += f'\n📝 {html.escape(tariff.description)}\n'
@@ -1677,10 +1722,23 @@ async def select_tariff_period(
     final_price = result.final_total
     original_price = result.original_total
     total_discount = result.promo_group_discount + result.promo_offer_discount
-    discount_percent = (
+    promo_discount_percent = (
         round((1 - final_price / original_price) * 100) if original_price > 0 and total_discount > 0 else 0
     )
     shown_device_limit = device_limit if device_limit is not None else tariff.device_limit
+
+    # Собственная скидка тарифа за срок (из period_prices), не связанная с промогруппой —
+    # иначе окно подтверждения молчало о ней, если у пользователя нет личной скидки.
+    tariff_period_prices = tariff.period_prices or {}
+    intrinsic_percent = tariff_period_intrinsic_discount_percent(tariff_period_prices, period)
+    intrinsic_savings = 0
+    if intrinsic_percent > 0:
+        extrapolated_price = tariff_period_extrapolated_price_kopeks(tariff_period_prices, period)
+        base_period_price = int(tariff_period_prices.get(str(period), 0) or 0)
+        intrinsic_savings = max(0, extrapolated_price - base_period_price)
+
+    discount_percent = _compose_discount_percent(intrinsic_percent, promo_discount_percent)
+    total_discount += intrinsic_savings
 
     # Проверяем баланс
     user_balance = db_user.balance_kopeks or 0

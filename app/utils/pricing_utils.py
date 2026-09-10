@@ -34,6 +34,53 @@ def calculate_price_per_month(price_kopeks: int, period_days: int) -> int:
     return round(price_kopeks * 30 / period_days)
 
 
+def tariff_period_extrapolated_price_kopeks(period_prices: dict[str, Any] | None, period_days: int) -> int:
+    """Цена периода, если бы тариф не давал скидку за длинный срок.
+
+    Экстраполирует цену САМОГО КОРОТКОГО периода тарифа пропорционально числу
+    дней — не «цена/месяц × число месяцев», чтобы не зависеть от округления
+    30-дневного месяца на некратных периодах. `0`, если посчитать нельзя
+    (нет цен, период не входит в `period_prices`, или это и есть самый
+    короткий период — экстраполировать не от чего).
+    """
+    if not period_prices:
+        return 0
+    try:
+        positive_periods = {int(days): int(price) for days, price in period_prices.items() if int(price) >= 0}
+    except (TypeError, ValueError):
+        return 0
+    if period_days not in positive_periods:
+        return 0
+    base_days = min(positive_periods)
+    if base_days == period_days:
+        return 0
+    base_price = positive_periods[base_days]
+    if base_price <= 0:
+        return 0
+    return round(base_price * period_days / base_days)
+
+
+def tariff_period_intrinsic_discount_percent(period_prices: dict[str, Any] | None, period_days: int) -> int:
+    """Собственная скидка тарифа за длинный период, без учёта промогруппы.
+
+    Тариф может задавать более выгодную цену за длинный период прямо в
+    `period_prices` (например Стандарт — на 20% дешевле за 360 дней, чем за
+    12 месяцев по цене 30-дневного периода). Раньше бейдж «−X%» у периодов
+    считался только от скидки промогруппы (`_get_user_period_discount`),
+    поэтому собственная скидка тарифа была не видна пользователю без личной
+    скидки промогруппы. Сравнение — с ценой САМОГО КОРОТКОГО периода тарифа,
+    см. `tariff_period_extrapolated_price_kopeks`.
+    """
+    if not period_prices or period_days not in {int(days) for days in period_prices}:
+        return 0
+    expected_price = tariff_period_extrapolated_price_kopeks(period_prices, period_days)
+    if expected_price <= 0:
+        return 0
+    actual_price = int(period_prices[str(period_days)])
+    percent = round((1 - actual_price / expected_price) * 100)
+    return max(0, min(99, percent))
+
+
 def calculate_prorated_price(monthly_price: int, end_date: datetime, min_charge_days: int = 1) -> tuple[int, int]:
     """Calculate prorated price based on remaining days.
 

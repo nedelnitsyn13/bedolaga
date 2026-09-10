@@ -1485,31 +1485,32 @@ async def add_subscription_traffic(db: AsyncSession, subscription: Subscription,
     return subscription
 
 
-def _tariff_companion_traffic_override_gb(subscription: Subscription) -> int | None:
-    """Переопределение базового ГБ компаньона из `tariff.server_traffic_limits`.
+def get_limited_companion_traffic_gb_for_tariff(tariff: Tariff | None) -> int:
+    """Базовый ГБ компаньона для тарифа само по себе, без привязки к подписке.
 
-    Использует тот же формат записи, что и общие пер-серверные лимиты тарифа
-    (см. `app/handlers/admin/tariff_server_limits.py`), но привязан к squad
-    лимитного сервера-компаньона и не падает обратно на общий
-    `tariff.traffic_limit_gb` — вместо этого вызывающий код использует
-    глобальный `settings.LIMITED_COMPANION_TRAFFIC_GB`. `None` означает
-    «override не задан», `0`/отсутствие ключа расценивается так же.
+    Используется как для платных подписок (см. `get_limited_companion_base_traffic_gb`),
+    так и для показа «сколько дадут» ДО покупки — на экране выбора тарифа.
+
+    Смотрит override в `tariff.server_traffic_limits` по squad лимитного
+    компаньона (тот же формат записи, что и обычные пер-серверные лимиты
+    тарифа, см. `app/handlers/admin/tariff_server_limits.py`) и падает
+    обратно на глобальный `settings.LIMITED_COMPANION_TRAFFIC_GB`, если
+    override не задан, задан нулём или `LIMITED_COMPANION_SQUAD_UUID` не
+    настроен.
     """
     squad_uuid = settings.LIMITED_COMPANION_SQUAD_UUID
-    if not squad_uuid:
-        return None
-    tariff = getattr(subscription, 'tariff', None)
-    if tariff is None:
-        return None
-    limits = getattr(tariff, 'server_traffic_limits', None) or {}
-    raw = limits.get(squad_uuid)
-    if isinstance(raw, dict):
-        raw = raw.get('traffic_limit_gb')
-    try:
-        value = int(raw)
-    except (TypeError, ValueError):
-        return None
-    return value if value > 0 else None
+    if squad_uuid and tariff is not None:
+        limits = getattr(tariff, 'server_traffic_limits', None) or {}
+        raw = limits.get(squad_uuid)
+        if isinstance(raw, dict):
+            raw = raw.get('traffic_limit_gb')
+        try:
+            value = int(raw)
+        except (TypeError, ValueError):
+            value = 0
+        if value > 0:
+            return value
+    return settings.LIMITED_COMPANION_TRAFFIC_GB
 
 
 def get_limited_companion_base_traffic_gb(subscription: Subscription) -> int:
@@ -1523,10 +1524,7 @@ def get_limited_companion_base_traffic_gb(subscription: Subscription) -> int:
     """
     if subscription.is_trial:
         return subscription.traffic_limit_gb or 0
-    override = _tariff_companion_traffic_override_gb(subscription)
-    if override is not None:
-        return override
-    return settings.LIMITED_COMPANION_TRAFFIC_GB
+    return get_limited_companion_traffic_gb_for_tariff(getattr(subscription, 'tariff', None))
 
 
 def get_limited_companion_total_traffic_limit_gb(subscription: Subscription, purchased_gb: int) -> int:
