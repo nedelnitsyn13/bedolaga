@@ -27,6 +27,7 @@ from app.config import settings
 from app.database.crud.subscription import (
     add_limited_companion_traffic,
     get_limited_companion_base_traffic_gb,
+    get_limited_companion_total_traffic_limit_gb,
     housekeep_limited_companion_traffic,
 )
 from app.database.crud.tariff import get_tariff_by_id
@@ -904,7 +905,7 @@ async def get_limited_companion_traffic(
 
     base_limit_gb = get_limited_companion_base_traffic_gb(subscription)
     purchased_gb = await housekeep_limited_companion_traffic(db, subscription)
-    total_limit_gb = base_limit_gb + purchased_gb
+    total_limit_gb = get_limited_companion_total_traffic_limit_gb(subscription, purchased_gb)
     used_gb = subscription.limited_companion_traffic_used_gb or 0.0
     used_percent = round(min(100.0, (used_gb / total_limit_gb) * 100), 1) if total_limit_gb > 0 else 0.0
 
@@ -990,6 +991,14 @@ async def purchase_limited_companion_traffic(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail='Traffic top-up feature is disabled',
+        )
+
+    if get_limited_companion_base_traffic_gb(subscription) == 0:
+        # Безлимитная база (обычно у триала) — докупка ничего не добавит
+        # (см. get_limited_companion_total_traffic_limit_gb), денег не берём.
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='Limited companion server already has unlimited traffic',
         )
 
     packages = settings.get_traffic_topup_packages()
@@ -1089,8 +1098,9 @@ async def purchase_limited_companion_traffic(
         'message': 'Limited companion traffic purchased successfully',
         'gb_added': request.gb,
         'new_purchased_traffic_gb': subscription.limited_companion_purchased_traffic_gb,
-        'new_total_limit_gb': get_limited_companion_base_traffic_gb(subscription)
-        + subscription.limited_companion_purchased_traffic_gb,
+        'new_total_limit_gb': get_limited_companion_total_traffic_limit_gb(
+            subscription, subscription.limited_companion_purchased_traffic_gb
+        ),
         'amount_paid_kopeks': final_price,
         'new_balance_kopeks': user.balance_kopeks,
     }
@@ -1217,7 +1227,7 @@ async def refresh_limited_companion_traffic(
 
     base_limit_gb = get_limited_companion_base_traffic_gb(subscription)
     purchased_gb = await housekeep_limited_companion_traffic(db, subscription)
-    total_limit_gb = base_limit_gb + purchased_gb
+    total_limit_gb = get_limited_companion_total_traffic_limit_gb(subscription, purchased_gb)
     used_gb = subscription.limited_companion_traffic_used_gb or 0.0
     used_percent = round(min(100.0, (used_gb / total_limit_gb) * 100), 1) if total_limit_gb > 0 else 0.0
 

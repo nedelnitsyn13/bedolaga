@@ -1090,6 +1090,7 @@
   "INFO_SECTION_NOT_AVAILABLE": "This section is temporarily unavailable.",
   "INSUFFICIENT_BALANCE": "❌ Insufficient balance. Top up {amount} and try again.",
   "INVALID_AMOUNT": "❌ Invalid amount",
+  "LIMITED_COMPANION_ALREADY_UNLIMITED": "♾️ The limited server already has unlimited traffic — no top-up needed",
   "LIMITED_COMPANION_UNAVAILABLE": "⚠️ The limited server is not available for this subscription",
   "LANGUAGE_PROMPT": "🌐 Choose the interface language:",
   "LANGUAGE_SELECTED": "🌐 Interface language set: <b>English</b>",

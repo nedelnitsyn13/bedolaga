@@ -1497,6 +1497,20 @@ def get_limited_companion_base_traffic_gb(subscription: Subscription) -> int:
     return settings.LIMITED_COMPANION_TRAFFIC_GB
 
 
+def get_limited_companion_total_traffic_limit_gb(subscription: Subscription, purchased_gb: int) -> int:
+    """Итоговый лимит трафика компаньона: база + активные докупки.
+
+    Если база — безлимит (`0`, возможно у триального компаньона, см.
+    `get_limited_companion_base_traffic_gb`), докупки в неё НЕ складываются —
+    иначе конечное число портит безлимит вместо того, чтобы его сохранить.
+    Мирроит `_apply_base_limit_preserving_active_purchases` для основного трафика.
+    """
+    base_limit_gb = get_limited_companion_base_traffic_gb(subscription)
+    if base_limit_gb == 0:
+        return 0
+    return base_limit_gb + purchased_gb
+
+
 async def housekeep_limited_companion_traffic(db: AsyncSession, subscription: Subscription) -> int:
     """Удаляет истёкшие докупки трафика лимитного сервера-компаньона и
     пересчитывает `limited_companion_purchased_traffic_gb` как сумму ещё

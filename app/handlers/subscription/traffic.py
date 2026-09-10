@@ -10,6 +10,7 @@ from app.database.crud.subscription import (
     add_limited_companion_traffic,
     add_subscription_traffic,
     get_limited_companion_base_traffic_gb,
+    get_limited_companion_total_traffic_limit_gb,
     housekeep_limited_companion_traffic,
     reactivate_subscription,
 )
@@ -769,11 +770,21 @@ async def handle_add_traffic_limited(
         )
         return
 
+    if get_limited_companion_base_traffic_gb(subscription) == 0:
+        # Безлимитный базовый трафик (обычно у триала) — докупка ничего не
+        # добавит (0 не складывается с докупками, см. get_limited_companion_total_traffic_limit_gb),
+        # деньги списывать не за что.
+        await callback.answer(
+            texts.t('LIMITED_COMPANION_ALREADY_UNLIMITED', '♾️ Лимитный сервер уже безлимитный — докупка не требуется'),
+            show_alert=True,
+        )
+        return
+
     # Note: unlike the main-key flow, TRAFFIC_SELECTION_MODE=fixed does NOT
     # block this — the companion's traffic pool is independent of the main
     # subscription's fixed-traffic tariff, so top-up stays available here.
     purchased_gb = await housekeep_limited_companion_traffic(db, subscription)
-    current_limit = get_limited_companion_base_traffic_gb(subscription) + purchased_gb
+    current_limit = get_limited_companion_total_traffic_limit_gb(subscription, purchased_gb)
     # Фиксированный хинт 30 дней — компаньон продаётся только помесячно
     # (см. add_traffic_limited ниже), скидка должна совпадать с кабинетом.
     traffic_discount_percent = PricingEngine.get_addon_discount_percent(db_user, 'traffic', 30)
@@ -817,6 +828,13 @@ async def add_traffic_limited(callback: types.CallbackQuery, db_user: User, db: 
     if not settings.is_limited_companion_enabled() or not subscription.limited_companion_remnawave_id:
         await callback.answer(
             texts.t('LIMITED_COMPANION_UNAVAILABLE', '⚠️ Лимитный сервер недоступен для этой подписки'),
+            show_alert=True,
+        )
+        return
+
+    if get_limited_companion_base_traffic_gb(subscription) == 0:
+        await callback.answer(
+            texts.t('LIMITED_COMPANION_ALREADY_UNLIMITED', '♾️ Лимитный сервер уже безлимитный — докупка не требуется'),
             show_alert=True,
         )
         return
@@ -907,8 +925,8 @@ async def add_traffic_limited(callback: types.CallbackQuery, db_user: User, db: 
         await db.refresh(db_user)
         await db.refresh(subscription)
 
-        new_limit = get_limited_companion_base_traffic_gb(subscription) + (
-            subscription.limited_companion_purchased_traffic_gb or 0
+        new_limit = get_limited_companion_total_traffic_limit_gb(
+            subscription, subscription.limited_companion_purchased_traffic_gb or 0
         )
         success_text = '✅ Трафик лимитного сервера успешно добавлен!\n\n'
         success_text += f'📈 Добавлено: {traffic_gb} ГБ\n'

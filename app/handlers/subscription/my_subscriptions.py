@@ -16,6 +16,7 @@ from app.config import settings
 from app.database.crud.subscription import (
     get_all_subscriptions_by_user_id,
     get_limited_companion_base_traffic_gb,
+    get_limited_companion_total_traffic_limit_gb,
     get_subscription_by_id_for_user,
     housekeep_limited_companion_traffic,
 )
@@ -73,7 +74,7 @@ def _format_subscription_line(sub, idx: int) -> str:
     parts.append(f'   📊 Трафик: {traffic}')
     if settings.is_limited_companion_enabled() and getattr(sub, 'limited_companion_remnawave_id', None):
         companion_purchased = sub.limited_companion_purchased_traffic_gb or 0
-        companion_limit = get_limited_companion_base_traffic_gb(sub) + companion_purchased
+        companion_limit = get_limited_companion_total_traffic_limit_gb(sub, companion_purchased)
         companion_used = (
             f'{sub.limited_companion_traffic_used_gb:.1f}' if sub.limited_companion_traffic_used_gb else '0'
         )
@@ -154,6 +155,7 @@ def _build_subscription_detail_keyboard(sub_id: int, sub=None) -> types.InlineKe
             and sub is not None
             and getattr(sub, 'limited_companion_remnawave_id', None)
             and settings.is_traffic_topup_enabled()
+            and get_limited_companion_base_traffic_gb(sub) != 0
         ):
             buttons.append(
                 [
@@ -271,7 +273,7 @@ async def show_subscription_detail(
 
     if settings.is_limited_companion_enabled() and getattr(subscription, 'limited_companion_remnawave_id', None):
         companion_purchased = await housekeep_limited_companion_traffic(db, subscription)
-        companion_limit = get_limited_companion_base_traffic_gb(subscription) + companion_purchased
+        companion_limit = get_limited_companion_total_traffic_limit_gb(subscription, companion_purchased)
         companion_used = subscription.limited_companion_traffic_used_gb or 0
         companion_limit_text = '∞' if companion_limit == 0 else f'{companion_limit} ГБ'
         text += f'\n🌐 Лимитный сервер: {companion_used:.1f} / {companion_limit_text}\n'

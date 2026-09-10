@@ -18,6 +18,7 @@ from app.database.crud.subscription import (
     add_limited_companion_traffic,
     extend_subscription,
     get_limited_companion_base_traffic_gb,
+    get_limited_companion_total_traffic_limit_gb,
 )
 from app.database.crud.transaction import create_transaction
 from app.database.crud.user import subtract_user_balance
@@ -2308,6 +2309,17 @@ async def _auto_add_traffic_limited(
         await _delete_cart_for_subscription(user.id, cart_data)
         return False
 
+    if get_limited_companion_base_traffic_gb(subscription) == 0:
+        # База стала безлимитной (например, триал) уже после того, как корзина
+        # была сохранена — докупка ничего не добавит, деньги списывать не за что.
+        logger.info(
+            '🔁 Автопокупка трафика (лимитный сервер): база уже безлимитная, корзина отменена',
+            format_user_id=_format_user_id(user),
+            subscription_id=subscription.id,
+        )
+        await _delete_cart_for_subscription(user.id, cart_data)
+        return False
+
     # Lock user BEFORE price computation to prevent TOCTOU on promo-offer/group discount
     user = await lock_user_for_pricing(db, user.id)
 
@@ -2414,8 +2426,8 @@ async def _auto_add_traffic_limited(
 
     await _delete_cart_for_subscription(user.id, cart_data)
 
-    new_total_limit = get_limited_companion_base_traffic_gb(subscription) + (
-        subscription.limited_companion_purchased_traffic_gb or 0
+    new_total_limit = get_limited_companion_total_traffic_limit_gb(
+        subscription, subscription.limited_companion_purchased_traffic_gb or 0
     )
     logger.info(
         '✅ Автопокупка трафика (лимитный сервер): пользователь добавил трафик',
@@ -2478,7 +2490,7 @@ async def _auto_add_traffic_limited(
                 user,
                 subscription,
                 'traffic',
-                old_purchased + get_limited_companion_base_traffic_gb(subscription),
+                get_limited_companion_total_traffic_limit_gb(subscription, old_purchased),
                 new_total_limit,
                 price_kopeks,
             )

@@ -614,12 +614,12 @@ class SubscriptionService:
             # quota pushed to the panel — otherwise a top-up bought 30+ days ago
             # would inflate the limit forever (see LimitedCompanionTrafficPurchase).
             from app.database.crud.subscription import (
-                get_limited_companion_base_traffic_gb,
+                get_limited_companion_total_traffic_limit_gb,
                 housekeep_limited_companion_traffic,
             )
 
             purchased_gb = await housekeep_limited_companion_traffic(db, subscription)
-            companion_traffic_gb = get_limited_companion_base_traffic_gb(subscription) + purchased_gb
+            companion_traffic_gb = get_limited_companion_total_traffic_limit_gb(subscription, purchased_gb)
 
             companion_user = await write_companion_account(
                 api,

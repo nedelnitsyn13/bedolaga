@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database.crud.subscription import (
-    get_limited_companion_base_traffic_gb,
+    get_limited_companion_total_traffic_limit_gb,
     housekeep_limited_companion_traffic,
 )
 from app.database.models import User
@@ -404,7 +404,7 @@ async def get_subscription_info_text(subscription, texts, db_user, db: AsyncSess
 
     if settings.is_limited_companion_enabled() and getattr(subscription, 'limited_companion_remnawave_id', None):
         companion_purchased = await housekeep_limited_companion_traffic(db, subscription)
-        companion_limit = get_limited_companion_base_traffic_gb(subscription) + companion_purchased
+        companion_limit = get_limited_companion_total_traffic_limit_gb(subscription, companion_purchased)
         info_text += (
             f'\n\n🌐 <b>Лимитный сервер</b>\n'
             f'Использовано: {texts.format_traffic(subscription.limited_companion_traffic_used_gb or 0, is_limit=False)}\n'

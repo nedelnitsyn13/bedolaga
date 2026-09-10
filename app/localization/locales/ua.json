@@ -1029,6 +1029,7 @@
   "INFO_SECTION_NOT_AVAILABLE": "Розділ тимчасово недоступний.",
   "INSUFFICIENT_BALANCE": "❌ Недостатньо коштів на балансі. Поповніть баланс на {amount} і спробуйте знову.",
   "INVALID_AMOUNT": "❌ Невірна сума",
+  "LIMITED_COMPANION_ALREADY_UNLIMITED": "♾️ Лімітний сервер вже безлімітний — докупка не потрібна",
   "LIMITED_COMPANION_UNAVAILABLE": "⚠️ Лімітний сервер недоступний для цієї підписки",
   "LANGUAGE_PROMPT": "🌐 Оберіть мову інтерфейсу:",
   "LANGUAGE_SELECTED": "🌐 Мову інтерфейсу встановлено: <b>Українська</b>",

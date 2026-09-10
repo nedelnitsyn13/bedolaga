@@ -1214,6 +1214,7 @@
   "INFO_SECTION_NOT_AVAILABLE": "این بخش موقتاً در دسترس نیست.",
   "INSUFFICIENT_BALANCE": "❌ موجودی ناکافی. موجودی را {amount} شارژ کنید و دوباره تلاش کنید.",
   "INVALID_AMOUNT": "❌ مبلغ نامعتبر",
+  "LIMITED_COMPANION_ALREADY_UNLIMITED": "♾️ سرور محدود از قبل نامحدود است — نیازی به شارژ نیست",
   "LIMITED_COMPANION_UNAVAILABLE": "⚠️ سرور محدود برای این اشتراک در دسترس نیست",
   "LANGUAGE_PROMPT": "🌐 زبان رابط را انتخاب کنید:",
   "LANGUAGE_SELECTED": "🌐 زبان رابط انتخاب شد: <b>فارسی</b>",

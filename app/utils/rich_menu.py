@@ -41,7 +41,10 @@ from aiogram.types import (
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.database.crud.subscription import get_all_subscriptions_by_user_id, get_limited_companion_base_traffic_gb
+from app.database.crud.subscription import (
+    get_all_subscriptions_by_user_id,
+    get_limited_companion_total_traffic_limit_gb,
+)
 from app.database.crud.tariff import get_tariff_by_id
 from app.database.crud.user_message import get_random_active_message
 from app.database.models import User
@@ -324,7 +327,7 @@ def _companion_traffic_text(subscription, texts) -> str | None:
     if not settings.is_limited_companion_enabled() or not getattr(subscription, 'limited_companion_remnawave_id', None):
         return None
     purchased = getattr(subscription, 'limited_companion_purchased_traffic_gb', 0) or 0
-    limit = get_limited_companion_base_traffic_gb(subscription) + purchased
+    limit = get_limited_companion_total_traffic_limit_gb(subscription, purchased)
     used = texts.format_traffic(
         float(getattr(subscription, 'limited_companion_traffic_used_gb', 0) or 0), is_limit=False
     )
