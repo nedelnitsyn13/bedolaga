@@ -325,7 +325,9 @@ def _companion_traffic_text(subscription, texts) -> str | None:
         return None
     purchased = getattr(subscription, 'limited_companion_purchased_traffic_gb', 0) or 0
     limit = get_limited_companion_base_traffic_gb(subscription) + purchased
-    used = texts.format_traffic(float(getattr(subscription, 'limited_companion_traffic_used_gb', 0) or 0), is_limit=False)
+    used = texts.format_traffic(
+        float(getattr(subscription, 'limited_companion_traffic_used_gb', 0) or 0), is_limit=False
+    )
     limit_text = texts.format_traffic(float(limit), is_limit=True)
     return f'{used}/{limit_text}'
 

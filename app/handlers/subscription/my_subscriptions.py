@@ -74,7 +74,9 @@ def _format_subscription_line(sub, idx: int) -> str:
     if settings.is_limited_companion_enabled() and getattr(sub, 'limited_companion_remnawave_id', None):
         companion_purchased = sub.limited_companion_purchased_traffic_gb or 0
         companion_limit = get_limited_companion_base_traffic_gb(sub) + companion_purchased
-        companion_used = f'{sub.limited_companion_traffic_used_gb:.1f}' if sub.limited_companion_traffic_used_gb else '0'
+        companion_used = (
+            f'{sub.limited_companion_traffic_used_gb:.1f}' if sub.limited_companion_traffic_used_gb else '0'
+        )
         companion_traffic = '∞' if companion_limit == 0 else f'{companion_used}/{companion_limit} ГБ'
         parts.append(f'   🌐 Лимитный сервер: {companion_traffic}')
     if devices:
