@@ -24,7 +24,11 @@ from fastapi import APIRouter, Depends, HTTPException, Query as QueryParam, stat
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.database.crud.subscription import add_limited_companion_traffic, housekeep_limited_companion_traffic
+from app.database.crud.subscription import (
+    add_limited_companion_traffic,
+    get_limited_companion_base_traffic_gb,
+    housekeep_limited_companion_traffic,
+)
 from app.database.crud.tariff import get_tariff_by_id
 from app.database.crud.transaction import create_transaction
 from app.database.crud.user import subtract_user_balance
@@ -898,7 +902,7 @@ async def get_limited_companion_traffic(
     ):
         return LimitedCompanionTrafficResponse(available=False)
 
-    base_limit_gb = settings.LIMITED_COMPANION_TRAFFIC_GB
+    base_limit_gb = get_limited_companion_base_traffic_gb(subscription)
     purchased_gb = await housekeep_limited_companion_traffic(db, subscription)
     total_limit_gb = base_limit_gb + purchased_gb
     used_gb = subscription.limited_companion_traffic_used_gb or 0.0
@@ -1085,7 +1089,7 @@ async def purchase_limited_companion_traffic(
         'message': 'Limited companion traffic purchased successfully',
         'gb_added': request.gb,
         'new_purchased_traffic_gb': subscription.limited_companion_purchased_traffic_gb,
-        'new_total_limit_gb': settings.LIMITED_COMPANION_TRAFFIC_GB
+        'new_total_limit_gb': get_limited_companion_base_traffic_gb(subscription)
         + subscription.limited_companion_purchased_traffic_gb,
         'amount_paid_kopeks': final_price,
         'new_balance_kopeks': user.balance_kopeks,
@@ -1211,7 +1215,7 @@ async def refresh_limited_companion_traffic(
             await db.commit()
             await db.refresh(subscription)
 
-    base_limit_gb = settings.LIMITED_COMPANION_TRAFFIC_GB
+    base_limit_gb = get_limited_companion_base_traffic_gb(subscription)
     purchased_gb = await housekeep_limited_companion_traffic(db, subscription)
     total_limit_gb = base_limit_gb + purchased_gb
     used_gb = subscription.limited_companion_traffic_used_gb or 0.0
