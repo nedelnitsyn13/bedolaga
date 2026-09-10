@@ -3434,7 +3434,7 @@
 
 - `tests/database/crud/test_limited_companion_base_traffic.py` — Python-модуль
   Классы: нет
-  Функции: `test_trial_subscription_uses_own_traffic_limit`, `test_trial_subscription_with_unlimited_traffic_stays_unlimited`, `test_paid_subscription_uses_fixed_settings_value`, `test_total_limit_adds_purchased_to_fixed_base`, `test_total_limit_stays_unlimited_when_base_is_unlimited` — Регрессия: раньше ``база(0) + докупки`` превращало безлимитного триального
+  Функции: `test_trial_subscription_uses_own_traffic_limit`, `test_trial_subscription_with_unlimited_traffic_stays_unlimited`, `test_paid_subscription_uses_fixed_settings_value`, `test_total_limit_adds_purchased_to_fixed_base`, `test_paid_subscription_uses_tariff_override_for_companion_squad` — Тариф может задать свой лимит компаньона через ``server_traffic_limits``, `test_tariff_override_falls_back_to_settings_when_not_set_for_squad`, `test_tariff_override_of_zero_falls_back_to_settings` — ``0`` в редакторе лимитов означает «по общему значению», не «безлимит»., `test_tariff_override_ignored_when_companion_squad_uuid_not_configured`, `test_total_limit_stays_unlimited_when_base_is_unlimited` — Регрессия: раньше ``база(0) + докупки`` превращало безлимитного триального
 - `tests/database/crud/test_limited_companion_traffic.py` — Python-модуль
   Классы: нет
   Функции: `test_add_limited_companion_traffic_creates_purchase_with_30_day_expiry`, `test_add_limited_companion_traffic_accumulates_across_purchases`, `test_housekeep_drops_expired_purchase_and_keeps_active_one`, `test_housekeep_is_noop_when_nothing_expired`, `test_housekeep_zeroes_out_when_all_purchases_expired`

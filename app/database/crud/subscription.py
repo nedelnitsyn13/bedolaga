@@ -1485,15 +1485,47 @@ async def add_subscription_traffic(db: AsyncSession, subscription: Subscription,
     return subscription
 
 
+def _tariff_companion_traffic_override_gb(subscription: Subscription) -> int | None:
+    """Переопределение базового ГБ компаньона из `tariff.server_traffic_limits`.
+
+    Использует тот же формат записи, что и общие пер-серверные лимиты тарифа
+    (см. `app/handlers/admin/tariff_server_limits.py`), но привязан к squad
+    лимитного сервера-компаньона и не падает обратно на общий
+    `tariff.traffic_limit_gb` — вместо этого вызывающий код использует
+    глобальный `settings.LIMITED_COMPANION_TRAFFIC_GB`. `None` означает
+    «override не задан», `0`/отсутствие ключа расценивается так же.
+    """
+    squad_uuid = settings.LIMITED_COMPANION_SQUAD_UUID
+    if not squad_uuid:
+        return None
+    tariff = getattr(subscription, 'tariff', None)
+    if tariff is None:
+        return None
+    limits = getattr(tariff, 'server_traffic_limits', None) or {}
+    raw = limits.get(squad_uuid)
+    if isinstance(raw, dict):
+        raw = raw.get('traffic_limit_gb')
+    try:
+        value = int(raw)
+    except (TypeError, ValueError):
+        return None
+    return value if value > 0 else None
+
+
 def get_limited_companion_base_traffic_gb(subscription: Subscription) -> int:
     """Базовый (без докупок) лимит трафика лимитного сервера-компаньона.
 
     Триальные подписки зеркалят `traffic_limit_gb` основной подписки —
     иначе компаньон триала получает больше трафика, чем сам триал.
-    Остальные подписки используют фиксированный `LIMITED_COMPANION_TRAFFIC_GB`.
+    Остальные подписки используют override тарифа (если задан в
+    `server_traffic_limits` для squad компаньона), иначе — фиксированный
+    `LIMITED_COMPANION_TRAFFIC_GB`.
     """
     if subscription.is_trial:
         return subscription.traffic_limit_gb or 0
+    override = _tariff_companion_traffic_override_gb(subscription)
+    if override is not None:
+        return override
     return settings.LIMITED_COMPANION_TRAFFIC_GB
 
 
