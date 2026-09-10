@@ -71,6 +71,12 @@ def _format_subscription_line(sub, idx: int) -> str:
 
     parts = [f'{emoji} <b>{idx}. {tariff_name}</b>{label}']
     parts.append(f'   📊 Трафик: {traffic}')
+    if settings.is_limited_companion_enabled() and getattr(sub, 'limited_companion_remnawave_id', None):
+        companion_purchased = sub.limited_companion_purchased_traffic_gb or 0
+        companion_limit = get_limited_companion_base_traffic_gb(sub) + companion_purchased
+        companion_used = f'{sub.limited_companion_traffic_used_gb:.1f}' if sub.limited_companion_traffic_used_gb else '0'
+        companion_traffic = '∞' if companion_limit == 0 else f'{companion_used}/{companion_limit} ГБ'
+        parts.append(f'   🌐 Лимитный сервер: {companion_traffic}')
     if devices:
         parts.append(f'   📱 Устройства: {devices}')
     parts.append(f'   📅 До: {end_date}')
@@ -265,7 +271,8 @@ async def show_subscription_detail(
         companion_purchased = await housekeep_limited_companion_traffic(db, subscription)
         companion_limit = get_limited_companion_base_traffic_gb(subscription) + companion_purchased
         companion_used = subscription.limited_companion_traffic_used_gb or 0
-        text += f'\n🌐 Лимитный сервер: {companion_used:.1f} / {companion_limit} ГБ\n'
+        companion_limit_text = '∞' if companion_limit == 0 else f'{companion_limit} ГБ'
+        text += f'\n🌐 Лимитный сервер: {companion_used:.1f} / {companion_limit_text}\n'
 
     if subscription.subscription_url and not settings.should_hide_subscription_link():
         text += f'\n🔗 <code>{subscription.subscription_url}</code>'

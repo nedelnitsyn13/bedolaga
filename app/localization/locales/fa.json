@@ -1225,6 +1225,7 @@
   "MAIN_MENU_ACTION_PROMPT": "عملیات را انتخاب کنید:",
   "MAIN_MENU_BUTTON": "🏠 منوی اصلی",
   "MAIN_MENU_RICH_BALANCE": "💰 موجودی: {balance}",
+  "MAIN_MENU_RICH_COMPANION_TRAFFIC": "🌐 سرور محدود: {traffic}",
   "MAIN_MENU_RICH_CONNECT": "⚡ اتصال",
   "MAIN_MENU_RICH_DAYS_LEFT": "{days} روز مانده",
   "MAIN_MENU_RICH_DEVICES": "📱 دستگاه‌ها: {devices}",

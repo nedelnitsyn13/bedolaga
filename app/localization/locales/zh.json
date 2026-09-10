@@ -1038,6 +1038,7 @@
   "MAIN_MENU_ACTION_PROMPT": "请选择操作：",
   "MAIN_MENU_BUTTON": "🏠主菜单",
   "MAIN_MENU_RICH_BALANCE": "💰 余额：{balance}",
+  "MAIN_MENU_RICH_COMPANION_TRAFFIC": "🌐 限量服务器：{traffic}",
   "MAIN_MENU_RICH_CONNECT": "⚡ 连接",
   "MAIN_MENU_RICH_DAYS_LEFT": "剩余 {days} 天",
   "MAIN_MENU_RICH_DEVICES": "📱 设备：{devices}",

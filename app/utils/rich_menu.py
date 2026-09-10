@@ -41,7 +41,7 @@ from aiogram.types import (
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.database.crud.subscription import get_all_subscriptions_by_user_id
+from app.database.crud.subscription import get_all_subscriptions_by_user_id, get_limited_companion_base_traffic_gb
 from app.database.crud.tariff import get_tariff_by_id
 from app.database.crud.user_message import get_random_active_message
 from app.database.models import User
@@ -319,6 +319,17 @@ def _renew_link(subscription_id: int | None, texts) -> str:
     return f'<a href="{url}">{label}</a>'
 
 
+def _companion_traffic_text(subscription, texts) -> str | None:
+    """Трафик лимитного сервера-компаньона, если он есть у подписки."""
+    if not settings.is_limited_companion_enabled() or not getattr(subscription, 'limited_companion_remnawave_id', None):
+        return None
+    purchased = getattr(subscription, 'limited_companion_purchased_traffic_gb', 0) or 0
+    limit = get_limited_companion_base_traffic_gb(subscription) + purchased
+    used = texts.format_traffic(float(getattr(subscription, 'limited_companion_traffic_used_gb', 0) or 0), is_limit=False)
+    limit_text = texts.format_traffic(float(limit), is_limit=True)
+    return f'{used}/{limit_text}'
+
+
 def _traffic_usage_text(subscription, texts) -> str:
     used = texts.format_traffic(float(getattr(subscription, 'traffic_used_gb', 0) or 0), is_limit=False)
     limit = texts.format_traffic(float(getattr(subscription, 'traffic_limit_gb', 0) or 0), is_limit=True)
@@ -420,6 +431,9 @@ def _build_subscriptions_table(subscriptions, texts) -> str:
         # colspan-строка видна всегда.
         if actual_status in {'active', 'trial', 'limited'}:
             usage_parts = [f'📊 {html.escape(_traffic_usage_text(subscription, texts))}']
+            companion_text = _companion_traffic_text(subscription, texts)
+            if companion_text:
+                usage_parts.append(f'🌐 {html.escape(companion_text)}')
             device_limit = getattr(subscription, 'device_limit', None)
             if device_limit is not None:
                 # 0 — безлимит (HWID выключен), а не «нет устройств»: строку не прячем
@@ -482,6 +496,10 @@ async def _build_single_subscription_block(user: User, texts, db: AsyncSession) 
         lines.append(
             _rich_text(traffic_template).replace('{traffic}', html.escape(_traffic_usage_text(subscription, texts)))
         )
+        companion_text = _companion_traffic_text(subscription, texts)
+        if companion_text:
+            companion_template = texts.t('MAIN_MENU_RICH_COMPANION_TRAFFIC', '🌐 Лимитный сервер: {traffic}')
+            lines.append(_rich_text(companion_template).replace('{traffic}', html.escape(companion_text)))
         device_limit = getattr(subscription, 'device_limit', None)
         if device_limit is not None:
             devices_template = texts.t('MAIN_MENU_RICH_DEVICES', '📱 Устройства: {devices}')
