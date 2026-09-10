@@ -1485,6 +1485,102 @@ async def add_subscription_traffic(db: AsyncSession, subscription: Subscription,
     return subscription
 
 
+async def housekeep_limited_companion_traffic(db: AsyncSession, subscription: Subscription) -> int:
+    """Удаляет истёкшие докупки трафика лимитного сервера-компаньона и
+    пересчитывает `limited_companion_purchased_traffic_gb` как сумму ещё
+    активных. Коммитит только если значение реально изменилось.
+
+    Аналог `_housekeep_expired_purchases` для основного трафика, но на
+    отдельной таблице `LimitedCompanionTrafficPurchase` — см. её докстринг.
+    Безопасно вызывать часто (idempotent, no-op если нечего чистить).
+
+    Возвращает актуальный `limited_companion_purchased_traffic_gb`.
+    """
+    from app.database.models import LimitedCompanionTrafficPurchase
+
+    now = datetime.now(UTC)
+
+    await db.execute(
+        delete(LimitedCompanionTrafficPurchase)
+        .where(
+            LimitedCompanionTrafficPurchase.subscription_id == subscription.id,
+            LimitedCompanionTrafficPurchase.expires_at <= now,
+        )
+        .execution_options(synchronize_session='fetch')
+    )
+    active_result = await db.execute(
+        select(LimitedCompanionTrafficPurchase.traffic_gb).where(
+            LimitedCompanionTrafficPurchase.subscription_id == subscription.id,
+            LimitedCompanionTrafficPurchase.expires_at > now,
+        )
+    )
+    purchased_gb = sum(active_result.scalars().all())
+
+    if (subscription.limited_companion_purchased_traffic_gb or 0) != purchased_gb:
+        subscription.limited_companion_purchased_traffic_gb = purchased_gb
+        await db.commit()
+        await db.refresh(subscription)
+
+    return purchased_gb
+
+
+async def add_limited_companion_traffic(db: AsyncSession, subscription: Subscription, gb: int) -> int:
+    """Регистрирует докупку трафика лимитного сервера-компаньона с истечением
+    через 30 дней (компаньон сбрасывает использованный трафик каждые 30 дней
+    на стороне панели — докупка живёт ровно один такой цикл, не навсегда).
+
+    Мирроит `add_subscription_traffic`, но пишет в отдельную таблицу
+    `LimitedCompanionTrafficPurchase` — см. её докстринг, почему не в
+    `TrafficPurchase`. Коммитит.
+
+    Возвращает новый `limited_companion_purchased_traffic_gb` (уже включает
+    эту покупку).
+    """
+    from app.database.models import LimitedCompanionTrafficPurchase
+
+    # Lock subscription row — та же защита от lost-update, что у
+    # add_subscription_traffic (конкурентная докупка/хаускипинг).
+    await _lock_subscription_row(db, subscription)
+
+    # Хаускипинг истёкших ДО добавления новой — иначе просроченные записи
+    # попали бы в сумму активных на шаге ниже.
+    now = datetime.now(UTC)
+    await db.execute(
+        delete(LimitedCompanionTrafficPurchase)
+        .where(
+            LimitedCompanionTrafficPurchase.subscription_id == subscription.id,
+            LimitedCompanionTrafficPurchase.expires_at <= now,
+        )
+        .execution_options(synchronize_session='fetch')
+    )
+    active_result = await db.execute(
+        select(LimitedCompanionTrafficPurchase.traffic_gb).where(
+            LimitedCompanionTrafficPurchase.subscription_id == subscription.id,
+            LimitedCompanionTrafficPurchase.expires_at > now,
+        )
+    )
+    active_gb = sum(active_result.scalars().all())
+
+    expires_at = now + timedelta(days=30)
+    db.add(LimitedCompanionTrafficPurchase(subscription_id=subscription.id, traffic_gb=gb, expires_at=expires_at))
+
+    purchased_gb = active_gb + gb
+    subscription.limited_companion_purchased_traffic_gb = purchased_gb
+    subscription.updated_at = datetime.now(UTC)
+
+    await db.commit()
+    await db.refresh(subscription)
+
+    logger.info(
+        '📈 К компаньон-аккаунту лимитного сервера добавлено ГБ трафика (истекает )',
+        subscription_id=subscription.id,
+        gb=gb,
+        new_expires_at=expires_at.strftime('%d.%m.%Y'),
+    )
+
+    return purchased_gb
+
+
 async def add_subscription_devices(db: AsyncSession, subscription: Subscription, devices: int) -> Subscription:
     # Lock subscription to prevent concurrent modifications
     locked_result = await db.execute(

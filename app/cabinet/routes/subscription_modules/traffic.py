@@ -24,6 +24,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query as QueryParam, stat
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
+from app.database.crud.subscription import add_limited_companion_traffic, housekeep_limited_companion_traffic
 from app.database.crud.tariff import get_tariff_by_id
 from app.database.crud.transaction import create_transaction
 from app.database.crud.user import subtract_user_balance
@@ -898,7 +899,7 @@ async def get_limited_companion_traffic(
         return LimitedCompanionTrafficResponse(available=False)
 
     base_limit_gb = settings.LIMITED_COMPANION_TRAFFIC_GB
-    purchased_gb = subscription.limited_companion_purchased_traffic_gb or 0
+    purchased_gb = await housekeep_limited_companion_traffic(db, subscription)
     total_limit_gb = base_limit_gb + purchased_gb
     used_gb = subscription.limited_companion_traffic_used_gb or 0.0
     used_percent = round(min(100.0, (used_gb / total_limit_gb) * 100), 1) if total_limit_gb > 0 else 0.0
@@ -1058,10 +1059,7 @@ async def purchase_limited_companion_traffic(
     if not success:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail='Failed to charge balance')
 
-    subscription.limited_companion_purchased_traffic_gb = (
-        subscription.limited_companion_purchased_traffic_gb or 0
-    ) + request.gb
-    await db.commit()
+    await add_limited_companion_traffic(db, subscription, request.gb)
 
     subscription_service = SubscriptionService()
     synced = await subscription_service.resync_limited_companion(db, subscription)
@@ -1214,7 +1212,7 @@ async def refresh_limited_companion_traffic(
             await db.refresh(subscription)
 
     base_limit_gb = settings.LIMITED_COMPANION_TRAFFIC_GB
-    purchased_gb = subscription.limited_companion_purchased_traffic_gb or 0
+    purchased_gb = await housekeep_limited_companion_traffic(db, subscription)
     total_limit_gb = base_limit_gb + purchased_gb
     used_gb = subscription.limited_companion_traffic_used_gb or 0.0
     used_percent = round(min(100.0, (used_gb / total_limit_gb) * 100), 1) if total_limit_gb > 0 else 0.0
