@@ -8,6 +8,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.database.crud.server_squad import get_all_server_squads
 from app.database.crud.tariff import get_tariff_by_id, update_tariff
 from app.database.models import Tariff, User
@@ -38,8 +39,19 @@ def format_server_limits_summary(tariff: Tariff) -> str:
 
 
 def _visible_squads(tariff: Tariff, squads: list) -> list:
+    """Сервера, доступные для редактирования лимита.
+
+    Лимитный сервер-компаньон (LIMITED_COMPANION_SQUAD_UUID) виден ВСЕГДА, даже
+    если не входит в allowed_squads тарифа — и не должен туда добавляться: он
+    живёт отдельным панельным аккаунтом (см. get_limited_companion_base_traffic_gb),
+    добавление его в allowed_squads даёт основному аккаунту прямой безлимитный
+    доступ к нему в обход компаньона.
+    """
     allowed = set(getattr(tariff, 'allowed_squads', None) or [])
-    return [s for s in squads if not allowed or s.squad_uuid in allowed]
+    if not allowed:
+        return squads
+    companion_uuid = settings.LIMITED_COMPANION_SQUAD_UUID
+    return [s for s in squads if s.squad_uuid in allowed or (companion_uuid and s.squad_uuid == companion_uuid)]
 
 
 def render_server_limits(tariff: Tariff) -> str:
@@ -54,9 +66,11 @@ def render_server_limits(tariff: Tariff) -> str:
 def get_server_limits_keyboard(tariff: Tariff, squads: list, language: str) -> InlineKeyboardMarkup:
     texts = get_texts(language)
     buttons = []
+    companion_uuid = settings.LIMITED_COMPANION_SQUAD_UUID
     for squad in _visible_squads(tariff, squads):
         limit = limit_for(tariff, squad.squad_uuid)
-        label = f'{squad.display_name}: {limit} ГБ' if limit else f'{squad.display_name}: по тарифу'
+        name = f'🌐 {squad.display_name}' if squad.squad_uuid == companion_uuid else squad.display_name
+        label = f'{name}: {limit} ГБ' if limit else f'{name}: по тарифу'
         buttons.append(
             [InlineKeyboardButton(text=label, callback_data=f'admin_tariff_srv_limit:{tariff.id}:{squad.squad_uuid}')]
         )
