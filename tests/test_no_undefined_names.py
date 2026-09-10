@@ -34,7 +34,6 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 # вызова. Комментарий утверждал, что функции нет нигде в проекте; это было
 # неверно, и запись в базе мешала вернуть строку обратно.
 KNOWN: dict[str, set[str]] = {
-    'app/cabinet/services/email_templates.py': {'NotificationType'},
     'app/handlers/start.py': {'User'},
     'app/services/payment/heleket.py': {'HeleketPayment'},
     'app/services/payment_method_config_service.py': {'User'},
@@ -43,7 +42,7 @@ KNOWN: dict[str, set[str]] = {
 
 
 def _undefined_names() -> dict[str, set[str]]:
-    result = subprocess.run(  # noqa: S603
+    result = subprocess.run(
         [sys.executable, '-m', 'ruff', 'check', '--select', 'F821', '--no-cache', '--output-format', 'json', 'app'],
         capture_output=True,
         text=True,

@@ -1,5 +1,95 @@
 # Changelog
 
+## [4.8.0](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/compare/v4.7.1...v4.8.0) (2026-09-09)
+
+
+### New Features
+
+* **panel-sync:** один поиск панельного аккаунта ([d709c65](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/d709c65e65f41a5c9ebeaf49e089a90e378f1821))
+* **panel-sync:** одна запись подписки в панель ([676ad25](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/676ad252e0842659116a2da3b66c8b7e5f7efefa))
+* **panel-sync:** одна проекция панель → подписка ([de23459](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/de23459936a1860f9d5d7c4ce90d981c8e631f86))
+* **panel-sync:** одна сборка запроса к панели ([1b53d2f](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/1b53d2f044a4035182bee9567a404526e6ff6c0d))
+* **panel-sync:** одно правило «жива ли подписка» для всех писателей ([0e9a78d](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/0e9a78d1589d486256333aac89caa39eb0b46b2b))
+* **tariffs:** отметка «выгодно» доезжает до подарка и лендинга ([40ba302](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/40ba3027ddc6b775e4bd564fe95d173a3977531f))
+
+
+### Bug Fixes
+
+* **activity:** действия в Mini App попадают в таймлайн активности ([bc262e3](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/bc262e3ec5d13527d1a29df79ba041f7b7913396))
+* **autopay:** бесплатный период продлевается автоматически ([17a180c](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/17a180cd0d21e885df696ab248be79f24a34405a))
+* **cabinet:** бесплатный тариф снова можно купить и продлить ([725260e](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/725260e6e742ef6331717f01ab538912a68739e0))
+* **cabinet:** признак автооплаты приезжает и в классическом режиме продаж ([9fddc20](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/9fddc20c464d04ed7a9a272af3b7551df3ffcbf3))
+* **daily:** суточная оплата обнуляет трафик и возвращает из лимита ([564fec3](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/564fec3e5395e7b08ed4da02817e0f997ccc43a9))
+* **miniapp:** пакет трафика без цены больше не отдаётся бесплатно ([a00de70](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/a00de700baaa9bc99b96026f0eafeff465219eb9))
+* **panel-sync:** массовый проход пишет связь в сессию, которой владеет строка ([29df61c](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/29df61c53e8b9d8b5a3e2f3052efe5bbb17ab2bf))
+* **panel-sync:** повторная синхронизация больше не двигает погашенную дату ([459a2b7](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/459a2b7ae5378d68e619f2c82e7fd4939e354bab))
+* **panel-sync:** свести расходящиеся стороны, а не только удерживать согласованные ([c88a5bf](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/c88a5bf8dfa66893742eb6eebfed3686a806ba99))
+* **panel-sync:** синхронизация больше не снимает блокировку пользователя ([08a2282](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/08a228271008287dc91cd74d10978df0341c6c10))
+* **quality:** убрать замечания статического анализа релизного PR ([adf7765](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/adf7765bb6c168f68971387ebc8e7469af433ba2))
+* **remnawave:** синхронизация доносит до панели дату окончания истёкшей подписки ([39097eb](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/39097eb9fb484e716e5fdda3a6f30b2c56b61782))
+* **settings:** настройка из кабинета переживает перезапуск ([0d04ae6](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/0d04ae6245c395613e620018c25189907c2011f2))
+
+
+### Refactoring
+
+* **panel-sync:** админка бота пишет в панель через общий сервис ([6220f6e](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/6220f6e2bc754e579e5e32b28d74dca7a71b4f39))
+* **panel-sync:** вебхук панели применяет событие через общую проекцию ([f9eeaa2](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/f9eeaa2a328a5df662ad27177d7347c7d702963f))
+* **panel-sync:** вход по почте усыновляет аккаунт панели через проекцию ([c282196](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/c2821960f46cba2b9c3ea3cb62b97a63138692c9))
+* **panel-sync:** кабинетная кнопка «из панели в бота» на общей проекции ([4e921f4](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/4e921f4c17a71db1ae22b1011fc95ce4eff0b84b))
+* **panel-sync:** кабинетная синхронизация подписки на общем сервисе ([e7bbb70](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/e7bbb7012bf98104e52636d35e5190df7de2b790))
+* **panel-sync:** карточка аккаунта в панели обновляется одним входом ([dd4af6d](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/dd4af6d361f2e33ab59eb21047edfd54b8bc2992))
+* **panel-sync:** кнопка «синхронизировать в панель» в кабинете на общем сервисе ([6704cc1](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/6704cc1420010b55f748703d2b655bc0528bf8da))
+* **panel-sync:** массовая синхронизация в панель на общем сервисе ([8ac2b74](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/8ac2b7422007eef27b892d675e000eadf4ee67b6))
+* **panel-sync:** мониторинг обновляет панель через общий сервис ([a7c5b63](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/a7c5b632cc992bc921e3622f14bc5a1ca9ca86fb))
+* **panel-sync:** мультитарифный проход берёт состояние через общую проекцию ([389a6a0](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/389a6a0b31d7ee1c112cdbf92cbc024f673af39d))
+* **panel-sync:** помощник «панель → подписка» на общей проекции ([98c45a7](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/98c45a774573b754828f70b7c36c8713192f9b5f))
+* **panel-sync:** правило даты переезжает в пакет синхронизации ([7816e1e](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/7816e1e9fd3be57050795dbb2469ec14bf1ddab6))
+* **panel-sync:** сервис подписок больше не собирает панельный запрос сам ([ca5b525](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/ca5b52524df24e701c5c372498ff655da4805a84))
+* **panel-sync:** сервис подписок пишет в панель через общий сервис ([dc6d279](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/dc6d279865823103a3ac1173069c402c9ebc18ae))
+* **panel-sync:** смена сквадов тарифа идёт через общий вход ([9b35a1f](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/9b35a1f8959a0aa3bfdfa8e6e5945936bc9e390e))
+* **panel-sync:** согласователь грейса берёт правила у общего сервиса ([a1b11ec](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/a1b11ecc3756ab81817f2815aa14e8bdb5b89d32))
+
+## [4.7.1](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/compare/v4.7.0...v4.7.1) (2026-09-08)
+
+
+### Bug Fixes
+
+* **grace:** согласователь грейса тоже перестал переписывать дату окончания ([664ecea](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/664ecea75fa9e2204bef188dd29010a411b670f5))
+* **remnawave:** истёкшей подписке больше не переписывается дата окончания в панели ([5b24d67](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/5b24d67a1febe903637875391c96da70f7e5e7bb))
+
+## [4.7.0](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/compare/v4.6.0...v4.7.0) (2026-09-08)
+
+
+### New Features
+
+* **cabinet-auth:** письмо подтверждения можно запросить снова до входа ([423bbf7](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/423bbf7d187dcee9ebfd922daf01d7a770577504))
+* **cabinet:** дроссель регистрации по email на час и сутки, свой список одноразовых доменов ([0b622ba](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/0b622ba5c1a29f014f19c2dedfa32a93af8ca4a8))
+* **tariffs:** один период тарифа можно отметить как самый выгодный ([ba52dee](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/ba52dee68baf4ede633cbf7b14a051aed607d1a6))
+* **tariffs:** сам тариф тоже можно отметить как выгодный ([6b0fdfb](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/6b0fdfb37376df52efd34068deb03f1b7dda7b2f))
+
+
+### Bug Fixes
+
+* **admin:** новой подписке проставляется remnawave_id при обновлении аккаунта панели ([aafdb2f](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/aafdb2f22683026f98fcff6412497a9d3719cfb7))
+* **balance:** быстрое пополнение отвечает на нажатие до похода к провайдеру ([7448af7](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/7448af743f6142e57f6f3ca2908a6ef163c42c03))
+* **bot:** поздний ответ на нажатие кнопки — предупреждение, а не отчёт об ошибке ([50c158f](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/50c158feeee4196b218861ce196a60349a66ee51))
+* **cabinet:** настройки партнёрки и тикетов сохраняются в базу, а не в .env ([6014b92](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/6014b92b9d344ccc11dfb38bb9d7b1257e68cb77))
+* **cabinet:** причина отказа в докупке и уменьшении устройств — машинный код, а не фраза ([04fa516](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/04fa51637d39ab2bd1cf7c0086e0b66672670249))
+* **cabinet:** флаг email-входа закрывает API, а не только кнопку ([23a5817](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/23a581729786c58dfaec814e407e6118e5b1e508))
+* **cabinet:** флаг email-входа читать парсером редактора настроек, сквозной HTTP-тест гейта ([fdebcad](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/fdebcad1558ac83d4fe81cf218b5d240a10e2418))
+* **email:** без настроенного SMTP очередь писем не крутит попытки и не шлёт ошибок ([9cf5a17](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/9cf5a17730a19ba70b0a4850a4e5f7c0b7275cb8))
+* **pricing:** суточная цена в кабинете — только со скидкой группы, промокод не вкладывается дважды ([968687c](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/968687cecd7aa241a90cbdc721b3acf5d7025c20))
+* **referral:** письмо о регистрации реферала — «Новый реферал», а не «Реферальный бонус: +0 ₽» ([92dd70a](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/92dd70a1a9317582d7f18ab61d849c209b568656))
+* **referral:** подписка под награду появляется в панели — sync выбирает create или update ([118fe1b](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/118fe1be3f43c71a88fdd10b84104202be41282c))
+* **remnawave:** режим disable запрещает удалять аккаунт панели при сбросе триала ([47427f8](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/47427f8d5eb5821393c44fac05b62f0c0f9adbff))
+* **tariffs:** в последний день подписки переключение тарифа больше не бесплатное ([fd9b2cc](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/fd9b2ccc70e147258a85ba7ac8bad8a440c3a32c))
+* **tests:** подписка панели импортируется только модулем ([518ee41](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/518ee41d4dbde816eb1e308cf75cd0d39443f57d))
+
+
+### Refactoring
+
+* убраны замечания статического анализа с релизного PR ([70d4bf9](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/70d4bf97ec953a3ec5854f9ebfa8bdacf8887f5b))
+
 ## [4.6.0](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/compare/v4.5.0...v4.6.0) (2026-09-07)
 
 

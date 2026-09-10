@@ -82,6 +82,8 @@ class RenewalOptionResponse(BaseModel):
     price_rubles: float
     discount_percent: int = 0
     original_price_kopeks: int | None = None
+    # Период, отмеченный оператором как самый выгодный.
+    is_highlighted: bool = False
 
 
 class RenewalRequest(BaseModel):
@@ -118,6 +120,23 @@ class TrafficPackageResponse(BaseModel):
     discount_percent: int = 0
     base_price_kopeks: int | None = None
     discount_kopeks: int | None = None
+
+
+class LimitedCompanionTrafficResponse(BaseModel):
+    """Usage/limit for the limited-companion server's own traffic pool.
+
+    Separate from the main subscription's traffic_used_gb/traffic_limit_gb —
+    see LIMITED_COMPANION_ENABLED. ``available=False`` (all other fields at
+    their defaults) means this subscription has no companion linked, or the
+    feature is disabled.
+    """
+
+    available: bool
+    used_gb: float = 0.0
+    base_limit_gb: int = 0
+    purchased_gb: int = 0
+    total_limit_gb: int = 0
+    used_percent: float = 0.0
 
 
 class TrafficPurchaseRequest(BaseModel):

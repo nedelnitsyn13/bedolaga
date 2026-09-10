@@ -67,6 +67,7 @@ from app.database.models import (
     YooKassaPayment,
 )
 from app.external.remnawave_api import RemnaWaveAPI
+from app.services.panel_sync import patch_panel_account
 
 
 logger = structlog.get_logger(__name__)
@@ -206,7 +207,28 @@ async def _get_remnawave_api() -> AsyncIterator[RemnaWaveAPI]:
 
 
 async def _delete_remnawave_user_with_fallback(remnawave_id: int) -> None:
-    """Удаляет пользователя из RemnaWave. При неудаче — деактивирует как fallback."""
+    """Убирает лишний аккаунт из RemnaWave. При неудаче — деактивирует как fallback.
+
+    Что значит «убирает», решает ``REMNAWAVE_USER_DELETE_MODE``: при ``disable``
+    аккаунт слитого профиля только отключается — админ, запретивший удаление
+    аккаунтов панели, не ждёт исключения для мержа.
+    """
+    if settings.get_remnawave_user_delete_mode() != 'delete':
+        try:
+            async with _get_remnawave_api() as api:
+                await api.disable_user(remnawave_id)
+                logger.info(
+                    'RemnaWave пользователь деактивирован при мерже (режим disable)',
+                    remnawave_id=remnawave_id,
+                )
+        except Exception:
+            logger.warning(
+                'Не удалось деактивировать RemnaWave пользователя при мерже',
+                remnawave_id=remnawave_id,
+                exc_info=True,
+            )
+        return
+
     try:
         async with _get_remnawave_api() as api:
             # 3.0.0: DELETE отвечает 204/202 без тела, поля isDeleted больше нет —
@@ -279,7 +301,8 @@ async def _sync_transferred_subscriptions_to_panel(
         async with _get_remnawave_api() as api:
             for sub in subs_with_panel_id:
                 try:
-                    await api.update_user(
+                    await patch_panel_account(
+                        api,
                         user_id=sub.remnawave_id,
                         description=new_description,
                         telegram_id=primary.telegram_id,

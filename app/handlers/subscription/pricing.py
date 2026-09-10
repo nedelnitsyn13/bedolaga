@@ -398,6 +398,16 @@ async def get_subscription_info_text(subscription, texts, db_user, db: AsyncSess
                 info_text += f'\n• {purchase.traffic_gb} ГБ — {time_text}'
                 info_text += f'\n  {bar} {progress_percent:.0f}% | до {expire_date}'
 
+    if settings.is_limited_companion_enabled() and getattr(subscription, 'limited_companion_remnawave_id', None):
+        companion_limit = settings.LIMITED_COMPANION_TRAFFIC_GB + (
+            subscription.limited_companion_purchased_traffic_gb or 0
+        )
+        info_text += (
+            f'\n\n🌐 <b>Лимитный сервер</b>\n'
+            f'Использовано: {texts.format_traffic(subscription.limited_companion_traffic_used_gb or 0, is_limit=False)}\n'
+            f'Лимит: {texts.format_traffic(companion_limit)}'
+        )
+
     if subscription_url and subscription_url != 'Генерируется...' and not settings.should_hide_subscription_link():
         info_text += f'\n\n🔗 <b>Ваша ссылка для импорта в VPN приложениe:</b>\n<code>{subscription_url}</code>'
 

@@ -2015,6 +2015,16 @@ class Tariff(Base):
     # Уровень тарифа (для визуального отображения, 1 = базовый)
     tier_level = Column(Integer, default=1, nullable=False)
 
+    # Период, выделенный оператором как самый выгодный (число дней из period_prices).
+    # Хранится днями, а не индексом: набор периодов правят, и индекс после правки
+    # указывал бы на другой период. None = ничего не выделено.
+    highlight_period_days = Column(Integer, nullable=True, default=None)
+
+    # Сам тариф отмечен оператором как выгодный: выделяется в списке тарифов.
+    # Отдельно от highlight_period_days — это разные экраны: сначала выбирают
+    # тариф, потом период внутри него.
+    is_highlighted = Column(Boolean, default=False, server_default='false', nullable=False)
+
     # Дополнительные настройки
     is_trial_available = Column(Boolean, default=False, nullable=False)  # Можно ли взять триал на этом тарифе
     allow_traffic_topup = Column(Boolean, default=True, nullable=False)  # Разрешена ли докупка трафика для этого тарифа
@@ -2077,6 +2087,25 @@ class Tariff(Base):
         """Возвращает цену в копейках для указанного периода."""
         prices = self.period_prices or {}
         return prices.get(str(period_days))
+
+    def has_configured_price_for_period(self, period_days: int) -> bool:
+        """Настроена ли цена этого периода — бесплатный (0 ₽) считается настроенным.
+
+        Признак верной настройки — наличие цены, а не её величина. Бесплатный
+        тариф в проекте штатный (см. ``is_free``), и бот продаёт его, проверяя
+        только наличие периода в ``period_prices``. Кабинет же считал нулевую
+        цену признаком поломанной конфигурации и отказывал в покупке тарифа,
+        который сам же показывал как «Бесплатно».
+
+        Непроставленная цена (``None``) настроенной не считается — это и есть
+        тот случай, ради которого проверка появилась.
+        """
+        if self.is_daily:
+            return period_days <= 1
+        prices = self.period_prices or {}
+        if prices.get(str(period_days)) is not None:
+            return True
+        return self.can_purchase_custom_days() and self.get_price_for_custom_days(period_days) is not None
 
     @property
     def is_free(self) -> bool:
@@ -2514,6 +2543,18 @@ class Subscription(Base):
     remnawave_short_id = Column(
         String(16), nullable=False, unique=True, server_default=''
     )  # Permanent short ID for username suffix
+
+    # Компаньон-аккаунт на "лимитном" сервере (см. LIMITED_COMPANION_ENABLED):
+    # отдельный панельный пользователь с фиксированной квотой трафика, чья
+    # подписка склеивается с основной сервисом subscription-merger на стороне
+    # панели. NULL, пока функция выключена или компаньон ещё не создан.
+    limited_companion_remnawave_id = Column(BigInteger, nullable=True)
+    limited_companion_short_uuid = Column(String(255), nullable=True)
+    # Докупленный сверх LIMITED_COMPANION_TRAFFIC_GB трафик компаньона и последнее
+    # синхронизированное значение использованного — для отдельного отображения
+    # трафика лимитного сервера пользователю, тем же способом, что и у основной.
+    limited_companion_purchased_traffic_gb = Column(Integer, default=0, server_default='0')
+    limited_companion_traffic_used_gb = Column(Float, default=0.0, server_default='0')
 
     # Тариф (для режима продаж "Тарифы")
     tariff_id = Column(Integer, ForeignKey('tariffs.id', ondelete='RESTRICT'), nullable=True, index=True)
