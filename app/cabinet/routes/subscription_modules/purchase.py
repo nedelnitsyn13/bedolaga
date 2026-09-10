@@ -26,6 +26,7 @@ from app.database.crud.subscription import (
     create_trial_subscription,
     decrement_subscription_server_counts,
     extend_subscription,
+    get_limited_companion_traffic_gb_for_tariff,
     get_subscription_by_id_for_user,
     get_subscription_by_user_id,
     should_carry_trial_remaining_days,
@@ -230,6 +231,12 @@ async def _build_tariff_response(
 
     traffic_label = '♾️ Безлимит' if tariff.traffic_limit_gb == 0 else f'{tariff.traffic_limit_gb} ГБ'
 
+    # Трафик лимитного сервера-компаньона — до покупки был виден только в боте
+    # (format_tariffs_list_text), в кабинете этого поля не было вовсе.
+    limited_companion_traffic_gb: int | None = None
+    if settings.is_limited_companion_enabled():
+        limited_companion_traffic_gb = get_limited_companion_traffic_gb_for_tariff(tariff)
+
     # Суточная цена — как и периоды, только со скидкой группы: промокод накладывает
     # кабинет для показа и сервер при списании (PricingEngine.daily_group_price).
     original_daily_price = getattr(tariff, 'daily_price_kopeks', 0) or 0
@@ -300,6 +307,12 @@ async def _build_tariff_response(
         # Сброс трафика
         'traffic_reset_mode': tariff.traffic_reset_mode or settings.DEFAULT_TRAFFIC_RESET_STRATEGY,
     }
+
+    if limited_companion_traffic_gb is not None:
+        response['limited_companion_traffic_gb'] = limited_companion_traffic_gb
+        response['limited_companion_traffic_label'] = (
+            '♾️ Безлимит' if limited_companion_traffic_gb == 0 else f'{limited_companion_traffic_gb} ГБ'
+        )
 
     # Add promo group info if user has discounts
     if promo_group_name:
