@@ -1183,7 +1183,12 @@ async def refresh_limited_companion_traffic(
             detail='Limited companion server is not available for this subscription',
         )
 
-    cache_suffix = f'{user.id}_{subscription_id}_limited' if subscription_id is not None else f'{user.id}_limited'
+    # Key off the resolved subscription's own id, not the raw query param —
+    # omitting subscription_id and passing it explicitly can resolve to the
+    # same subscription, and keying on the raw param would let a caller get
+    # two independent rate-limit buckets for one subscription by alternating
+    # which form it sends.
+    cache_suffix = f'{user.id}_{subscription.id}_limited'
     is_limited = await RateLimitCache.is_rate_limited(
         cache_suffix,
         'limited_traffic_refresh',
