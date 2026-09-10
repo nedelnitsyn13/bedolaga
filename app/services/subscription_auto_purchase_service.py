@@ -1575,6 +1575,7 @@ async def _auto_add_devices(
     cart_data: dict,
     *,
     bot: Bot | None = None,
+    manual: bool = False,
 ) -> bool:
     """Auto-purchase devices from saved cart after balance topup."""
     from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
@@ -1836,10 +1837,14 @@ async def _auto_add_devices(
         texts = get_texts(getattr(user, 'language', 'ru'))
         try:
             message = texts.t(
-                'AUTO_PURCHASE_DEVICES_SUCCESS',
+                'ADDON_PURCHASE_DEVICES_SUCCESS' if manual else 'AUTO_PURCHASE_DEVICES_SUCCESS',
                 (
-                    '✅ <b>Устройства добавлены автоматически!</b>\n\n'
-                    '📱 Добавлено: {devices_to_add} устройств\n'
+                    (
+                        '✅ <b>Устройства добавлены!</b>\n\n'
+                        if manual
+                        else '✅ <b>Устройства добавлены автоматически!</b>\n\n'
+                    )
+                    + '📱 Добавлено: {devices_to_add} устройств\n'
                     '📊 Новый лимит: {new_limit} устройств\n'
                     '💰 Списано: {price}'
                 ),
@@ -1902,6 +1907,7 @@ async def _auto_add_traffic(
     cart_data: dict,
     *,
     bot: Bot | None = None,
+    manual: bool = False,
 ) -> bool:
     """Auto-purchase traffic from saved cart after balance topup."""
     from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
@@ -2192,10 +2198,10 @@ async def _auto_add_traffic(
         texts = get_texts(getattr(user, 'language', 'ru'))
         try:
             message = texts.t(
-                'AUTO_PURCHASE_TRAFFIC_SUCCESS',
+                'ADDON_PURCHASE_TRAFFIC_SUCCESS' if manual else 'AUTO_PURCHASE_TRAFFIC_SUCCESS',
                 (
-                    '✅ <b>Трафик добавлен автоматически!</b>\n\n'
-                    '📈 Добавлено: {traffic_gb} ГБ\n'
+                    ('✅ <b>Трафик добавлен!</b>\n\n' if manual else '✅ <b>Трафик добавлен автоматически!</b>\n\n')
+                    + '📈 Добавлено: {traffic_gb} ГБ\n'
                     '📊 Новый лимит: {new_limit} ГБ\n'
                     '💰 Списано: {price}'
                 ),
@@ -3336,6 +3342,7 @@ async def _process_single_cart(
     cart_data: dict,
     *,
     bot: Bot | None = None,
+    manual: bool = False,
 ) -> bool:
     """Process a single cart entry.  Returns True if purchase succeeded."""
     from app.database.crud.transaction import get_user_transactions
@@ -3425,9 +3432,9 @@ async def _process_single_cart(
     if cart_mode == 'daily_tariff_purchase':
         return await _auto_purchase_daily_tariff(db, user, cart_data, bot=bot)
     if cart_mode == 'add_devices':
-        return await _auto_add_devices(db, user, cart_data, bot=bot)
+        return await _auto_add_devices(db, user, cart_data, bot=bot, manual=manual)
     if cart_mode == 'add_traffic':
-        return await _auto_add_traffic(db, user, cart_data, bot=bot)
+        return await _auto_add_traffic(db, user, cart_data, bot=bot, manual=manual)
     if cart_mode == 'add_traffic_limited':
         return await _auto_add_traffic_limited(db, user, cart_data, bot=bot)
 
@@ -3681,6 +3688,27 @@ async def _auto_purchase_gift(
         total_price=saved_expected_price,
     )
     return True
+
+
+ADDON_CART_MODES = frozenset({'add_traffic', 'add_devices'})
+
+
+async def resume_addon_cart(
+    db: AsyncSession,
+    user: User,
+    cart_data: dict,
+    *,
+    bot: Bot | None = None,
+) -> bool:
+    """Докупка трафика/устройств из сохранённой корзины по явному нажатию.
+
+    Тот же путь, что и тихая автопокупка после пополнения (списание, начисление,
+    синхронизация с панелью, уведомления), но в обход её «тихих» гейтов —
+    глобального выключателя и TTL метки намерения: человек нажал кнопку сам.
+    """
+    if (cart_data.get('cart_mode') or cart_data.get('mode')) not in ADDON_CART_MODES:
+        return False
+    return await _process_single_cart(db, user, cart_data, bot=bot, manual=True)
 
 
 async def auto_purchase_saved_cart_after_topup(
@@ -3995,4 +4023,4 @@ async def _process_legacy_generic_cart(
     return True
 
 
-__all__ = ['auto_purchase_saved_cart_after_topup']
+__all__ = ['ADDON_CART_MODES', 'auto_purchase_saved_cart_after_topup', 'resume_addon_cart']

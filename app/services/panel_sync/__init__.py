@@ -25,6 +25,7 @@ from app.services.panel_sync.projection import (
     read_panel_user,
 )
 from app.services.panel_sync.runner import SyncStats, push_all_subscriptions
+from app.services.panel_sync.tags import normalize_panel_tag, resolve_panel_user_tag
 from app.services.panel_sync.writer import (
     PanelWriteResult,
     patch_panel_account,
@@ -47,6 +48,7 @@ __all__ = [
     'SyncStats',
     'build_panel_payload',
     'is_subscription_live',
+    'normalize_panel_tag',
     'panel_expire_at',
     'panel_status_for_new_subscription',
     'patch_panel_account',
@@ -56,6 +58,7 @@ __all__ = [
     'push_subscription',
     'read_panel_user',
     'resolve_panel_identity',
+    'resolve_panel_user_tag',
     'stale_panel_expire_at',
     'write_companion_account',
 ]
