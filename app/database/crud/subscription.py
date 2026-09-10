@@ -1485,6 +1485,32 @@ async def add_subscription_traffic(db: AsyncSession, subscription: Subscription,
     return subscription
 
 
+def get_limited_companion_base_traffic_gb(subscription: Subscription) -> int:
+    """Базовый (без докупок) лимит трафика лимитного сервера-компаньона.
+
+    Триальные подписки зеркалят `traffic_limit_gb` основной подписки —
+    иначе компаньон триала получает больше трафика, чем сам триал.
+    Остальные подписки используют фиксированный `LIMITED_COMPANION_TRAFFIC_GB`.
+    """
+    if subscription.is_trial:
+        return subscription.traffic_limit_gb or 0
+    return settings.LIMITED_COMPANION_TRAFFIC_GB
+
+
+def get_limited_companion_total_traffic_limit_gb(subscription: Subscription, purchased_gb: int) -> int:
+    """Итоговый лимит трафика компаньона: база + активные докупки.
+
+    Если база — безлимит (`0`, возможно у триального компаньона, см.
+    `get_limited_companion_base_traffic_gb`), докупки в неё НЕ складываются —
+    иначе конечное число портит безлимит вместо того, чтобы его сохранить.
+    Мирроит `_apply_base_limit_preserving_active_purchases` для основного трафика.
+    """
+    base_limit_gb = get_limited_companion_base_traffic_gb(subscription)
+    if base_limit_gb == 0:
+        return 0
+    return base_limit_gb + purchased_gb
+
+
 async def housekeep_limited_companion_traffic(db: AsyncSession, subscription: Subscription) -> int:
     """Удаляет истёкшие докупки трафика лимитного сервера-компаньона и
     пересчитывает `limited_companion_purchased_traffic_gb` как сумму ещё
