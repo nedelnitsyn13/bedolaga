@@ -1078,7 +1078,8 @@ async def purchase_limited_companion_traffic(
         'message': 'Limited companion traffic purchased successfully',
         'gb_added': request.gb,
         'new_purchased_traffic_gb': subscription.limited_companion_purchased_traffic_gb,
-        'new_total_limit_gb': settings.LIMITED_COMPANION_TRAFFIC_GB + subscription.limited_companion_purchased_traffic_gb,
+        'new_total_limit_gb': settings.LIMITED_COMPANION_TRAFFIC_GB
+        + subscription.limited_companion_purchased_traffic_gb,
         'amount_paid_kopeks': final_price,
         'new_balance_kopeks': user.balance_kopeks,
     }
@@ -1141,8 +1142,6 @@ async def save_limited_companion_traffic_cart(
         'description': f'Докупка {request.gb} ГБ трафика (лимитный сервер)',
     }
     await user_cart_service.save_user_cart(user.id, cart_data)
-    logger.info(
-        'Cart saved for limited companion traffic purchase (cabinet save-cart)', user_id=user.id, gb=request.gb
-    )
+    logger.info('Cart saved for limited companion traffic purchase (cabinet save-cart)', user_id=user.id, gb=request.gb)
 
     return {'success': True, 'cart_saved': True}

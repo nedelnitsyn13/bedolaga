@@ -51,9 +51,7 @@ def _load_legacy_users(source_path: Path) -> list[dict]:
     conn = sqlite3.connect(uri, uri=True)
     conn.row_factory = sqlite3.Row
     try:
-        rows = conn.execute(
-            'SELECT telegram_id, auth_email, balance, total_spent FROM users'
-        ).fetchall()
+        rows = conn.execute('SELECT telegram_id, auth_email, balance, total_spent FROM users').fetchall()
     finally:
         conn.close()
     return [dict(r) for r in rows]
@@ -108,7 +106,9 @@ async def _diagnose(db, legacy_users: list[dict]) -> None:
 
         flagged += 1
         identity = f'telegram_id={bedolaga_user.telegram_id}' if bedolaga_user.telegram_id else f'email={auth_email}'
-        status = 'МИГРИРОВАН (транзакции с тегом есть)' if has_migration_txn else 'ПРОПУЩЕН (баланс не тронут миграцией)'
+        status = (
+            'МИГРИРОВАН (транзакции с тегом есть)' if has_migration_txn else 'ПРОПУЩЕН (баланс не тронут миграцией)'
+        )
         print()
         print(f'  bedolaga user_id={bedolaga_user.id} {identity} — {status}')
         print(f'    легаси баланс      : {legacy_balance_rub:.2f} ₽  (total_spent={legacy_total_spent_rub:.2f} ₽)')

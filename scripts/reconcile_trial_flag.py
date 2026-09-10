@@ -99,18 +99,15 @@ async def _reconcile(db, legacy_totals: LegacyTotals, *, apply: bool) -> Reconci
     # non-TRIAL-status subscription — the cabinet badge is driven by
     # is_trial alone, so that case needs fixing too.
     rows = (
-        (
-            await db.execute(
-                select(Subscription, User)
-                .join(User, User.id == Subscription.user_id)
-                .where(
-                    Subscription.remnawave_id.is_not(None),
-                    Subscription.is_trial.is_(True),
-                )
+        await db.execute(
+            select(Subscription, User)
+            .join(User, User.id == Subscription.user_id)
+            .where(
+                Subscription.remnawave_id.is_not(None),
+                Subscription.is_trial.is_(True),
             )
         )
-        .all()
-    )
+    ).all()
     report.subscriptions_checked = len(rows)
 
     for subscription, user in rows:
@@ -129,9 +126,7 @@ async def _reconcile(db, legacy_totals: LegacyTotals, *, apply: bool) -> Reconci
             continue
 
         old_status = subscription.status
-        new_status = (
-            SubscriptionStatus.ACTIVE.value if old_status == SubscriptionStatus.TRIAL.value else old_status
-        )
+        new_status = SubscriptionStatus.ACTIVE.value if old_status == SubscriptionStatus.TRIAL.value else old_status
         report.unresolved_lines.append(
             f'subscription id={subscription.id} user_id={user.id} '
             f'telegram_id={user.telegram_id} email={user.email}: '
