@@ -8,6 +8,8 @@ POST /subscription/traffic/save-cart
 GET /subscription/limited-traffic
 GET /subscription/limited-traffic-packages
 POST /subscription/limited-traffic
+POST /subscription/limited-traffic/save-cart
+POST /subscription/limited-traffic/refresh
 """
 
 from __future__ import annotations
@@ -1154,3 +1156,74 @@ async def save_limited_companion_traffic_cart(
     logger.info('Cart saved for limited companion traffic purchase (cabinet save-cart)', user_id=user.id, gb=request.gb)
 
     return {'success': True, 'cart_saved': True}
+
+
+@router.post('/limited-traffic/refresh', response_model=LimitedCompanionTrafficResponse)
+async def refresh_limited_companion_traffic(
+    user: User = Depends(get_current_cabinet_user),
+    db: AsyncSession = Depends(get_cabinet_db),
+    subscription_id: int | None = QueryParam(None, description='Subscription ID for multi-tariff'),
+):
+    """Refresh the limited-companion server's traffic usage from the RemnaWave panel.
+
+    limited_companion_traffic_used_gb is otherwise only written by a purchase's
+    resync_limited_companion call or the periodic monitoring pass, so the
+    cabinet can show a stale (often 0) value for a long time without this —
+    mirrors POST /refresh-traffic for the main account. Rate limited to 1
+    request per 60 seconds per subscription.
+    """
+    subscription = await resolve_subscription(db, user, subscription_id)
+    if (
+        not subscription
+        or not settings.is_limited_companion_enabled()
+        or not subscription.limited_companion_remnawave_id
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='Limited companion server is not available for this subscription',
+        )
+
+    # Key off the resolved subscription's own id, not the raw query param —
+    # omitting subscription_id and passing it explicitly can resolve to the
+    # same subscription, and keying on the raw param would let a caller get
+    # two independent rate-limit buckets for one subscription by alternating
+    # which form it sends.
+    cache_suffix = f'{user.id}_{subscription.id}_limited'
+    is_limited = await RateLimitCache.is_rate_limited(
+        cache_suffix,
+        'limited_traffic_refresh',
+        TRAFFIC_REFRESH_RATE_LIMIT,
+        TRAFFIC_REFRESH_RATE_WINDOW,
+    )
+    if is_limited:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f'Rate limited. Try again in {TRAFFIC_REFRESH_RATE_WINDOW} seconds.',
+            headers={'Retry-After': str(TRAFFIC_REFRESH_RATE_WINDOW)},
+        )
+
+    remnawave_service = RemnaWaveService()
+    traffic_stats = await remnawave_service.get_user_traffic_stats_by_panel_id(
+        subscription.limited_companion_remnawave_id
+    )
+    if traffic_stats:
+        used_gb = traffic_stats.get('used_traffic_gb', 0)
+        if abs((subscription.limited_companion_traffic_used_gb or 0) - used_gb) > 0.01:
+            subscription.limited_companion_traffic_used_gb = used_gb
+            await db.commit()
+            await db.refresh(subscription)
+
+    base_limit_gb = settings.LIMITED_COMPANION_TRAFFIC_GB
+    purchased_gb = subscription.limited_companion_purchased_traffic_gb or 0
+    total_limit_gb = base_limit_gb + purchased_gb
+    used_gb = subscription.limited_companion_traffic_used_gb or 0.0
+    used_percent = round(min(100.0, (used_gb / total_limit_gb) * 100), 1) if total_limit_gb > 0 else 0.0
+
+    return LimitedCompanionTrafficResponse(
+        available=True,
+        used_gb=round(used_gb, 2),
+        base_limit_gb=base_limit_gb,
+        purchased_gb=purchased_gb,
+        total_limit_gb=total_limit_gb,
+        used_percent=used_percent,
+    )
