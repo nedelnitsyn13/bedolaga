@@ -1010,15 +1010,22 @@ async def purchase_limited_companion_traffic(
         missing = final_price - user.balance_kopeks
 
         # Save cart for auto-purchase after balance top-up — mirrors POST /subscription/traffic.
+        # total_price + return_to_cart are required by
+        # subscription_auto_purchase_service.auto_purchase_saved_cart_after_topup:
+        # return_to_cart marks this as a fresh "insufficient funds -> top up" intent
+        # (without it the silent auto-purchase never fires), total_price is read by
+        # the cart-notification path once the balance lands.
         cart_data = {
             'cart_mode': 'add_traffic_limited',
             'subscription_id': subscription.id,
             'traffic_gb': request.gb,
             'price_kopeks': final_price,
+            'total_price': final_price,
             'base_price_kopeks': base_price_kopeks,
             'discount_percent': traffic_discount_percent,
             'source': 'cabinet',
             'description': f'Докупка {request.gb} ГБ трафика (лимитный сервер)',
+            'return_to_cart': True,
         }
         try:
             await user_cart_service.save_user_cart(user.id, cart_data)
@@ -1136,10 +1143,12 @@ async def save_limited_companion_traffic_cart(
         'subscription_id': subscription.id,
         'traffic_gb': request.gb,
         'price_kopeks': final_price,
+        'total_price': final_price,
         'base_price_kopeks': base_price_kopeks,
         'discount_percent': traffic_discount_percent,
         'source': 'cabinet',
         'description': f'Докупка {request.gb} ГБ трафика (лимитный сервер)',
+        'return_to_cart': True,
     }
     await user_cart_service.save_user_cart(user.id, cart_data)
     logger.info('Cart saved for limited companion traffic purchase (cabinet save-cart)', user_id=user.id, gb=request.gb)

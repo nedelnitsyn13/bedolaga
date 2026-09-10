@@ -770,8 +770,9 @@ async def handle_add_traffic_limited(
     # block this — the companion's traffic pool is independent of the main
     # subscription's fixed-traffic tariff, so top-up stays available here.
     current_limit = settings.LIMITED_COMPANION_TRAFFIC_GB + (subscription.limited_companion_purchased_traffic_gb or 0)
-    period_hint_days = _get_period_hint_from_subscription(subscription)
-    traffic_discount_percent = PricingEngine.get_addon_discount_percent(db_user, 'traffic', period_hint_days)
+    # Фиксированный хинт 30 дней — компаньон продаётся только помесячно
+    # (см. add_traffic_limited ниже), скидка должна совпадать с кабинетом.
+    traffic_discount_percent = PricingEngine.get_addon_discount_percent(db_user, 'traffic', 30)
 
     prompt_text = (
         '📈 <b>Докупить трафик — лимитный сервер</b>\n\n'
@@ -832,8 +833,10 @@ async def add_traffic_limited(callback: types.CallbackQuery, db_user: User, db: 
     # Цена всегда за один месяц, а не пропорционально остатку подписки:
     # трафик компаньона сбрасывается каждые 30 дней (см. LIMITED_COMPANION_ENABLED),
     # так что оплата "за все оставшиеся дни подписки" не имеет смысла — докупленный
-    # ГБ всё равно действует только до следующего сброса.
-    period_hint_days = _get_period_hint_from_subscription(subscription)
+    # ГБ всё равно действует только до следующего сброса. Фиксированный хинт 30
+    # дней (а не остаток подписки) — иначе скидка для период-зависимых промогрупп
+    # разъезжается с кабинетом и с auto-purchase, которые тоже используют 30.
+    period_hint_days = 30
     discounted_per_month, discount_per_month, traffic_discount_pct = PricingEngine.calculate_traffic_discount(
         base_price,
         db_user,

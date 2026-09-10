@@ -1779,6 +1779,7 @@
   "REFERRAL_WITHDRAWAL_STATS_PENDING": "⏳ На розгляді: <b>{amount}</b>",
   "AUTO_PURCHASE_DEVICES_SUCCESS": "✅ <b>Пристрої додано автоматично!</b>\n\n📱 Додано: {devices_to_add} пристроїв\n📊 Новий ліміт: {new_limit} пристроїв\n💰 Списано: {price}",
   "AUTO_PURCHASE_TRAFFIC_SUCCESS": "✅ <b>Трафік додано автоматично!</b>\n\n📈 Додано: {traffic_gb} ГБ\n📊 Новий ліміт: {new_limit} ГБ\n💰 Списано: {price}",
+  "AUTO_PURCHASE_TRAFFIC_LIMITED_SUCCESS": "✅ <b>Трафік лімітного сервера додано автоматично!</b>\n\n📈 Додано: {traffic_gb} ГБ\n📊 Новий ліміт: {new_limit} ГБ\n💰 Списано: {price}",
   "BTN_RENEW_SUBSCRIPTION": "⏰ Продовжити підписку",
   "BTN_TOPUP_BALANCE": "💳 Поповнити баланс",
   "PAYMENT_SUCCESS_CLOUDPAYMENTS": "✅ <b>Оплату отримано!</b>\n\n💰 Сума: {amount}₽\n💳 Спосіб: CloudPayments\n💵 Баланс: {balance}₽\n\nДякуємо за поповнення!",

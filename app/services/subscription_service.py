@@ -734,16 +734,18 @@ class SubscriptionService:
         """
         if not settings.is_limited_companion_enabled():
             return False
-        if not subscription.remnawave_id:
-            return False
 
         user = await get_user_by_id(db, subscription.user_id)
         if not user:
             return False
 
+        main_remnawave_id = subscription.remnawave_id if settings.is_multi_tariff_enabled() else user.remnawave_id
+        if not main_remnawave_id:
+            return False
+
         try:
             async with self.get_api_client() as api:
-                main_user = await api.get_user_by_id(subscription.remnawave_id)
+                main_user = await api.get_user_by_id(main_remnawave_id)
                 if not main_user:
                     return False
                 await self._sync_limited_companion_user(api, db, user, subscription, main_user)

@@ -1777,6 +1777,7 @@
   "REFERRAL_WITHDRAWAL_STATS_PENDING": "⏳ 审核中：<b>{amount}</b>",
   "AUTO_PURCHASE_DEVICES_SUCCESS": "✅ <b>已自动添加设备！</b>\n\n📱 新增：{devices_to_add} 台设备\n📊 新上限：{new_limit} 台设备\n💰 已扣款：{price}",
   "AUTO_PURCHASE_TRAFFIC_SUCCESS": "✅ <b>已自动添加流量！</b>\n\n📈 新增：{traffic_gb} GB\n📊 新上限：{new_limit} GB\n💰 已扣款：{price}",
+  "AUTO_PURCHASE_TRAFFIC_LIMITED_SUCCESS": "✅ <b>限量服务器流量已自动添加！</b>\n\n📈 新增：{traffic_gb} GB\n📊 新上限：{new_limit} GB\n💰 已扣款：{price}",
   "BTN_RENEW_SUBSCRIPTION": "⏰ 续订订阅",
   "BTN_TOPUP_BALANCE": "💳 充值余额",
   "PAYMENT_SUCCESS_CLOUDPAYMENTS": "✅ <b>已收到付款！</b>\n\n💰 金额：{amount}₽\n💳 方式：CloudPayments\n💵 余额：{balance}₽\n\n感谢您的充值！",
