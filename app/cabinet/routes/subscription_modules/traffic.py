@@ -1008,12 +1008,36 @@ async def purchase_limited_companion_traffic(
 
     if final_price > 0 and user.balance_kopeks < final_price:
         missing = final_price - user.balance_kopeks
+
+        # Save cart for auto-purchase after balance top-up — mirrors POST /subscription/traffic.
+        cart_data = {
+            'cart_mode': 'add_traffic_limited',
+            'subscription_id': subscription.id,
+            'traffic_gb': request.gb,
+            'price_kopeks': final_price,
+            'base_price_kopeks': base_price_kopeks,
+            'discount_percent': traffic_discount_percent,
+            'source': 'cabinet',
+            'description': f'Докупка {request.gb} ГБ трафика (лимитный сервер)',
+        }
+        try:
+            await user_cart_service.save_user_cart(user.id, cart_data)
+            logger.info(
+                'Cart saved for limited companion traffic purchase (cabinet)',
+                user_id=user.id,
+                gb=request.gb,
+            )
+        except Exception as e:
+            logger.error('Error saving cart for limited companion traffic purchase (cabinet)', error=e)
+
         raise HTTPException(
             status_code=status.HTTP_402_PAYMENT_REQUIRED,
             detail={
                 'code': 'insufficient_funds',
                 'message': f'Недостаточно средств. Не хватает {settings.format_price(missing, round_kopeks=False)}',
                 'missing_amount': missing,
+                'cart_saved': True,
+                'cart_mode': 'add_traffic_limited',
             },
         )
 
@@ -1065,3 +1089,60 @@ async def purchase_limited_companion_traffic(
         response['base_price_kopeks'] = base_price_kopeks
 
     return response
+
+
+@router.post('/limited-traffic/save-cart')
+async def save_limited_companion_traffic_cart(
+    request: TrafficPurchaseRequest,
+    user: User = Depends(get_current_cabinet_user),
+    db: AsyncSession = Depends(get_cabinet_db),
+    subscription_id: int | None = QueryParam(None, description='Subscription ID for multi-tariff'),
+) -> dict[str, bool]:
+    """Save cart for limited-companion traffic purchase (insufficient-balance flow).
+
+    Mirrors POST /subscription/traffic/save-cart: the frontend calls this
+    proactively (InsufficientBalancePrompt's onBeforeTopUp) before sending the
+    user to top up, so subscription_auto_purchase_service finishes the
+    purchase automatically once the balance lands.
+    """
+    subscription = await resolve_subscription(db, user, subscription_id)
+    if not subscription:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='У вас нет активной подписки')
+
+    if not settings.is_limited_companion_enabled() or not subscription.limited_companion_remnawave_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='Лимитный сервер недоступен для этой подписки',
+        )
+
+    if not settings.is_traffic_topup_enabled():
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Докупка трафика отключена')
+
+    packages = settings.get_traffic_topup_packages()
+    matching_pkg = next((pkg for pkg in packages if pkg['gb'] == request.gb and pkg.get('enabled', True)), None)
+    if not matching_pkg or matching_pkg['price'] <= 0:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Недоступный пакет трафика')
+    base_price_kopeks = matching_pkg['price']
+
+    discount_result = _apply_addon_discount(user, 'traffic', base_price_kopeks, 30)
+    final_price = discount_result['discounted']
+    traffic_discount_percent = discount_result['percent']
+    if traffic_discount_percent < 100 and final_price > 0:
+        final_price = max(100, final_price)
+
+    cart_data = {
+        'cart_mode': 'add_traffic_limited',
+        'subscription_id': subscription.id,
+        'traffic_gb': request.gb,
+        'price_kopeks': final_price,
+        'base_price_kopeks': base_price_kopeks,
+        'discount_percent': traffic_discount_percent,
+        'source': 'cabinet',
+        'description': f'Докупка {request.gb} ГБ трафика (лимитный сервер)',
+    }
+    await user_cart_service.save_user_cart(user.id, cart_data)
+    logger.info(
+        'Cart saved for limited companion traffic purchase (cabinet save-cart)', user_id=user.id, gb=request.gb
+    )
+
+    return {'success': True, 'cart_saved': True}

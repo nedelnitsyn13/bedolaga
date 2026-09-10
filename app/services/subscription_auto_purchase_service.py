@@ -2247,6 +2247,243 @@ async def _auto_add_traffic(
     return True
 
 
+async def _auto_add_traffic_limited(
+    db: AsyncSession,
+    user: User,
+    cart_data: dict,
+    *,
+    bot: Bot | None = None,
+) -> bool:
+    """Auto-purchase limited-companion traffic from saved cart after balance topup.
+
+    Sibling of ``_auto_add_traffic`` for the limited-companion server's own
+    traffic pool (see LIMITED_COMPANION_ENABLED) — a separate top-up flow
+    mirrored from app/handlers/subscription/traffic.py::add_traffic_limited
+    and app/cabinet/routes/subscription_modules/traffic.py::
+    purchase_limited_companion_traffic. Price is always flat per month
+    (period_hint_days=30, no proration) — the companion's usage resets every
+    30 days regardless of the main subscription's remaining days.
+    """
+    from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+
+    from app.database.crud.subscription import get_subscription_by_id_for_user
+    from app.database.crud.user import lock_user_for_pricing, subtract_user_balance
+    from app.database.models import PaymentMethod
+
+    traffic_gb = _safe_int(cart_data.get('traffic_gb'))
+    cart_price_kopeks = _safe_int(cart_data.get('price_kopeks'))
+
+    if traffic_gb <= 0 or cart_price_kopeks <= 0:
+        logger.warning(
+            '🔁 Автопокупка трафика (лимитный сервер): некорректные данные корзины',
+            format_user_id=_format_user_id(user),
+            traffic_gb=traffic_gb,
+            cart_price_kopeks=cart_price_kopeks,
+        )
+        return False
+
+    saved_subscription_id = _safe_int(cart_data.get('subscription_id'))
+    subscription = (
+        await get_subscription_by_id_for_user(db, saved_subscription_id, user.id) if saved_subscription_id else None
+    )
+    if not subscription:
+        logger.warning(
+            '🔁 Автопокупка трафика (лимитный сервер): подписка из корзины не найдена',
+            format_user_id=_format_user_id(user),
+            saved_subscription_id=saved_subscription_id,
+        )
+        await _delete_cart_for_subscription(user.id, cart_data)
+        return False
+
+    if not settings.is_limited_companion_enabled() or not subscription.limited_companion_remnawave_id:
+        logger.warning(
+            '🔁 Автопокупка трафика (лимитный сервер): компаньон недоступен для подписки',
+            format_user_id=_format_user_id(user),
+            subscription_id=subscription.id,
+        )
+        await _delete_cart_for_subscription(user.id, cart_data)
+        return False
+
+    # Lock user BEFORE price computation to prevent TOCTOU on promo-offer/group discount
+    user = await lock_user_for_pricing(db, user.id)
+
+    # Recompute base price from settings (config may have changed since cart was saved)
+    base_price = settings.get_traffic_topup_price(traffic_gb)
+    if base_price <= 0:
+        logger.warning(
+            '🔁 Автопокупка трафика (лимитный сервер): цена пакета не настроена, корзина удалена',
+            format_user_id=_format_user_id(user),
+            traffic_gb=traffic_gb,
+        )
+        await _delete_cart_for_subscription(user.id, cart_data)
+        return False
+
+    price_kopeks, _, _ = PricingEngine.calculate_traffic_discount(base_price, user, 30)
+    if price_kopeks != cart_price_kopeks:
+        logger.warning(
+            '🔁 Автопокупка трафика (лимитный сервер): пересчитанная цена отличается от корзины',
+            format_user_id=_format_user_id(user),
+            cart_price_kopeks=cart_price_kopeks,
+            recomputed_price_kopeks=price_kopeks,
+        )
+
+    if price_kopeks > 0 and user.balance_kopeks < price_kopeks:
+        logger.info(
+            '🔁 Автопокупка трафика (лимитный сервер): у пользователя недостаточно средств',
+            format_user_id=_format_user_id(user),
+            balance_kopeks=user.balance_kopeks,
+            price_kopeks=price_kopeks,
+        )
+        return False
+
+    description = f'Докупка {traffic_gb} ГБ трафика (лимитный сервер)'
+    try:
+        success = await subtract_user_balance(
+            db,
+            user,
+            price_kopeks,
+            description,
+            create_transaction=True,
+            payment_method=PaymentMethod.BALANCE,
+            transaction_type=TransactionType.SUBSCRIPTION_PAYMENT,
+        )
+        if not success:
+            logger.warning(
+                '❌ Автопокупка трафика (лимитный сервер): не удалось списать баланс',
+                format_user_id=_format_user_id(user),
+            )
+            return False
+    except Exception as error:
+        logger.error(
+            '❌ Автопокупка трафика (лимитный сервер): ошибка списания баланса',
+            format_user_id=_format_user_id(user),
+            error=error,
+            exc_info=True,
+        )
+        return False
+
+    old_purchased = subscription.limited_companion_purchased_traffic_gb or 0
+    try:
+        subscription.limited_companion_purchased_traffic_gb = old_purchased + traffic_gb
+        await db.commit()
+        await db.refresh(subscription)
+    except Exception as error:
+        logger.error(
+            '❌ Автопокупка трафика (лимитный сервер): ошибка сохранения докупленного трафика',
+            format_user_id=_format_user_id(user),
+            error=error,
+            exc_info=True,
+        )
+        await db.rollback()
+        try:
+            from app.database.crud.user import add_user_balance
+
+            await add_user_balance(
+                db,
+                user,
+                price_kopeks,
+                'Возврат: ошибка автопокупки трафика лимитного сервера',
+                create_transaction=True,
+                transaction_type=TransactionType.REFUND,
+            )
+        except Exception as refund_error:
+            logger.critical(
+                'CRITICAL: Автопокупка трафика (лимитный сервер): не удалось вернуть средства',
+                format_user_id=_format_user_id(user),
+                price_kopeks=price_kopeks,
+                refund_error=refund_error,
+            )
+        return False
+
+    try:
+        subscription_service = SubscriptionService()
+        synced = await subscription_service.resync_limited_companion(db, subscription)
+        if not synced:
+            logger.warning(
+                '⚠️ Автопокупка трафика (лимитный сервер): не удалось применить в панели',
+                subscription_id=subscription.id,
+            )
+    except Exception as error:
+        logger.warning(
+            '⚠️ Автопокупка трафика (лимитный сервер): ошибка синка с Remnawave',
+            format_user_id=_format_user_id(user),
+            error=error,
+        )
+
+    await _delete_cart_for_subscription(user.id, cart_data)
+
+    new_total_limit = settings.LIMITED_COMPANION_TRAFFIC_GB + (subscription.limited_companion_purchased_traffic_gb or 0)
+    logger.info(
+        '✅ Автопокупка трафика (лимитный сервер): пользователь добавил трафик',
+        format_user_id=_format_user_id(user),
+        traffic_gb=traffic_gb,
+        new_total_limit_gb=new_total_limit,
+        price_kopeks=price_kopeks,
+    )
+
+    if bot and user.telegram_id and settings.is_notifications_enabled():
+        texts = get_texts(getattr(user, 'language', 'ru'))
+        try:
+            message = texts.t(
+                'AUTO_PURCHASE_TRAFFIC_LIMITED_SUCCESS',
+                (
+                    '✅ <b>Трафик лимитного сервера добавлен автоматически!</b>\n\n'
+                    '📈 Добавлено: {traffic_gb} ГБ\n'
+                    '📊 Новый лимит: {new_limit} ГБ\n'
+                    '💰 Списано: {price}'
+                ),
+            ).format(
+                traffic_gb=traffic_gb,
+                new_limit=new_total_limit,
+                price=texts.format_price(price_kopeks),
+            )
+            keyboard = InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [
+                        InlineKeyboardButton(
+                            text=texts.t('MY_SUBSCRIPTION_BUTTON', '📱 Моя подписка'),
+                            callback_data='menu_subscription',
+                        )
+                    ],
+                    [
+                        InlineKeyboardButton(
+                            text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '🏠 Главное меню'),
+                            callback_data='back_to_menu',
+                        )
+                    ],
+                ]
+            )
+            await bot.send_message(
+                chat_id=user.telegram_id,
+                text=message,
+                reply_markup=keyboard,
+                parse_mode='HTML',
+            )
+        except Exception as error:
+            logger.warning(
+                '⚠️ Автопокупка трафика (лимитный сервер): не удалось уведомить пользователя',
+                telegram_id=user.telegram_id,
+                error=error,
+            )
+
+    if bot:
+        try:
+            notification_service = AdminNotificationService(bot)
+            await notification_service.send_subscription_update_notification(
+                db,
+                user,
+                subscription,
+                'traffic',
+                old_purchased + settings.LIMITED_COMPANION_TRAFFIC_GB,
+                new_total_limit,
+                price_kopeks,
+            )
+        except Exception as error:
+            logger.warning('⚠️ Автопокупка трафика (лимитный сервер): не удалось уведомить админов', error=error)
+
+    return True
+
+
 async def try_auto_extend_expired_after_topup(
     db: AsyncSession,
     user: User,
@@ -3175,6 +3412,8 @@ async def _process_single_cart(
         return await _auto_add_devices(db, user, cart_data, bot=bot)
     if cart_mode == 'add_traffic':
         return await _auto_add_traffic(db, user, cart_data, bot=bot)
+    if cart_mode == 'add_traffic_limited':
+        return await _auto_add_traffic_limited(db, user, cart_data, bot=bot)
 
     logger.warning(
         'Автопокупка: неизвестный cart_mode, пропускаем',
