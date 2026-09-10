@@ -94,6 +94,34 @@ def test_autopay_button_hidden_on_disabled_subscription() -> None:
     assert 'subscription_autopay' not in _callbacks(keyboard)
 
 
+def test_traffic_button_hidden_for_unlimited_subscription() -> None:
+    """0 — осознанный безлимит: нет смысла показывать кнопку, ведущую только к
+    алерту "У вас уже безлимитный трафик" (см. handlers/subscription/
+    traffic.py::handle_add_traffic)."""
+    sub = SimpleNamespace(actual_status='active', traffic_limit_gb=0)
+
+    keyboard = _build_subscription_detail_keyboard(sub_id=42, sub=sub)
+
+    callbacks = _callbacks(keyboard)
+    assert 'st:42' not in callbacks
+
+
+def test_traffic_button_present_for_limited_subscription() -> None:
+    sub = SimpleNamespace(actual_status='active', traffic_limit_gb=100)
+
+    keyboard = _build_subscription_detail_keyboard(sub_id=42, sub=sub)
+
+    assert 'st:42' in _callbacks(keyboard)
+
+
+def test_traffic_button_present_when_status_unknown() -> None:
+    """sub=None (or missing traffic_limit_gb) — unknown state defaults to
+    showing the button, same safety default as the other action buttons."""
+    keyboard = _build_subscription_detail_keyboard(sub_id=42, sub=None)
+
+    assert 'st:42' in _callbacks(keyboard)
+
+
 def test_autopay_button_present_when_status_unknown() -> None:
     """When sub=None, the keyboard treats the subscription as active (is_inactive=False).
     The autopay button must be there too — symmetry with traffic/devices buttons that

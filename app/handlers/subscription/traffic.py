@@ -789,9 +789,12 @@ async def handle_add_traffic_limited(
     # (см. add_traffic_limited ниже), скидка должна совпадать с кабинетом.
     traffic_discount_percent = PricingEngine.get_addon_discount_percent(db_user, 'traffic', 30)
 
+    companion_used = subscription.limited_companion_traffic_used_gb or 0
     prompt_text = (
         '📈 <b>Докупить трафик — лимитный сервер</b>\n\n'
-        f'Использовано: {texts.format_traffic(subscription.limited_companion_traffic_used_gb or 0, is_limit=False)}\n'
+        # format_traffic округляет использованное до целых ГБ (0.3 -> "0 ГБ") —
+        # одна десятая знака совпадает с детальной карточкой подписки.
+        f'Использовано: {companion_used:.1f} ГБ\n'
         f'Текущий лимит: {texts.format_traffic(current_limit)}\n\n'
         'Выберите дополнительный трафик:'
     )
