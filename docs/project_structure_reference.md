@@ -3228,6 +3228,9 @@
 - `tests/cabinet/test_promocode_traffic_roundtrip.py` — Python-модуль
   Классы: нет
   Функции: `test_traffic_survives_create` — Указанный при создании трафик попадает в строку и в ответ., `test_traffic_is_updatable` — Правка меняет трафик, а не отвечает 200 со старым значением.
+- `tests/cabinet/test_purchase_options_companion_traffic.py` — Python-модуль
+  Классы: нет
+  Функции: `test_companion_traffic_uses_tariff_override`, `test_companion_traffic_falls_back_to_global_setting`, `test_companion_traffic_absent_when_feature_disabled`
 - `tests/cabinet/test_purchase_tariff_expired_trial_reuse.py` — Python-модуль
   Классы: нет
   Функции: `test_purchase_tariff_tariff_lookup_includes_inactive` — REGRESSION: the ``get_subscription_by_user_and_tariff`` fallback CALL
