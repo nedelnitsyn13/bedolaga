@@ -56,6 +56,7 @@ async def _get_tariff_servers(
     """Get server info for tariff."""
     servers, _ = await get_all_server_squads(db, available_only=False)
     limits = server_traffic_limits or {}
+    companion_uuid = settings.LIMITED_COMPANION_SQUAD_UUID
     result = []
     for server in servers:
         # Получаем индивидуальный лимит трафика для сервера
@@ -75,6 +76,7 @@ async def _get_tariff_servers(
                 country_code=server.country_code,
                 is_selected=server.squad_uuid in allowed_squads,
                 traffic_limit_gb=server_limit,
+                is_limited_companion=bool(companion_uuid) and server.squad_uuid == companion_uuid,
             )
         )
     return result
@@ -157,6 +159,7 @@ async def get_available_servers(
 ):
     """Get list of all servers for tariff selection."""
     servers, _ = await get_all_server_squads(db, available_only=False)
+    companion_uuid = settings.LIMITED_COMPANION_SQUAD_UUID
     return [
         ServerInfo(
             id=server.id,
@@ -164,6 +167,7 @@ async def get_available_servers(
             display_name=server.display_name,
             country_code=server.country_code,
             is_selected=False,
+            is_limited_companion=bool(companion_uuid) and server.squad_uuid == companion_uuid,
         )
         for server in servers
     ]

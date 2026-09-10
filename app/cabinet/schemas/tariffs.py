@@ -35,6 +35,12 @@ class ServerInfo(BaseModel):
     country_code: str | None = None
     is_selected: bool = False
     traffic_limit_gb: int | None = None  # Индивидуальный лимит для сервера
+    # Это squad лимитного сервера-компаньона (settings.LIMITED_COMPANION_SQUAD_UUID).
+    # Его лимит трафика задаётся независимо от allowed_squads — компаньон живёт
+    # отдельным панельным аккаунтом, добавлять этот сервер в allowed_squads тарифа
+    # не нужно (и не стоит: тогда основной аккаунт получит к нему прямой безлимитный
+    # доступ в обход компаньона).
+    is_limited_companion: bool = False
 
 
 class PromoGroupInfo(BaseModel):

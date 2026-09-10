@@ -124,6 +124,21 @@ def test_screen_lists_all_squads_when_tariff_allows_all() -> None:
     assert any('Berlin' in label for label in labels)
 
 
+def test_companion_squad_visible_even_when_not_allowed(monkeypatch) -> None:
+    """Лимит компаньона независим от allowed_squads — добавлять его туда не нужно
+    (и не стоит: основной аккаунт получил бы к нему прямой безлимитный доступ
+    в обход отдельного лимитного компаньон-аккаунта, см. LIMITED_COMPANION_SQUAD_UUID)."""
+    monkeypatch.setattr(mod.settings, 'LIMITED_COMPANION_SQUAD_UUID', 'sq-2')
+    squads = [*SQUADS, SimpleNamespace(squad_uuid='sq-3', display_name='Paris')]
+    tariff = _tariff(allowed_squads=['sq-1'])  # sq-2 (компаньон) сознательно не в allowed_squads
+
+    keyboard = mod.get_server_limits_keyboard(tariff, squads, 'ru')
+    labels = [b.text for row in keyboard.inline_keyboard for b in row]
+
+    assert any('🌐 Berlin' in label for label in labels)
+    assert not any('Paris' in label for label in labels)  # обычный сервер вне allowed — не виден
+
+
 async def test_input_sets_limit_without_mutating_stored_dict(monkeypatch) -> None:
     tariff = _tariff()
     original = tariff.server_traffic_limits
