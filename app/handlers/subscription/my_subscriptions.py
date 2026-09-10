@@ -147,7 +147,10 @@ def _build_subscription_detail_keyboard(sub_id: int, sub=None) -> types.InlineKe
 
     if not is_inactive:
         buttons.append([types.InlineKeyboardButton(text='💳 Автоплатеж', callback_data='subscription_autopay')])
-        buttons.append([types.InlineKeyboardButton(text='📊 Трафик', callback_data=f'st:{sub_id}')])
+        if sub is None or getattr(sub, 'traffic_limit_gb', None) != 0:
+            # 0 — осознанный безлимит: докупка ничего не добавит, кнопка вела бы
+            # только к алерту "У вас уже безлимитный трафик" (см. handle_add_traffic).
+            buttons.append([types.InlineKeyboardButton(text='📊 Трафик', callback_data=f'st:{sub_id}')])
         buttons.append([types.InlineKeyboardButton(text='📱 Устройства', callback_data=f'sd:{sub_id}')])
 
         if (
