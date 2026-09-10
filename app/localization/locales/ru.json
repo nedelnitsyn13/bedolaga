@@ -1012,6 +1012,7 @@
   "TARIFF_PURCHASE_DAYS_BUTTON": "📅 {days} дн.",
   "TARIFF_PURCHASE_DEVICES_LINE": "📱 Устройств: {devices}\n",
   "TARIFF_PURCHASE_DISCOUNT_LINE": "\n🎁 <b>Скидка: {percent}%</b>\n",
+  "TARIFF_PURCHASE_COMPANION_TRAFFIC_LINE": "🌐 Лимитный сервер: {traffic}\n",
   "TARIFF_PURCHASE_DISCOUNT_SHORT_LINE": "\n🎁 Скидка: {percent}% (-{amount})",
   "TARIFF_PURCHASE_ERROR": "❌ Произошла ошибка при оформлении подписки",
   "TARIFF_PURCHASE_INFO": "📦 <b>{name}</b>\n\n<b>Параметры:</b>\n• Трафик: {traffic}\n• Устройств: {devices}\n",

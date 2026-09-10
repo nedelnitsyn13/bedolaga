@@ -18,6 +18,7 @@ from types import SimpleNamespace
 from app.database.crud.subscription import (
     get_limited_companion_base_traffic_gb,
     get_limited_companion_total_traffic_limit_gb,
+    get_limited_companion_traffic_gb_for_tariff,
 )
 
 
@@ -56,6 +57,76 @@ def test_total_limit_adds_purchased_to_fixed_base(monkeypatch) -> None:
     paid_subscription = SimpleNamespace(is_trial=False, traffic_limit_gb=200)
 
     assert get_limited_companion_total_traffic_limit_gb(paid_subscription, 20) == 70
+
+
+def test_paid_subscription_uses_tariff_override_for_companion_squad(monkeypatch) -> None:
+    """Тариф может задать свой лимит компаньона через ``server_traffic_limits``
+    (тот же squad, что и ``LIMITED_COMPANION_SQUAD_UUID``) — раньше все платные
+    подписки получали один и тот же глобальный ГБ независимо от тарифа."""
+    from app.database.crud import subscription as subscription_crud
+
+    monkeypatch.setattr(subscription_crud.settings, 'LIMITED_COMPANION_TRAFFIC_GB', 50)
+    monkeypatch.setattr(subscription_crud.settings, 'LIMITED_COMPANION_SQUAD_UUID', 'companion-squad')
+    tariff = SimpleNamespace(server_traffic_limits={'companion-squad': {'traffic_limit_gb': 250}})
+    paid_subscription = SimpleNamespace(is_trial=False, traffic_limit_gb=200, tariff=tariff)
+
+    assert get_limited_companion_base_traffic_gb(paid_subscription) == 250
+
+
+def test_tariff_override_falls_back_to_settings_when_not_set_for_squad(monkeypatch) -> None:
+    from app.database.crud import subscription as subscription_crud
+
+    monkeypatch.setattr(subscription_crud.settings, 'LIMITED_COMPANION_TRAFFIC_GB', 50)
+    monkeypatch.setattr(subscription_crud.settings, 'LIMITED_COMPANION_SQUAD_UUID', 'companion-squad')
+    # У тарифа есть лимиты по другим серверам, но не по squad компаньона.
+    tariff = SimpleNamespace(server_traffic_limits={'other-squad': {'traffic_limit_gb': 300}})
+    paid_subscription = SimpleNamespace(is_trial=False, traffic_limit_gb=200, tariff=tariff)
+
+    assert get_limited_companion_base_traffic_gb(paid_subscription) == 50
+
+
+def test_tariff_override_of_zero_falls_back_to_settings(monkeypatch) -> None:
+    """``0`` в редакторе лимитов означает «по общему значению», не «безлимит»."""
+    from app.database.crud import subscription as subscription_crud
+
+    monkeypatch.setattr(subscription_crud.settings, 'LIMITED_COMPANION_TRAFFIC_GB', 50)
+    monkeypatch.setattr(subscription_crud.settings, 'LIMITED_COMPANION_SQUAD_UUID', 'companion-squad')
+    tariff = SimpleNamespace(server_traffic_limits={'companion-squad': {'traffic_limit_gb': 0}})
+    paid_subscription = SimpleNamespace(is_trial=False, traffic_limit_gb=200, tariff=tariff)
+
+    assert get_limited_companion_base_traffic_gb(paid_subscription) == 50
+
+
+def test_tariff_override_ignored_when_companion_squad_uuid_not_configured(monkeypatch) -> None:
+    from app.database.crud import subscription as subscription_crud
+
+    monkeypatch.setattr(subscription_crud.settings, 'LIMITED_COMPANION_TRAFFIC_GB', 50)
+    monkeypatch.setattr(subscription_crud.settings, 'LIMITED_COMPANION_SQUAD_UUID', None)
+    tariff = SimpleNamespace(server_traffic_limits={'companion-squad': {'traffic_limit_gb': 250}})
+    paid_subscription = SimpleNamespace(is_trial=False, traffic_limit_gb=200, tariff=tariff)
+
+    assert get_limited_companion_base_traffic_gb(paid_subscription) == 50
+
+
+def test_traffic_gb_for_tariff_returns_override_directly(monkeypatch) -> None:
+    """Прямой вход для показа "сколько дадут" ДО покупки — на экране выбора тарифа."""
+    from app.database.crud import subscription as subscription_crud
+
+    monkeypatch.setattr(subscription_crud.settings, 'LIMITED_COMPANION_TRAFFIC_GB', 50)
+    monkeypatch.setattr(subscription_crud.settings, 'LIMITED_COMPANION_SQUAD_UUID', 'companion-squad')
+    tariff = SimpleNamespace(server_traffic_limits={'companion-squad': {'traffic_limit_gb': 250}})
+
+    assert get_limited_companion_traffic_gb_for_tariff(tariff) == 250
+
+
+def test_traffic_gb_for_tariff_falls_back_to_settings_without_override(monkeypatch) -> None:
+    from app.database.crud import subscription as subscription_crud
+
+    monkeypatch.setattr(subscription_crud.settings, 'LIMITED_COMPANION_TRAFFIC_GB', 50)
+    monkeypatch.setattr(subscription_crud.settings, 'LIMITED_COMPANION_SQUAD_UUID', 'companion-squad')
+
+    assert get_limited_companion_traffic_gb_for_tariff(None) == 50
+    assert get_limited_companion_traffic_gb_for_tariff(SimpleNamespace(server_traffic_limits={})) == 50
 
 
 def test_total_limit_stays_unlimited_when_base_is_unlimited(monkeypatch) -> None:

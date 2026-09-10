@@ -2049,6 +2049,7 @@
   "TARIFF_PURCHASE_DAYS_BUTTON": "📅 {days} 天",
   "TARIFF_PURCHASE_DEVICES_LINE": "📱 设备：{devices}\n",
   "TARIFF_PURCHASE_DISCOUNT_LINE": "\n🎁 <b>折扣：{percent}%</b>\n",
+  "TARIFF_PURCHASE_COMPANION_TRAFFIC_LINE": "🌐 限量服务器：{traffic}\n",
   "TARIFF_PURCHASE_DISCOUNT_SHORT_LINE": "\n🎁 折扣：{percent}%（-{amount}）",
   "TARIFF_PURCHASE_ERROR": "❌ 开通订阅时出错",
   "TARIFF_PURCHASE_INFO": "📦 <b>{name}</b>\n\n<b>参数：</b>\n• 流量：{traffic}\n• 设备：{devices}\n",

@@ -8,7 +8,11 @@
 from unittest.mock import MagicMock, patch
 
 from app.localization.texts import _build_dynamic_values
-from app.utils.pricing_utils import calculate_price_per_month
+from app.utils.pricing_utils import (
+    calculate_price_per_month,
+    tariff_period_extrapolated_price_kopeks,
+    tariff_period_intrinsic_discount_percent,
+)
 
 
 # DEPRECATED: format_period_option_label tests removed - function replaced with unified price_display system
@@ -75,3 +79,42 @@ class TestBuildDynamicValues:
         assert 'TRAFFIC_10GB' in result
         assert 'TRAFFIC_UNLIMITED' in result
         assert 'SUPPORT_INFO' in result
+
+
+class TestTariffPeriodIntrinsicDiscount:
+    """Собственная скидка тарифа за длинный период — из period_prices, без промогруппы."""
+
+    STANDARD_PRICES = {'30': 29000, '90': 78000, '180': 148000, '360': 278000}
+
+    def test_shortest_period_has_no_discount(self) -> None:
+        assert tariff_period_intrinsic_discount_percent(self.STANDARD_PRICES, 30) == 0
+
+    def test_longer_period_computed_relative_to_shortest(self) -> None:
+        # 90 дней по цене 30-дневного периода: 29000 * 3 = 87000, факт 78000 → ~10%
+        assert tariff_period_intrinsic_discount_percent(self.STANDARD_PRICES, 90) == 10
+        # 360 дней: 29000 * 12 = 348000, факт 278000 → ~20%
+        assert tariff_period_intrinsic_discount_percent(self.STANDARD_PRICES, 360) == 20
+
+    def test_period_not_in_prices_returns_zero(self) -> None:
+        assert tariff_period_intrinsic_discount_percent(self.STANDARD_PRICES, 60) == 0
+
+    def test_empty_or_missing_prices_return_zero(self) -> None:
+        assert tariff_period_intrinsic_discount_percent({}, 90) == 0
+        assert tariff_period_intrinsic_discount_percent(None, 90) == 0
+
+    def test_negative_price_period_is_treated_as_disabled(self) -> None:
+        """Отрицательная цена — отключённый период (как в get_price_for_period), не участвует в базе."""
+        prices = {'30': -1, '90': 78000, '360': 278000}
+        # 30 дней отключён -> базой становится 90 дней, для него самого скидки нет
+        assert tariff_period_intrinsic_discount_percent(prices, 90) == 0
+
+
+class TestTariffPeriodExtrapolatedPrice:
+    STANDARD_PRICES = {'30': 29000, '90': 78000, '360': 278000}
+
+    def test_extrapolates_from_shortest_period(self) -> None:
+        assert tariff_period_extrapolated_price_kopeks(self.STANDARD_PRICES, 90) == 87000
+        assert tariff_period_extrapolated_price_kopeks(self.STANDARD_PRICES, 360) == 348000
+
+    def test_shortest_period_itself_returns_zero(self) -> None:
+        assert tariff_period_extrapolated_price_kopeks(self.STANDARD_PRICES, 30) == 0

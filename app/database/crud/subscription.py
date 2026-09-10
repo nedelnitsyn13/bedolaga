@@ -1485,16 +1485,46 @@ async def add_subscription_traffic(db: AsyncSession, subscription: Subscription,
     return subscription
 
 
+def get_limited_companion_traffic_gb_for_tariff(tariff: Tariff | None) -> int:
+    """Базовый ГБ компаньона для тарифа само по себе, без привязки к подписке.
+
+    Используется как для платных подписок (см. `get_limited_companion_base_traffic_gb`),
+    так и для показа «сколько дадут» ДО покупки — на экране выбора тарифа.
+
+    Смотрит override в `tariff.server_traffic_limits` по squad лимитного
+    компаньона (тот же формат записи, что и обычные пер-серверные лимиты
+    тарифа, см. `app/handlers/admin/tariff_server_limits.py`) и падает
+    обратно на глобальный `settings.LIMITED_COMPANION_TRAFFIC_GB`, если
+    override не задан, задан нулём или `LIMITED_COMPANION_SQUAD_UUID` не
+    настроен.
+    """
+    squad_uuid = settings.LIMITED_COMPANION_SQUAD_UUID
+    if squad_uuid and tariff is not None:
+        limits = getattr(tariff, 'server_traffic_limits', None) or {}
+        raw = limits.get(squad_uuid)
+        if isinstance(raw, dict):
+            raw = raw.get('traffic_limit_gb')
+        try:
+            value = int(raw)
+        except (TypeError, ValueError):
+            value = 0
+        if value > 0:
+            return value
+    return settings.LIMITED_COMPANION_TRAFFIC_GB
+
+
 def get_limited_companion_base_traffic_gb(subscription: Subscription) -> int:
     """Базовый (без докупок) лимит трафика лимитного сервера-компаньона.
 
     Триальные подписки зеркалят `traffic_limit_gb` основной подписки —
     иначе компаньон триала получает больше трафика, чем сам триал.
-    Остальные подписки используют фиксированный `LIMITED_COMPANION_TRAFFIC_GB`.
+    Остальные подписки используют override тарифа (если задан в
+    `server_traffic_limits` для squad компаньона), иначе — фиксированный
+    `LIMITED_COMPANION_TRAFFIC_GB`.
     """
     if subscription.is_trial:
         return subscription.traffic_limit_gb or 0
-    return settings.LIMITED_COMPANION_TRAFFIC_GB
+    return get_limited_companion_traffic_gb_for_tariff(getattr(subscription, 'tariff', None))
 
 
 def get_limited_companion_total_traffic_limit_gb(subscription: Subscription, purchased_gb: int) -> int:
