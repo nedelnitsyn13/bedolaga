@@ -14,7 +14,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.database.crud.subscription import extend_subscription
+from app.database.crud.subscription import add_limited_companion_traffic, extend_subscription
 from app.database.crud.transaction import create_transaction
 from app.database.crud.user import subtract_user_balance
 from app.database.models import (
@@ -2364,9 +2364,7 @@ async def _auto_add_traffic_limited(
 
     old_purchased = subscription.limited_companion_purchased_traffic_gb or 0
     try:
-        subscription.limited_companion_purchased_traffic_gb = old_purchased + traffic_gb
-        await db.commit()
-        await db.refresh(subscription)
+        await add_limited_companion_traffic(db, subscription, traffic_gb)
     except Exception as error:
         logger.error(
             '❌ Автопокупка трафика (лимитный сервер): ошибка сохранения докупленного трафика',

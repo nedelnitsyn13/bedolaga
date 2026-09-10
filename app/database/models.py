@@ -2574,6 +2574,12 @@ class Subscription(Base):
     traffic_purchases = relationship(
         'TrafficPurchase', back_populates='subscription', passive_deletes=True, cascade='all, delete-orphan'
     )
+    limited_companion_traffic_purchases = relationship(
+        'LimitedCompanionTrafficPurchase',
+        back_populates='subscription',
+        passive_deletes=True,
+        cascade='all, delete-orphan',
+    )
     grace_access_sessions = relationship(
         'GraceAccessSessionModel', back_populates='subscription', passive_deletes=True, lazy='noload'
     )
@@ -2865,6 +2871,39 @@ class TrafficPurchase(Base):
     @property
     def is_expired(self) -> bool:
         """Проверяет, истекла ли докупка."""
+        return datetime.now(UTC) >= _aware(self.expires_at)
+
+
+class LimitedCompanionTrafficPurchase(Base):
+    """Докупка трафика лимитного сервера-компаньона, с индивидуальной датой истечения.
+
+    Отдельная таблица от ``TrafficPurchase`` — не переиспользуется, потому что
+    та завязана на добрый десяток мест (продление, смена тарифа, pricing
+    engine, admin-панель, суточные тарифы, бэкапы), которые молча
+    подразумевают, что каждая строка — это докупка ОСНОВНОГО трафика.
+    Подмешивать сюда докупки компаньона означало бы аудировать и переправлять
+    каждое из этих мест; отдельная таблица — чисто аддитивное изменение, не
+    трогающее уже отлаженный биллинг основного трафика.
+    """
+
+    __tablename__ = 'limited_companion_traffic_purchases'
+    __table_args__ = (
+        Index('ix_limited_companion_traffic_purchases_created_at', 'created_at'),
+        Index('ix_limited_companion_traffic_purchases_sub_expires', 'subscription_id', 'expires_at'),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    subscription_id = Column(Integer, ForeignKey('subscriptions.id', ondelete='CASCADE'), nullable=False)
+
+    traffic_gb = Column(Integer, nullable=False)  # Количество ГБ в покупке
+    expires_at = Column(AwareDateTime(), nullable=False, index=True)  # Дата истечения (покупка + 30 дней)
+
+    created_at = Column(AwareDateTime(), default=func.now())
+
+    subscription = relationship('Subscription', back_populates='limited_companion_traffic_purchases')
+
+    @property
+    def is_expired(self) -> bool:
         return datetime.now(UTC) >= _aware(self.expires_at)
 
 

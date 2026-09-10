@@ -610,9 +610,13 @@ class SubscriptionService:
                     suffix='_lim',
                 )
 
-            companion_traffic_gb = settings.LIMITED_COMPANION_TRAFFIC_GB + (
-                subscription.limited_companion_purchased_traffic_gb or 0
-            )
+            # Drop expired limited-companion traffic purchases before computing the
+            # quota pushed to the panel — otherwise a top-up bought 30+ days ago
+            # would inflate the limit forever (see LimitedCompanionTrafficPurchase).
+            from app.database.crud.subscription import housekeep_limited_companion_traffic
+
+            purchased_gb = await housekeep_limited_companion_traffic(db, subscription)
+            companion_traffic_gb = settings.LIMITED_COMPANION_TRAFFIC_GB + purchased_gb
 
             companion_user = await write_companion_account(
                 api,

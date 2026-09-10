@@ -7,7 +7,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import PERIOD_PRICES, settings
 from app.database.crud.subscription import (
+    add_limited_companion_traffic,
     add_subscription_traffic,
+    housekeep_limited_companion_traffic,
     reactivate_subscription,
 )
 from app.database.crud.transaction import create_transaction
@@ -769,7 +771,8 @@ async def handle_add_traffic_limited(
     # Note: unlike the main-key flow, TRAFFIC_SELECTION_MODE=fixed does NOT
     # block this — the companion's traffic pool is independent of the main
     # subscription's fixed-traffic tariff, so top-up stays available here.
-    current_limit = settings.LIMITED_COMPANION_TRAFFIC_GB + (subscription.limited_companion_purchased_traffic_gb or 0)
+    purchased_gb = await housekeep_limited_companion_traffic(db, subscription)
+    current_limit = settings.LIMITED_COMPANION_TRAFFIC_GB + purchased_gb
     # Фиксированный хинт 30 дней — компаньон продаётся только помесячно
     # (см. add_traffic_limited ниже), скидка должна совпадать с кабинетом.
     traffic_discount_percent = PricingEngine.get_addon_discount_percent(db_user, 'traffic', 30)
@@ -882,10 +885,7 @@ async def add_traffic_limited(callback: types.CallbackQuery, db_user: User, db: 
             await callback.answer('⚠️ Ошибка списания средств', show_alert=True)
             return
 
-        subscription.limited_companion_purchased_traffic_gb = (
-            subscription.limited_companion_purchased_traffic_gb or 0
-        ) + traffic_gb
-        await db.commit()
+        await add_limited_companion_traffic(db, subscription, traffic_gb)
 
         subscription_service = SubscriptionService()
         synced = await subscription_service.resync_limited_companion(db, subscription)
