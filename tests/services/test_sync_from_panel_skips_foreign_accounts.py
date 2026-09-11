@@ -42,7 +42,7 @@ def _panel_account(panel_id: int, *, username: str) -> SimpleNamespace:
 
 
 def _empty_result() -> SimpleNamespace:
-    return SimpleNamespace(scalars=lambda: SimpleNamespace(all=list), scalar_one_or_none=lambda: None)
+    return SimpleNamespace(scalars=lambda: SimpleNamespace(all=list), scalar_one_or_none=lambda: None, all=list)
 
 
 @pytest.fixture

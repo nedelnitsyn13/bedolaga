@@ -2040,6 +2040,23 @@ class RemnaWaveService:
                 if _sub_panel_id is not None:
                     subs_by_panel_id[_sub_panel_id] = sub
 
+            # Компаньон-аккаунты лимитного сервера — отдельные панельные
+            # пользователи с тем же telegram_id, что и основной (см.
+            # _sync_limited_companion_user). Бэкфил ниже матчит «осиротевших»
+            # панельных юзеров по telegram_id/email и заводит им новую
+            # Subscription — без этого исключения каждый компаньон читался бы
+            # как вторая настоящая подписка пользователя.
+            companion_ids_result = await db.execute(
+                select(Subscription.limited_companion_remnawave_id).where(
+                    Subscription.limited_companion_remnawave_id.isnot(None)
+                )
+            )
+            companion_panel_ids = {
+                normalized
+                for (raw_id,) in companion_ids_result.all()
+                if (normalized := _normalize_panel_user_id(raw_id)) is not None
+            }
+
             from app.services.grace_access_runtime import get_open_grace_subscription_ids
 
             open_grace_ids = await get_open_grace_subscription_ids(db)
@@ -2089,6 +2106,11 @@ class RemnaWaveService:
                         short_uuid=panel_user.get('shortUuid'),
                     )
                     stats['errors'] += 1
+                    continue
+
+                if panel_user_id in companion_panel_ids:
+                    # Компаньон лимитного сервера — не самостоятельная подписка,
+                    # синкается отдельно через resync_limited_companion.
                     continue
 
                 subscription = subs_by_panel_id.get(panel_user_id)
