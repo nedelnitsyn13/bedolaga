@@ -4346,6 +4346,9 @@
 - `tests/services/test_sync_from_panel_releases_transaction.py` — Python-модуль
   Классы: нет
   Функции: `events`, `db`, `service`, `test_import_releases_callers_transaction_before_loading_panel`, `test_import_rolls_back_after_failure_so_session_stays_usable`
+- `tests/services/test_sync_from_panel_skips_companion_accounts.py` — Python-модуль
+  Классы: нет
+  Функции: `test_companion_panel_account_is_not_backfilled_as_a_new_subscription`
 - `tests/services/test_sync_from_panel_skips_foreign_accounts.py` — Python-модуль
   Классы: нет
   Функции: `db`, `service`, `test_import_skips_accounts_without_identity_and_says_so`
