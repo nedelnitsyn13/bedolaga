@@ -71,6 +71,10 @@ class UserSubscriptionInfo(BaseModel):
     purchased_traffic_gb: int = 0
     traffic_purchases: list[TrafficPurchaseItem] = []
 
+    # Limited-companion (capped extra server) account — admin view only.
+    has_limited_companion: bool = False
+    limited_companion_traffic_limit_gb: int = 0
+
     # Platega SBP auto-renewal (admin view only — populated by the async
     # builder; the sync builder leaves both at their None default).
     sbp_recurring_status: str | None = None
@@ -355,6 +359,7 @@ class UpdateSubscriptionRequest(BaseModel):
         ...,
         description=(
             'Action: extend, shorten, set_end_date, change_tariff, set_traffic, '
+            'add_traffic, add_limited_traffic, remove_traffic, '
             'toggle_autopay, cancel, reset (zero out the subscription, keep user+tickets)'
         ),
     )
@@ -378,7 +383,7 @@ class UpdateSubscriptionRequest(BaseModel):
     # For toggle_autopay
     autopay_enabled: bool | None = Field(None, description='Enable/disable autopay')
 
-    # For add_traffic action
+    # For add_traffic / add_limited_traffic actions
     traffic_gb: int | None = Field(None, ge=1, description='Traffic GB to add')
 
     # For remove_traffic action
