@@ -293,6 +293,7 @@ def _build_subscription_info(subscription: Subscription, tariff_name: str | None
 async def _build_subscription_info_async(db: AsyncSession, subscription: Subscription) -> UserSubscriptionInfo:
     """Build UserSubscriptionInfo from Subscription model, fetching tariff name and traffic purchases."""
     tariff_name = None
+    tariff = None
     if subscription.tariff_id:
         tariff = await get_tariff_by_id(db, subscription.tariff_id)
         if tariff:
@@ -327,6 +328,21 @@ async def _build_subscription_info_async(db: AsyncSession, subscription: Subscri
     info = _build_subscription_info(subscription, tariff_name=tariff_name)
     info.purchased_traffic_gb = getattr(subscription, 'purchased_traffic_gb', 0) or 0
     info.traffic_purchases = traffic_purchase_items
+
+    if settings.is_limited_companion_enabled() and subscription.limited_companion_remnawave_id:
+        from app.database.crud.subscription import get_limited_companion_traffic_gb_for_tariff
+
+        info.has_limited_companion = True
+        # Mirrors get_limited_companion_base_traffic_gb/_total_traffic_limit_gb but
+        # takes the already-fetched `tariff` instead of the lazy `subscription.tariff`
+        # relationship, which isn't safe to touch in this async context.
+        base_limit_gb = (
+            subscription.traffic_limit_gb or 0
+            if subscription.is_trial
+            else (get_limited_companion_traffic_gb_for_tariff(tariff))
+        )
+        purchased_gb = subscription.limited_companion_purchased_traffic_gb or 0
+        info.limited_companion_traffic_limit_gb = 0 if base_limit_gb == 0 else base_limit_gb + purchased_gb
 
     # Platega SBP auto-renewal status — admin-only, needs a DB query, so it
     # lives here rather than in the sync builder. Gated to avoid a needless
@@ -1167,6 +1183,7 @@ async def update_user_subscription(
     - **set_end_date**: Set specific end date
     - **change_tariff**: Change subscription tariff
     - **set_traffic**: Set traffic limit and/or used traffic
+    - **add_limited_traffic**: Grant extra traffic to the limited-companion account (30 days)
     - **toggle_autopay**: Enable/disable autopay
     - **cancel**: Cancel subscription (set status to expired)
     - **activate**: Activate subscription
@@ -1669,6 +1686,52 @@ async def update_user_subscription(
         return UpdateSubscriptionResponse(
             success=True,
             message=f'Added {request.traffic_gb} GB traffic (30 days)',
+            subscription=await _build_subscription_info_async(db, subscription),
+        )
+
+    if request.action == 'add_limited_traffic':
+        if not request.traffic_gb:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail='traffic_gb parameter is required for add_limited_traffic action',
+            )
+
+        if not subscription.limited_companion_remnawave_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail='Subscription has no limited-companion account',
+            )
+
+        from app.database.crud.subscription import add_limited_companion_traffic
+        from app.services.subscription_service import SubscriptionService
+
+        await add_limited_companion_traffic(db, subscription, request.traffic_gb)
+
+        subscription_service = SubscriptionService()
+        synced = await subscription_service.resync_limited_companion(db, subscription)
+        if not synced:
+            logger.error(
+                'Failed to sync admin-granted limited-companion traffic to panel',
+                admin_id=admin.id,
+                subscription_id=subscription.id,
+            )
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail='Traffic added but panel sync failed — retry or check panel status',
+            )
+
+        await db.refresh(subscription)
+
+        logger.info(
+            'Admin added limited-companion traffic for user',
+            admin_id=admin.id,
+            traffic_gb=request.traffic_gb,
+            user_id=user_id,
+        )
+
+        return UpdateSubscriptionResponse(
+            success=True,
+            message=f'Added {request.traffic_gb} GB limited-server traffic (30 days)',
             subscription=await _build_subscription_info_async(db, subscription),
         )
 

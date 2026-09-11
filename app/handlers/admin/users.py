@@ -23,6 +23,7 @@ from app.database.crud.server_squad import (
     get_server_squad_by_id,
     get_server_squad_by_uuid,
 )
+from app.database.crud.subscription import add_limited_companion_traffic
 from app.database.crud.tariff import get_all_tariffs, get_tariff_by_id
 from app.database.crud.user import (
     get_referrals,
@@ -968,6 +969,16 @@ async def _render_user_subscription_overview(
                 types.InlineKeyboardButton(text='💳 Автоплатёж', callback_data=f'admin_user_autopay_{user_id}{_sid}'),
             ],
         ]
+
+        if settings.is_limited_companion_enabled() and subscription.limited_companion_remnawave_id:
+            keyboard.append(
+                [
+                    types.InlineKeyboardButton(
+                        text='➕ Трафик (лимитный сервер)',
+                        callback_data=f'admin_user_limtraffic_{user_id}{_sid}',
+                    )
+                ]
+            )
 
         # Кнопки тарифов в режиме тарифов
         if settings.is_tariffs_mode():
@@ -4223,6 +4234,183 @@ async def process_traffic_edit_text(message: types.Message, db_user: User, state
 
 @admin_required
 @error_handler
+async def start_limited_traffic_add(callback: types.CallbackQuery, db_user: User, state: FSMContext):
+    user_id, subscription_id = _extract_admin_sub_context(callback.data)
+
+    await state.update_data(limited_traffic_user_id=user_id, admin_subscription_id=subscription_id)
+
+    _sid = f'_s{subscription_id}' if subscription_id else ''
+    back_cb = (
+        f'admin_user_sub_select_{user_id}_{subscription_id}'
+        if subscription_id and settings.is_multi_tariff_enabled()
+        else f'admin_user_subscription_{user_id}'
+    )
+
+    await callback.message.edit_text(
+        '➕ <b>Добавление трафика (лимитный сервер)</b>\n\n'
+        'Это начислит дополнительный трафик на компаньон-аккаунт '
+        'лимитного сервера сверх текущего лимита — так же, как '
+        'при платной докупке пользователем, только бесплатно.\n\n'
+        'Введите количество ГБ для начисления:\n'
+        '• Примеры: 10, 25, 50, 100\n'
+        '• Максимум: 10000 ГБ за раз\n\n'
+        'Или нажмите /cancel для отмены',
+        reply_markup=types.InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    types.InlineKeyboardButton(
+                        text='+10 ГБ', callback_data=f'admin_user_limtraffic_add_{user_id}{_sid}_10'
+                    ),
+                    types.InlineKeyboardButton(
+                        text='+25 ГБ', callback_data=f'admin_user_limtraffic_add_{user_id}{_sid}_25'
+                    ),
+                ],
+                [
+                    types.InlineKeyboardButton(
+                        text='+50 ГБ', callback_data=f'admin_user_limtraffic_add_{user_id}{_sid}_50'
+                    ),
+                    types.InlineKeyboardButton(
+                        text='+100 ГБ', callback_data=f'admin_user_limtraffic_add_{user_id}{_sid}_100'
+                    ),
+                ],
+                [types.InlineKeyboardButton(text='❌ Отмена', callback_data=back_cb)],
+            ]
+        ),
+    )
+
+    await state.set_state(AdminStates.adding_user_limited_traffic)
+    await callback.answer()
+
+
+async def _add_limited_companion_traffic_and_sync(
+    db: AsyncSession, user_id: int, traffic_gb: int, admin_id: int, subscription_id: int | None = None
+) -> int | None:
+    """Add `traffic_gb` to a user's limited-companion account and push it to the panel.
+
+    Returns the new total companion traffic limit (GB) on success, None on failure
+    (no subscription / no companion account / panel sync error).
+    """
+    from app.database.crud.subscription import get_limited_companion_total_traffic_limit_gb
+
+    subscription = await _resolve_admin_subscription(db, user_id, subscription_id)
+    if not subscription or not subscription.limited_companion_remnawave_id:
+        return None
+
+    await add_limited_companion_traffic(db, subscription, traffic_gb)
+
+    subscription_service = SubscriptionService()
+    synced = await subscription_service.resync_limited_companion(db, subscription)
+    if not synced:
+        logger.error(
+            'Не удалось применить начисленный админом трафик лимитного сервера в панели',
+            subscription_id=subscription.id,
+            admin_id=admin_id,
+        )
+        return None
+
+    await db.refresh(subscription)
+    purchased_gb = subscription.limited_companion_purchased_traffic_gb or 0
+    logger.info(
+        'Админ начислил трафик лимитного сервера',
+        admin_id=admin_id,
+        user_id=user_id,
+        traffic_gb=traffic_gb,
+    )
+    return get_limited_companion_total_traffic_limit_gb(subscription, purchased_gb)
+
+
+@admin_required
+@error_handler
+async def set_limited_traffic_button(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
+    parts = callback.data.split('_')
+    traffic_gb = int(parts[-1])
+    if parts[-2].startswith('s') and parts[-2][1:].isdigit():
+        subscription_id = int(parts[-2][1:])
+        user_id = int(parts[-3])
+    else:
+        subscription_id = None
+        user_id = int(parts[-2])
+
+    back_cb = (
+        f'admin_user_sub_select_{user_id}_{subscription_id}'
+        if subscription_id and settings.is_multi_tariff_enabled()
+        else f'admin_user_subscription_{user_id}'
+    )
+
+    new_limit = await _add_limited_companion_traffic_and_sync(
+        db, user_id, traffic_gb, db_user.id, subscription_id=subscription_id
+    )
+
+    if new_limit is not None:
+        limit_text = '♾️ безлимитный' if new_limit == 0 else f'{new_limit} ГБ'
+        await callback.message.edit_text(
+            f'✅ Начислено {traffic_gb} ГБ на лимитный сервер\n\nНовый лимит: {limit_text}',
+            reply_markup=types.InlineKeyboardMarkup(
+                inline_keyboard=[[types.InlineKeyboardButton(text='📱 Подписка и настройки', callback_data=back_cb)]]
+            ),
+        )
+    else:
+        await callback.message.edit_text(
+            '❌ Ошибка начисления трафика лимитного сервера',
+            reply_markup=types.InlineKeyboardMarkup(
+                inline_keyboard=[[types.InlineKeyboardButton(text='📱 Подписка и настройки', callback_data=back_cb)]]
+            ),
+        )
+
+    await callback.answer()
+
+
+@admin_required
+@error_handler
+async def process_limited_traffic_add_text(message: types.Message, db_user: User, state: FSMContext, db: AsyncSession):
+    data = await state.get_data()
+    user_id = data.get('limited_traffic_user_id')
+    subscription_id = data.get('admin_subscription_id')
+
+    if not user_id:
+        await message.answer('❌ Ошибка: пользователь не найден')
+        await state.clear()
+        return
+
+    back_cb = (
+        f'admin_user_sub_select_{user_id}_{subscription_id}'
+        if subscription_id and settings.is_multi_tariff_enabled()
+        else f'admin_user_subscription_{user_id}'
+    )
+
+    try:
+        traffic_gb = int(message.text.strip())
+
+        if traffic_gb <= 0 or traffic_gb > 10000:
+            await message.answer('❌ Количество ГБ должно быть от 1 до 10000')
+            return
+
+        new_limit = await _add_limited_companion_traffic_and_sync(
+            db, user_id, traffic_gb, db_user.id, subscription_id=subscription_id
+        )
+
+        if new_limit is not None:
+            limit_text = '♾️ безлимитный' if new_limit == 0 else f'{new_limit} ГБ'
+            await message.answer(
+                f'✅ Начислено {traffic_gb} ГБ на лимитный сервер\n\nНовый лимит: {limit_text}',
+                reply_markup=types.InlineKeyboardMarkup(
+                    inline_keyboard=[
+                        [types.InlineKeyboardButton(text='📱 Подписка и настройки', callback_data=back_cb)]
+                    ]
+                ),
+            )
+        else:
+            await message.answer('❌ Ошибка начисления трафика лимитного сервера')
+
+    except ValueError:
+        await message.answer('❌ Введите корректное число ГБ')
+        return
+
+    await state.clear()
+
+
+@admin_required
+@error_handler
 async def confirm_reset_devices(callback: types.CallbackQuery, db_user: User):
     user_id, subscription_id = _extract_admin_sub_context(callback.data)
 
@@ -6421,6 +6609,14 @@ def register_handlers(dp: Dispatcher):
     dp.callback_query.register(set_user_traffic_button, F.data.startswith('admin_user_traffic_set_'))
 
     dp.message.register(process_traffic_edit_text, AdminStates.editing_user_traffic)
+
+    dp.callback_query.register(
+        start_limited_traffic_add, F.data.startswith('admin_user_limtraffic_') & ~F.data.contains('add')
+    )
+
+    dp.callback_query.register(set_limited_traffic_button, F.data.startswith('admin_user_limtraffic_add_'))
+
+    dp.message.register(process_limited_traffic_add_text, AdminStates.adding_user_limited_traffic)
 
     dp.callback_query.register(
         confirm_reset_devices, F.data.startswith('admin_user_reset_devices_') & ~F.data.contains('confirm')
