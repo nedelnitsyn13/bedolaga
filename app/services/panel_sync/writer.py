@@ -36,6 +36,45 @@ from app.services.panel_sync.payload import PanelPayload, build_panel_payload
 logger = structlog.get_logger(__name__)
 
 
+async def reset_companion_devices(api, subscription) -> None:
+    """Mirror a full device reset onto the limited-companion account.
+
+    Device-reset call sites only ever touch the subscription's main panel
+    account; the companion (``write_companion_account``) is a separate
+    RemnaWave user with its own independent HWID device list, so without
+    this a "reset" silently leaves every device connected on the limited
+    server. Best-effort: the main reset already happened and must not be
+    undone because the companion account is unreachable.
+    """
+    companion_id = getattr(subscription, 'limited_companion_remnawave_id', None) if subscription else None
+    if not companion_id:
+        return
+    try:
+        await api.reset_user_devices(companion_id)
+    except Exception as error:
+        logger.warning(
+            '⚠️ Не удалось сбросить устройства на лимитном компаньоне',
+            subscription_id=getattr(subscription, 'id', None),
+            error=error,
+        )
+
+
+async def remove_companion_device(api, subscription, device_hwid) -> None:
+    """Mirror removing one device (by hwid) onto the limited-companion account."""
+    companion_id = getattr(subscription, 'limited_companion_remnawave_id', None) if subscription else None
+    if not companion_id or not device_hwid:
+        return
+    try:
+        await api.remove_device(companion_id, device_hwid)
+    except Exception as error:
+        logger.warning(
+            '⚠️ Не удалось удалить устройство на лимитном компаньоне',
+            subscription_id=getattr(subscription, 'id', None),
+            device_hwid=device_hwid,
+            error=error,
+        )
+
+
 @dataclass(frozen=True)
 class PanelWriteResult:
     """Чем закончилась запись."""
@@ -115,8 +154,10 @@ async def push_subscription(
 
     panel_user_id = identity.user_id
     if panel_user_id is not None:
-        if reset_devices and not await api.reset_user_devices(panel_user_id):
-            logger.error('⚠️ Не удалось сбросить HWID', panel_user_id=panel_user_id)
+        if reset_devices:
+            if not await api.reset_user_devices(panel_user_id):
+                logger.error('⚠️ Не удалось сбросить HWID', panel_user_id=panel_user_id)
+            await reset_companion_devices(api, subscription)
         update_kwargs = payload.update_kwargs(
             user_id=panel_user_id,
             panel_current=identity.expire_at,

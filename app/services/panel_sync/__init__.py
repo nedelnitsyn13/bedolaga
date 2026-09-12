@@ -37,6 +37,8 @@ from app.services.panel_sync.writer import (
     patch_panel_account,
     patch_panel_squads,
     push_subscription,
+    remove_companion_device,
+    reset_companion_devices,
     write_companion_account,
 )
 
@@ -67,6 +69,8 @@ __all__ = [
     'push_all_subscriptions',
     'push_subscription',
     'read_panel_user',
+    'remove_companion_device',
+    'reset_companion_devices',
     'resolve_panel_identity',
     'resolve_panel_user_tag',
     'stale_panel_expire_at',

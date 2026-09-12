@@ -19,6 +19,7 @@ from app.database.crud.tariff import get_tariff_by_id
 from app.database.crud.transaction import create_transaction
 from app.database.crud.user import subtract_user_balance
 from app.database.models import PaymentMethod, Subscription, TransactionType, User
+from app.services.panel_sync import reset_companion_devices
 from app.services.pricing_engine import pricing_engine
 from app.services.remnawave_service import RemnaWaveService
 from app.services.subscription_service import SubscriptionService
@@ -562,6 +563,7 @@ async def switch_tariff(
                     logger.info('Reset all devices for user on tariff switch', user_id=user.id)
                 else:
                     logger.error('Failed to reset devices on tariff switch', user_id=user.id)
+                await reset_companion_devices(api, subscription)
         except Exception as e:
             logger.error('Failed to reset devices on tariff switch', error=e)
 

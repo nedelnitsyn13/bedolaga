@@ -34,6 +34,7 @@ from app.database.crud.user_device_alias import (
     set_alias,
 )
 from app.database.models import Subscription, TransactionType, User
+from app.services.panel_sync import remove_companion_device, reset_companion_devices
 from app.services.subscription_service import SubscriptionService
 from app.services.user_cart_service import user_cart_service
 
@@ -1080,6 +1081,8 @@ async def delete_device(
             # руками, а клиентом: он валидирует идентификатор на границе и
             # проверяет, что hwid действительно пропал из ответа панели.
             removed = await api.remove_device(_panel_user_id, hwid)
+            if removed:
+                await remove_companion_device(api, subscription, hwid)
 
         if not removed:
             raise HTTPException(
@@ -1158,6 +1161,8 @@ async def delete_all_devices(
                     status_code=status.HTTP_502_BAD_GATEWAY,
                     detail='Failed to delete devices',
                 )
+
+            await reset_companion_devices(api, subscription)
 
             return {
                 'success': True,
@@ -1373,6 +1378,7 @@ async def reduce_devices(
                                     if await api.remove_device(_panel_user_id, device_hwid):
                                         devices_removed_count += 1
                                         logger.info('Removed device for user', device_hwid=device_hwid, user_id=user.id)
+                                        await remove_companion_device(api, subscription, device_hwid)
                                 except Exception as del_error:
                                     logger.error('Error removing device', device_hwid=device_hwid, del_error=del_error)
         except Exception as e:

@@ -23,6 +23,7 @@ from app.database.crud.transaction import create_transaction
 from app.database.crud.user import subtract_user_balance
 from app.database.models import PaymentMethod, Subscription, Transaction, TransactionType, User
 from app.services.admin_notification_service import AdminNotificationService
+from app.services.panel_sync import reset_companion_devices
 from app.services.pricing_engine import RenewalPricing
 from app.services.remnawave_service import RemnaWaveConfigurationError
 from app.services.subscription_service import SubscriptionService
@@ -555,6 +556,7 @@ class SubscriptionRenewalService:
                         # означал бы, что поддержка закроет тикет «не могу
                         # добавить устройство» как ошибку пользователя.
                         _devices_reset = await api.reset_user_devices(_panel_user_id)
+                        await reset_companion_devices(api, subscription_after)
                     if _devices_reset:
                         logger.info(
                             'Devices reset on renewal',
