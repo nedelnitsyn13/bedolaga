@@ -735,6 +735,28 @@ class UserService:
                     except Exception as e:
                         logger.error('❌ Ошибка деактивации RemnaWave пользователя при блокировке', error=e)
 
+                # Компаньон лимитного сервера — отдельный панельный аккаунт
+                # (Subscription.limited_companion_remnawave_id), disable_remnawave_user
+                # выше его не трогает. Без этого заблокированный пользователь
+                # сохранял рабочий доступ на лимитном сервере до истечения его
+                # собственного лимита трафика/времени.
+                for sub in subs:
+                    companion_id = sub.limited_companion_remnawave_id
+                    if companion_id:
+                        try:
+                            await subscription_service.disable_remnawave_user(companion_id)
+                            logger.info(
+                                '✅ Компаньон лимитного сервера деактивирован при блокировке',
+                                remnawave_id=companion_id,
+                                subscription_id=sub.id,
+                            )
+                        except Exception as e:
+                            logger.error(
+                                '❌ Ошибка деактивации компаньона лимитного сервера при блокировке',
+                                error=e,
+                                subscription_id=sub.id,
+                            )
+
                 for sub in subs:
                     if sub.status in ['active', 'trial']:
                         await deactivate_subscription(db, sub)
@@ -871,6 +893,11 @@ class UserService:
                 panel_user_ids = [sub.remnawave_id for sub in subs if sub.remnawave_id]
             else:
                 panel_user_ids = [user.remnawave_id] if user.remnawave_id else []
+
+            # Компаньон лимитного сервера — отдельный панельный аккаунт
+            # (Subscription.limited_companion_remnawave_id); без него он остаётся
+            # рабочим в панели навсегда после удаления пользователя из бота.
+            panel_user_ids += [sub.limited_companion_remnawave_id for sub in subs if sub.limited_companion_remnawave_id]
 
             if panel_user_ids:
                 if not force_panel_delete and any(is_active_paid_subscription(sub) for sub in subs):
