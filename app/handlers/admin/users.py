@@ -4497,7 +4497,9 @@ async def reset_user_devices(callback: types.CallbackQuery, db_user: User, db: A
         await callback.answer('❌ Ошибка сброса устройств', show_alert=True)
 
 
-async def _push_narrow_change_to_panel(db, user, subscription, *, fields: set[str]) -> None:
+async def _push_narrow_change_to_panel(
+    db, user, subscription, *, fields: set[str], sync_companion_device_limit_too: bool = False
+) -> None:
     """Донести до панели одно изменение подписки, не трогая соседние поля.
 
     Админские экраны правят по одному свойству — серверы, лимит устройств, лимит
@@ -4506,9 +4508,14 @@ async def _push_narrow_change_to_panel(db, user, subscription, *, fields: set[st
     собранный тем же сервисом, что и все остальные, — иначе поля снова начнут
     расходиться. Описание аккаунта уезжает всегда: оно про пользователя, а не
     про подписку.
+
+    ``sync_companion_device_limit_too`` — только для экрана лимита устройств:
+    компаньон лимитного сервера сам по себе в этот PATCH не попадает (сервера
+    и трафик у него независимые), но его ``hwidDeviceLimit`` должен меняться
+    вместе с основным.
     """
     from app.services.grace_access_runtime import update_panel_user_grace_safe
-    from app.services.panel_sync import push_subscription
+    from app.services.panel_sync import push_subscription, sync_companion_device_limit
     from app.services.panel_sync.fields import PANEL_ACCOUNT_METADATA_FIELDS
 
     remnawave_service = RemnaWaveService()
@@ -4531,6 +4538,8 @@ async def _push_narrow_change_to_panel(db, user, subscription, *, fields: set[st
             create_if_missing=False,
             update_call=lambda **kwargs: update_panel_user_grace_safe(api, subscription.id, **kwargs),
         )
+        if sync_companion_device_limit_too:
+            await sync_companion_device_limit(api, subscription)
 
 
 async def _update_user_devices(
@@ -4550,7 +4559,9 @@ async def _update_user_devices(
         await db.commit()
 
         try:
-            await _push_narrow_change_to_panel(db, user, subscription, fields={'hwid_device_limit'})
+            await _push_narrow_change_to_panel(
+                db, user, subscription, fields={'hwid_device_limit'}, sync_companion_device_limit_too=True
+            )
             logger.info('✅ Обновлен лимит устройств в RemnaWave для пользователя', telegram_id=user.telegram_id)
         except Exception as rw_error:
             logger.error('❌ Ошибка обновления лимита устройств в RemnaWave', rw_error=rw_error)

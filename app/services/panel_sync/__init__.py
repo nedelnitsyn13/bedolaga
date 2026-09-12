@@ -39,6 +39,7 @@ from app.services.panel_sync.writer import (
     push_subscription,
     remove_companion_device,
     reset_companion_devices,
+    sync_companion_device_limit,
     write_companion_account,
 )
 
@@ -74,5 +75,6 @@ __all__ = [
     'resolve_panel_identity',
     'resolve_panel_user_tag',
     'stale_panel_expire_at',
+    'sync_companion_device_limit',
     'write_companion_account',
 ]
