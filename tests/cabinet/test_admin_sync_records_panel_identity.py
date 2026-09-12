@@ -154,6 +154,30 @@ async def test_multi_mode_new_subscription_gets_its_own_panel_user(monkeypatch):
     assert user.remnawave_id == USER_PANEL_ID
 
 
+async def test_admin_sync_mirrors_state_onto_the_limited_companion(monkeypatch):
+    """Any admin edit routed through _sync_subscription_to_panel (extend, tariff,
+    traffic, devices) must also reach the limited-companion account — it never
+    went through SubscriptionService before, so a companion's expire date or
+    device limit could silently drift from the main account it mirrors."""
+    _panel_double(monkeypatch, _Api({USER_PANEL_ID}), multi_tariff=False)
+    user, subscription = _user(), _subscription(limited_companion_remnawave_id=857)
+
+    companion_calls = []
+
+    async def fake_sync_companion(self, api, db, user_arg, subscription_arg, main_user):
+        companion_calls.append(subscription_arg.id)
+
+    monkeypatch.setattr(
+        'app.services.subscription_service.SubscriptionService._sync_limited_companion_user',
+        fake_sync_companion,
+    )
+
+    changes = await admin_users._sync_subscription_to_panel(_db(panel_id_taken=False), user, subscription)
+
+    assert changes['action'] == 'updated'
+    assert companion_calls == [subscription.id]
+
+
 async def test_sync_to_panel_endpoint_records_panel_id_on_selected_subscription(monkeypatch):
     updated, _created = _panel_double(monkeypatch, _Api({USER_PANEL_ID}), multi_tariff=False)
     subscription = _subscription()

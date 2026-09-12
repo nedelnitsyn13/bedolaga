@@ -8,7 +8,12 @@ import pytest
 
 from app.database.models import SubscriptionStatus
 from app.external.remnawave_api import RemnaWaveAPIError, RemnaWaveTransientError
-from app.services.panel_sync import push_subscription, remove_companion_device, reset_companion_devices
+from app.services.panel_sync import (
+    push_subscription,
+    remove_companion_device,
+    reset_companion_devices,
+    sync_companion_device_limit,
+)
 from app.services.panel_sync.expiry import _MINIMUM_FUTURE as MARGIN, SKEW_RETRY_MARGIN
 
 
@@ -385,3 +390,31 @@ async def test_push_subscription_mirrors_reset_onto_the_companion():
     await push_subscription(api, _user(), sub, multi_tariff=True, now=NOW, reset_devices=True)
 
     api.reset_user_devices.assert_any_call(857)
+
+
+@pytest.mark.asyncio
+async def test_sync_companion_device_limit_patches_the_companion_account():
+    api = AsyncMock()
+
+    await sync_companion_device_limit(api, _sub(limited_companion_remnawave_id=857, device_limit=5))
+
+    api.update_user.assert_awaited_once()
+    assert api.update_user.await_args.kwargs['user_id'] == 857
+    assert api.update_user.await_args.kwargs['hwid_device_limit'] == 5
+
+
+@pytest.mark.asyncio
+async def test_sync_companion_device_limit_noop_without_a_companion():
+    api = AsyncMock()
+
+    await sync_companion_device_limit(api, _sub())
+
+    api.update_user.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_sync_companion_device_limit_swallows_panel_errors():
+    api = AsyncMock()
+    api.update_user.side_effect = RemnaWaveAPIError('boom', 500, {})
+
+    await sync_companion_device_limit(api, _sub(limited_companion_remnawave_id=857))  # must not raise

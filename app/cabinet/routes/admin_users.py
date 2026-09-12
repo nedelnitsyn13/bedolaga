@@ -445,6 +445,17 @@ async def _sync_subscription_to_panel(
             user.last_remnawave_sync = datetime.now(UTC)
             await db.commit()
 
+            # Компаньон лимитного сервера — отдельный панельный аккаунт
+            # (Subscription.limited_companion_remnawave_id), зеркалящий статус,
+            # срок действия и лимит устройств основного. push_subscription выше
+            # трогает только основной аккаунт, поэтому без этого шага любое
+            # админское изменение подписки в кабинете (продление, тариф,
+            # трафик, устройства) не долетало бы до компаньона.
+            if result.panel_user is not None:
+                from app.services.subscription_service import SubscriptionService
+
+                await SubscriptionService()._sync_limited_companion_user(api, db, user, subscription, result.panel_user)
+
         return changes
 
     except Exception as e:

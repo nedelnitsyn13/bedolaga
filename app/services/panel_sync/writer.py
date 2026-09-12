@@ -75,6 +75,33 @@ async def remove_companion_device(api, subscription, device_hwid) -> None:
         )
 
 
+async def sync_companion_device_limit(api, subscription) -> None:
+    """Mirror ``hwid_device_limit`` onto the limited-companion account.
+
+    Admin single-field edits (see ``_push_narrow_change_to_panel``) PATCH only
+    the main panel account and never go through
+    ``SubscriptionService._sync_limited_companion_user``, so without this the
+    companion keeps its old device limit after an admin changes it.
+    """
+    companion_id = getattr(subscription, 'limited_companion_remnawave_id', None) if subscription else None
+    if not companion_id:
+        return
+    try:
+        from app.utils.subscription_utils import resolve_hwid_device_limit_for_payload
+
+        await patch_panel_account(
+            api,
+            user_id=companion_id,
+            hwid_device_limit=resolve_hwid_device_limit_for_payload(subscription),
+        )
+    except Exception as error:
+        logger.warning(
+            '⚠️ Не удалось обновить лимит устройств на лимитном компаньоне',
+            subscription_id=getattr(subscription, 'id', None),
+            error=error,
+        )
+
+
 @dataclass(frozen=True)
 class PanelWriteResult:
     """Чем закончилась запись."""
