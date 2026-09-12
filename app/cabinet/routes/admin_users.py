@@ -67,6 +67,8 @@ from app.services.panel_sync import (
     is_subscription_live,
     project_onto_subscription,
     read_panel_user,
+    remove_companion_device,
+    reset_companion_devices,
 )
 from app.services.panel_sync.fields import narrow_push_fields
 from app.services.permission_service import PermissionService
@@ -2679,8 +2681,10 @@ async def delete_user_device(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='User not found')
 
     _panel_user_id = None
+    _subscription = None
     if subscription_id is not None:
-        _panel_user_id = (await _get_owned_subscription_or_404(db, subscription_id, user_id)).remnawave_id
+        _subscription = await _get_owned_subscription_or_404(db, subscription_id, user_id)
+        _panel_user_id = _subscription.remnawave_id
     else:
         _panel_user_id = user.remnawave_id
 
@@ -2693,6 +2697,8 @@ async def delete_user_device(
         service = RemnaWaveService()
         async with service.get_api_client() as api:
             success = await api.remove_device(_panel_user_id, hwid)
+            if success:
+                await remove_companion_device(api, _subscription, hwid)
 
         if success:
             logger.info('Admin deleted device for user', admin_id=admin.id, hwid=hwid, user_id=user_id)
@@ -2764,12 +2770,14 @@ async def reset_user_devices(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='User not found')
 
     _rst_panel_user_id = None
+    _rst_subscription = None
     if settings.is_multi_tariff_enabled() and subscription_id:
         from app.database.crud.subscription import get_subscription_by_id_for_user
 
         sub = await get_subscription_by_id_for_user(db, subscription_id, user_id)
         if sub:
             _rst_panel_user_id = sub.remnawave_id
+            _rst_subscription = sub
     else:
         _rst_panel_user_id = user.remnawave_id
 
@@ -2798,6 +2806,8 @@ async def reset_user_devices(
                     # «Deleted 5/5 devices» при пяти отказах подряд.
                     if await api.remove_device(_rst_panel_user_id, device_hwid):
                         deleted += 1
+
+            await reset_companion_devices(api, _rst_subscription)
 
         logger.info('Admin reset devices for user /', admin_id=admin.id, user_id=user_id, deleted=deleted, total=total)
         if deleted < total:

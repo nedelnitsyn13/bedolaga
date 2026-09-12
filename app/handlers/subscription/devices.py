@@ -32,6 +32,7 @@ from app.keyboards.inline import (
     get_specific_app_keyboard,
 )
 from app.localization.texts import get_texts
+from app.services.panel_sync import remove_companion_device, reset_companion_devices
 from app.services.pricing_engine import PricingEngine
 from app.services.remnawave_service import RemnaWaveService
 from app.services.subscription_service import SubscriptionService
@@ -742,6 +743,7 @@ async def execute_change_devices(
                                     if await api.remove_device(panel_user_id, device_hwid):
                                         devices_reset_count += 1
                                         logger.info('✅ Удалено устройство', device_hwid=device_hwid)
+                                        await remove_companion_device(api, subscription, device_hwid)
                                     else:
                                         logger.error('Ошибка удаления устройства', device_hwid=device_hwid)
             except Exception as reset_error:
@@ -1271,6 +1273,8 @@ async def handle_single_device_reset(
                             )
                             return
 
+                        await remove_companion_device(api, subscription, device_hwid)
+
                         platform = device.get('platform', 'Unknown')
                         device_model = device.get('deviceModel', 'Unknown')
                         device_info = f'{platform} - {device_model}'
@@ -1395,6 +1399,8 @@ async def handle_all_devices_reset_from_management(
                 else:
                     failed_count += 1
                     logger.warning('⚠️ У устройства нет HWID', device=device)
+
+            await reset_companion_devices(api, subscription)
 
             if success_count > 0:
                 if failed_count == 0:

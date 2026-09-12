@@ -26,6 +26,7 @@ from app.database.database import AsyncSessionLocal
 from app.database.models import Tariff, Transaction, TransactionType, User
 from app.localization.texts import Texts, get_texts
 from app.services.admin_notification_service import AdminNotificationService
+from app.services.panel_sync import reset_companion_devices
 from app.services.subscription_service import SubscriptionService
 from app.services.tariff_switch_policy import remaining_days_for_switch, should_reset_used_traffic
 from app.services.user_cart_service import user_cart_service
@@ -4017,6 +4018,7 @@ async def confirm_tariff_switch(
                         logger.info('🔧 Сброшены устройства при смене тарифа для user_id', db_user_id=db_user.id)
                     else:
                         logger.error('Не удалось сбросить устройства при смене тарифа', db_user_id=db_user.id)
+                    await reset_companion_devices(api, subscription)
             except Exception as e:
                 logger.error('Ошибка сброса устройств при смене тарифа', error=e)
 
@@ -4318,6 +4320,7 @@ async def confirm_daily_tariff_switch(
                         logger.error(
                             'Не удалось сбросить устройства при смене на суточный тариф', db_user_id=db_user.id
                         )
+                    await reset_companion_devices(api, subscription)
             except Exception as e:
                 logger.error('Ошибка сброса устройств при смене тарифа', error=e)
 
@@ -5276,6 +5279,7 @@ async def confirm_instant_switch(
                             'Не удалось сбросить устройства при мгновенном переключении тарифа',
                             db_user_id=db_user.id,
                         )
+                    await reset_companion_devices(api, subscription)
             except Exception as e:
                 logger.error('Ошибка сброса устройств при переключении тарифа', error=e)
 

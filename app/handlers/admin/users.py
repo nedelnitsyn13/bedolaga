@@ -43,6 +43,7 @@ from app.keyboards.admin import (
     get_user_restrictions_keyboard,
 )
 from app.localization.texts import Texts, get_texts
+from app.services.panel_sync import reset_companion_devices
 from app.services.remnawave_service import RemnaWaveService
 from app.services.subscription_service import SubscriptionService
 from app.services.user_service import UserService
@@ -4451,6 +4452,7 @@ async def reset_user_devices(callback: types.CallbackQuery, db_user: User, db: A
     try:
         user = await get_user_by_id(db, user_id)
         panel_user_id = None
+        subscription = None
         if subscription_id and settings.is_multi_tariff_enabled():
             from app.database.crud.subscription import get_subscription_by_id_for_user
 
@@ -4468,6 +4470,7 @@ async def reset_user_devices(callback: types.CallbackQuery, db_user: User, db: A
         remnawave_service = RemnaWaveService()
         async with remnawave_service.get_api_client() as api:
             success = await api.reset_user_devices(panel_user_id)
+            await reset_companion_devices(api, subscription)
 
         if success:
             await callback.message.edit_text(

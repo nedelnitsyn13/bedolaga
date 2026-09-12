@@ -2833,6 +2833,14 @@ class RemnaWaveService:
                 if _user_panel_id is not None:
                     _panel_ids_to_reset.add(_user_panel_id)
 
+            # Компаньон лимитного сервера — отдельный панельный аккаунт
+            # (Subscription.limited_companion_remnawave_id); без него он
+            # остаётся с рабочими устройствами после полной очистки пользователя.
+            for sub in getattr(user, 'subscriptions', []) or []:
+                _companion_panel_id = _normalize_panel_user_id(getattr(sub, 'limited_companion_remnawave_id', None))
+                if _companion_panel_id is not None:
+                    _panel_ids_to_reset.add(_companion_panel_id)
+
             for _panel_user_id in _panel_ids_to_reset:
                 try:
                     async with self.get_api_client() as api:

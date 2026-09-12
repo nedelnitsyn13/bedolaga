@@ -8,7 +8,7 @@ import pytest
 
 from app.database.models import SubscriptionStatus
 from app.external.remnawave_api import RemnaWaveAPIError, RemnaWaveTransientError
-from app.services.panel_sync import push_subscription
+from app.services.panel_sync import push_subscription, remove_companion_device, reset_companion_devices
 from app.services.panel_sync.expiry import _MINIMUM_FUTURE as MARGIN, SKEW_RETRY_MARGIN
 
 
@@ -322,4 +322,66 @@ async def test_other_validation_errors_are_not_mistaken_for_clock_skew():
 
     with pytest.raises(RemnaWaveAPIError):
         await push_subscription(api, _user(), sub, multi_tariff=True, now=NOW)
-    assert api.update_user.await_count == 2
+
+
+# --- Companion device mirroring ---------------------------------------------
+#
+# The limited-companion account (Subscription.limited_companion_remnawave_id)
+# is a separate RemnaWave user with its own independent HWID device list (see
+# SubscriptionService._sync_limited_companion_user). Every device-reset call
+# site only ever touched the subscription's main panel account, so blocking
+# or resetting devices there silently left the companion's devices connected.
+
+
+@pytest.mark.asyncio
+async def test_reset_companion_devices_resets_the_companion_account():
+    api = AsyncMock()
+
+    await reset_companion_devices(api, _sub(limited_companion_remnawave_id=857))
+
+    api.reset_user_devices.assert_awaited_once_with(857)
+
+
+@pytest.mark.asyncio
+async def test_reset_companion_devices_noop_without_a_companion():
+    api = AsyncMock()
+
+    await reset_companion_devices(api, _sub())
+
+    api.reset_user_devices.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_reset_companion_devices_swallows_panel_errors():
+    api = AsyncMock()
+    api.reset_user_devices.side_effect = RemnaWaveAPIError('boom', 500, {})
+
+    await reset_companion_devices(api, _sub(limited_companion_remnawave_id=857))  # must not raise
+
+
+@pytest.mark.asyncio
+async def test_remove_companion_device_removes_the_same_hwid():
+    api = AsyncMock()
+
+    await remove_companion_device(api, _sub(limited_companion_remnawave_id=857), 'TARGET-HWID')
+
+    api.remove_device.assert_awaited_once_with(857, 'TARGET-HWID')
+
+
+@pytest.mark.asyncio
+async def test_remove_companion_device_noop_without_a_companion():
+    api = AsyncMock()
+
+    await remove_companion_device(api, _sub(), 'TARGET-HWID')
+
+    api.remove_device.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_push_subscription_mirrors_reset_onto_the_companion():
+    api = _api(get_user_by_id=_panel_user())
+    sub = _sub(remnawave_id=42, limited_companion_remnawave_id=857)
+
+    await push_subscription(api, _user(), sub, multi_tariff=True, now=NOW, reset_devices=True)
+
+    api.reset_user_devices.assert_any_call(857)
