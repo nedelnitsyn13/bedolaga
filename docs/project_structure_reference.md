@@ -3929,6 +3929,9 @@
 - `tests/services/test_ban_notification_global_switch.py` — Python-модуль
   Классы: нет
   Функции: `service`, `test_typed_ban_is_silent_when_notifications_are_off`, `test_typed_ban_is_delivered_when_notifications_are_on` — Обратная сторона: рубильник не должен глушить включённые уведомления., `test_switch_is_checked_before_touching_the_database` — Выход обязан быть до поиска пользователя, как у соседних методов., `test_every_send_method_respects_the_switch` — Ни один способ уведомить пользователя не должен обходить рубильник.
+- `tests/services/test_block_user_disables_companion.py` — Python-модуль
+  Классы: нет
+  Функции: `test_block_user_disables_companion_alongside_main_account`
 - `tests/services/test_broadcast_bad_request_logging.py` — Python-модуль
   Классы: нет
   Функции: `test_bad_request_is_logged_once_per_cause_with_telegram_text`, `test_each_distinct_cause_gets_its_own_error_entry`, `test_blocked_users_are_still_counted_quietly` — «chat not found» — это не сбой рассылки, а ушедший пользователь: без error.
