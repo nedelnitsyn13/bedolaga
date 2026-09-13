@@ -5346,6 +5346,15 @@ async def admin_buy_subscription_execute(callback: types.CallbackQuery, db_user:
                     # extend снова уйдёт в create-ветку и наплодит дублей в панели.
                     await db.commit()
 
+                    # Компаньон лимитного сервера зеркалит срок и статус основного
+                    # аккаунта, а push_subscription выше трогает только основной:
+                    # без этого продлённая админом подписка оставляла компаньона
+                    # с прежней датой окончания.
+                    if remnawave_user is not None:
+                        await SubscriptionService()._sync_limited_companion_user(
+                            api, db, target_user, subscription, remnawave_user
+                        )
+
                 if remnawave_user:
                     logger.info('Пользователь успешно обновлен в RemnaWave', telegram_id=target_user.telegram_id)
                 else:
