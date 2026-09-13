@@ -4227,6 +4227,14 @@ async def sync_user_to_panel(
             user.updated_at = datetime.now(UTC)
             await db.commit()
 
+            # Компаньон лимитного сервера зеркалит статус, срок и лимит устройств
+            # основного аккаунта; push_subscription выше пишет только в основной,
+            # поэтому ручная синхронизация из кабинета до компаньона не доходила.
+            if result.panel_user is not None:
+                from app.services.subscription_service import SubscriptionService
+
+                await SubscriptionService()._sync_limited_companion_user(api, db, user, push_sub, result.panel_user)
+
         logger.info('Admin synced user to panel. Action', admin_id=admin.id, user_id=user_id, action=action)
 
         return SyncToPanelResponse(

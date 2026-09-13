@@ -195,3 +195,34 @@ async def test_sync_to_panel_endpoint_records_panel_id_on_selected_subscription(
     assert result.action == 'updated'
     assert updated == [USER_PANEL_ID]
     assert subscription.remnawave_id == USER_PANEL_ID
+
+
+async def test_sync_to_panel_endpoint_mirrors_onto_the_limited_companion(monkeypatch):
+    """The manual "sync to panel" button has its own push and bypassed the
+    companion, so a hand-triggered sync fixed the main account and left the
+    companion on its old state."""
+    _panel_double(monkeypatch, _Api({USER_PANEL_ID}), multi_tariff=False)
+    subscription = _subscription(limited_companion_remnawave_id=857)
+    user = _user(subscriptions=[subscription])
+    monkeypatch.setattr(admin_users, 'get_user_by_id', AsyncMock(return_value=user))
+
+    companion_calls = []
+
+    async def fake_sync_companion(self, api, db, user_arg, subscription_arg, main_user):
+        companion_calls.append(subscription_arg.id)
+
+    monkeypatch.setattr(
+        'app.services.subscription_service.SubscriptionService._sync_limited_companion_user',
+        fake_sync_companion,
+    )
+
+    result = await admin_users.sync_user_to_panel(
+        user.id,
+        subscription_id=subscription.id,
+        request=SyncToPanelRequest(),
+        admin=SimpleNamespace(id=1),
+        db=_db(panel_id_taken=False),
+    )
+
+    assert result.action == 'updated'
+    assert companion_calls == [subscription.id]
