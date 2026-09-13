@@ -1513,6 +1513,19 @@ def get_limited_companion_traffic_gb_for_tariff(tariff: Tariff | None) -> int:
     return settings.LIMITED_COMPANION_TRAFFIC_GB
 
 
+def get_limited_companion_base_traffic_gb_with_tariff(subscription: Subscription, tariff: Tariff | None) -> int:
+    """То же, что `get_limited_companion_base_traffic_gb`, но на готовом тарифе.
+
+    Ленивое `subscription.tariff` в async-контексте трогать нельзя — SQLAlchemy
+    бросает MissingGreenlet, и `getattr(..., None)` это не спасает. Экраны
+    админки (кабинет и бот) тариф и так достают ради названия, поэтому
+    передают его сюда, а не полагаются на relationship.
+    """
+    if subscription.is_trial:
+        return subscription.traffic_limit_gb or 0
+    return get_limited_companion_traffic_gb_for_tariff(tariff)
+
+
 def get_limited_companion_base_traffic_gb(subscription: Subscription) -> int:
     """Базовый (без докупок) лимит трафика лимитного сервера-компаньона.
 
@@ -1522,9 +1535,7 @@ def get_limited_companion_base_traffic_gb(subscription: Subscription) -> int:
     `server_traffic_limits` для squad компаньона), иначе — фиксированный
     `LIMITED_COMPANION_TRAFFIC_GB`.
     """
-    if subscription.is_trial:
-        return subscription.traffic_limit_gb or 0
-    return get_limited_companion_traffic_gb_for_tariff(getattr(subscription, 'tariff', None))
+    return get_limited_companion_base_traffic_gb_with_tariff(subscription, getattr(subscription, 'tariff', None))
 
 
 def get_limited_companion_total_traffic_limit_gb(subscription: Subscription, purchased_gb: int) -> int:
@@ -1535,7 +1546,21 @@ def get_limited_companion_total_traffic_limit_gb(subscription: Subscription, pur
     иначе конечное число портит безлимит вместо того, чтобы его сохранить.
     Мирроит `_apply_base_limit_preserving_active_purchases` для основного трафика.
     """
-    base_limit_gb = get_limited_companion_base_traffic_gb(subscription)
+    return _apply_companion_purchases(get_limited_companion_base_traffic_gb(subscription), purchased_gb)
+
+
+def get_limited_companion_total_traffic_limit_gb_with_tariff(
+    subscription: Subscription, tariff: Tariff | None, purchased_gb: int
+) -> int:
+    """Итоговый лимит компаньона на готовом тарифе — см.
+    `get_limited_companion_base_traffic_gb_with_tariff` про то, зачем тариф
+    передаётся явно."""
+    return _apply_companion_purchases(
+        get_limited_companion_base_traffic_gb_with_tariff(subscription, tariff), purchased_gb
+    )
+
+
+def _apply_companion_purchases(base_limit_gb: int, purchased_gb: int) -> int:
     if base_limit_gb == 0:
         return 0
     return base_limit_gb + purchased_gb
