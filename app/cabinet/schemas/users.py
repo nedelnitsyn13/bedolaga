@@ -72,8 +72,14 @@ class UserSubscriptionInfo(BaseModel):
     traffic_purchases: list[TrafficPurchaseItem] = []
 
     # Limited-companion (capped extra server) account — admin view only.
+    # The companion is a separate panel account with its own traffic quota, so
+    # none of the fields above describe it: an admin looking at "3 / 50 GB"
+    # cannot tell that the limited server is already exhausted.
     has_limited_companion: bool = False
     limited_companion_traffic_limit_gb: int = 0
+    limited_companion_traffic_used_gb: float = 0.0
+    limited_companion_purchased_traffic_gb: int = 0
+    limited_companion_panel_id: int | None = None
 
     # Platega SBP auto-renewal (admin view only — populated by the async
     # builder; the sync builder leaves both at their None default).
@@ -359,7 +365,7 @@ class UpdateSubscriptionRequest(BaseModel):
         ...,
         description=(
             'Action: extend, shorten, set_end_date, change_tariff, set_traffic, '
-            'add_traffic, add_limited_traffic, remove_traffic, '
+            'add_traffic, add_limited_traffic, sync_limited_companion, remove_traffic, '
             'toggle_autopay, cancel, reset (zero out the subscription, keep user+tickets)'
         ),
     )

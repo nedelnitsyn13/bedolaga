@@ -332,19 +332,18 @@ async def _build_subscription_info_async(db: AsyncSession, subscription: Subscri
     info.traffic_purchases = traffic_purchase_items
 
     if settings.is_limited_companion_enabled() and subscription.limited_companion_remnawave_id:
-        from app.database.crud.subscription import get_limited_companion_traffic_gb_for_tariff
+        from app.database.crud.subscription import get_limited_companion_total_traffic_limit_gb_with_tariff
 
-        info.has_limited_companion = True
-        # Mirrors get_limited_companion_base_traffic_gb/_total_traffic_limit_gb but
-        # takes the already-fetched `tariff` instead of the lazy `subscription.tariff`
-        # relationship, which isn't safe to touch in this async context.
-        base_limit_gb = (
-            subscription.traffic_limit_gb or 0
-            if subscription.is_trial
-            else (get_limited_companion_traffic_gb_for_tariff(tariff))
-        )
         purchased_gb = subscription.limited_companion_purchased_traffic_gb or 0
-        info.limited_companion_traffic_limit_gb = 0 if base_limit_gb == 0 else base_limit_gb + purchased_gb
+        info.has_limited_companion = True
+        info.limited_companion_panel_id = subscription.limited_companion_remnawave_id
+        info.limited_companion_purchased_traffic_gb = purchased_gb
+        info.limited_companion_traffic_used_gb = subscription.limited_companion_traffic_used_gb or 0.0
+        # The tariff is passed explicitly: the lazy `subscription.tariff`
+        # relationship isn't safe to touch in this async context.
+        info.limited_companion_traffic_limit_gb = get_limited_companion_total_traffic_limit_gb_with_tariff(
+            subscription, tariff, purchased_gb
+        )
 
     # Platega SBP auto-renewal status — admin-only, needs a DB query, so it
     # lives here rather than in the sync builder. Gated to avoid a needless
@@ -1193,6 +1192,7 @@ async def update_user_subscription(
     - **change_tariff**: Change subscription tariff
     - **set_traffic**: Set traffic limit and/or used traffic
     - **add_limited_traffic**: Grant extra traffic to the limited-companion account (30 days)
+    - **sync_limited_companion**: Re-sync the limited-companion account from the panel
     - **toggle_autopay**: Enable/disable autopay
     - **cancel**: Cancel subscription (set status to expired)
     - **activate**: Activate subscription
@@ -1741,6 +1741,41 @@ async def update_user_subscription(
         return UpdateSubscriptionResponse(
             success=True,
             message=f'Added {request.traffic_gb} GB limited-server traffic (30 days)',
+            subscription=await _build_subscription_info_async(db, subscription),
+        )
+
+    if request.action == 'sync_limited_companion':
+        # `limited_companion_traffic_used_gb` is only written by a top-up's resync
+        # and by the periodic monitoring pass, so on the admin screen it can sit
+        # stale (often 0) for days. This re-reads the main panel account, rewrites
+        # the companion from it and stores the companion's fresh used-traffic —
+        # the same path a paid top-up takes, minus the traffic grant.
+        if not subscription.limited_companion_remnawave_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail='Subscription has no limited-companion account',
+            )
+
+        from app.services.subscription_service import SubscriptionService
+
+        if not await SubscriptionService().resync_limited_companion(db, subscription):
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail='Limited-companion sync failed — retry or check panel status',
+            )
+
+        await db.refresh(subscription)
+
+        logger.info(
+            'Admin re-synced limited-companion account',
+            admin_id=admin.id,
+            subscription_id=subscription.id,
+            user_id=user_id,
+        )
+
+        return UpdateSubscriptionResponse(
+            success=True,
+            message='Limited-companion account synced from panel',
             subscription=await _build_subscription_info_async(db, subscription),
         )
 

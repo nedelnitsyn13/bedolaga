@@ -820,6 +820,35 @@ async def show_users_statistics(callback: types.CallbackQuery, db_user: User, db
     await callback.answer()
 
 
+def _format_limited_companion_block(subscription: Subscription, tariff) -> str:
+    """Блок «лимитный профиль» для экрана подписки в админке.
+
+    Компаньон лимитного сервера — отдельный аккаунт панели со своей квотой
+    трафика, поэтому ни одна строка выше про него ничего не говорит: админ
+    смотрит на «Трафик: 3.0/50 ГБ» и не видит, что на лимитном сервере у
+    пользователя всё уже выбрано. Цифры берутся из базы — за свежими в панель
+    ходит кнопка «🔄 Синхр. лимитный» рядом.
+    """
+    if not settings.is_limited_companion_enabled() or not subscription.limited_companion_remnawave_id:
+        return ''
+
+    from app.database.crud.subscription import get_limited_companion_total_traffic_limit_gb_with_tariff
+
+    purchased_gb = subscription.limited_companion_purchased_traffic_gb or 0
+    # Тариф передаётся явно: ленивое subscription.tariff в async-контексте
+    # роняет SQLAlchemy, если relationship не подгружен.
+    total_gb = get_limited_companion_total_traffic_limit_gb_with_tariff(subscription, tariff, purchased_gb)
+    used_gb = subscription.limited_companion_traffic_used_gb or 0
+    limit_text = '♾️ ГБ' if total_gb == 0 else f'{total_gb} ГБ'
+
+    block = '\n🌐 <b>Лимитный профиль</b>\n'
+    block += f'<b>ID в панели:</b> <code>{subscription.limited_companion_remnawave_id}</code>\n'
+    block += f'<b>Трафик:</b> {used_gb:.1f}/{limit_text}\n'
+    if purchased_gb:
+        block += f'<b>Из них докуплено:</b> {purchased_gb} ГБ\n'
+    return block
+
+
 async def _render_user_subscription_overview(
     callback: types.CallbackQuery, db: AsyncSession, user_id: int, subscription_id: int | None = None
 ) -> bool:
@@ -909,6 +938,7 @@ async def _render_user_subscription_overview(
         text += f'<b>Тип:</b> {type_emoji} {"Триал" if subscription.is_trial else "Платная"}\n'
 
         # Отображение тарифа
+        tariff = None
         if subscription.tariff_id:
             tariff = await get_tariff_by_id(db, subscription.tariff_id)
             if tariff:
@@ -924,6 +954,8 @@ async def _render_user_subscription_overview(
         if subscription.is_active:
             days_left = (subscription.end_date - datetime.now(UTC)).days
             text += f'<b>Осталось дней:</b> {days_left}\n'
+
+        text += _format_limited_companion_block(subscription, tariff)
 
         current_squads = subscription.connected_squads or []
         if current_squads:
@@ -975,9 +1007,13 @@ async def _render_user_subscription_overview(
             keyboard.append(
                 [
                     types.InlineKeyboardButton(
-                        text='➕ Трафик (лимитный сервер)',
+                        text='➕ Трафик (лимитный)',
                         callback_data=f'admin_user_limtraffic_{user_id}{_sid}',
-                    )
+                    ),
+                    types.InlineKeyboardButton(
+                        text='🔄 Синхр. лимитный',
+                        callback_data=f'admin_user_limsync_{user_id}{_sid}',
+                    ),
                 ]
             )
 
@@ -4322,6 +4358,46 @@ async def _add_limited_companion_traffic_and_sync(
 
 @admin_required
 @error_handler
+async def admin_sync_limited_companion(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
+    """Пересобрать компаньон лимитного сервера из панели по кнопке админа.
+
+    Трафик компаньона в базу пишут только докупка и фоновый мониторинг, поэтому
+    на экране админки он может быть сильно устаревшим (часто нулём). Кнопка
+    перечитывает основной аккаунт панели, переписывает из него компаньона и
+    сохраняет свежий used_traffic — тот же путь, что и докупка, только без
+    начисления.
+    """
+    user_id, subscription_id = _extract_admin_sub_context(callback.data)
+
+    subscription = await _resolve_admin_subscription(db, user_id, subscription_id)
+    if not subscription or not subscription.limited_companion_remnawave_id:
+        await callback.answer('❌ У подписки нет лимитного профиля', show_alert=True)
+        return
+
+    if not await SubscriptionService().resync_limited_companion(db, subscription):
+        logger.error(
+            'Не удалось синхронизировать лимитный профиль по кнопке админа',
+            admin_id=db_user.id,
+            subscription_id=subscription.id,
+        )
+        await callback.answer('❌ Не удалось синхронизировать лимитный профиль', show_alert=True)
+        return
+
+    await db.refresh(subscription)
+
+    try:
+        await _render_user_subscription_overview(callback, db, user_id, subscription_id=subscription_id)
+    except TelegramBadRequest as error:
+        # Синхронизация прошла, но в панели ничего не изменилось — Telegram
+        # отказывается перерисовывать идентичное сообщение. Это не ошибка.
+        if 'not modified' not in str(error).lower():
+            raise
+
+    await callback.answer('✅ Лимитный профиль синхронизирован')
+
+
+@admin_required
+@error_handler
 async def set_limited_traffic_button(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
     parts = callback.data.split('_')
     traffic_gb = int(parts[-1])
@@ -6638,6 +6714,8 @@ def register_handlers(dp: Dispatcher):
     )
 
     dp.callback_query.register(set_limited_traffic_button, F.data.startswith('admin_user_limtraffic_add_'))
+
+    dp.callback_query.register(admin_sync_limited_companion, F.data.startswith('admin_user_limsync_'))
 
     dp.message.register(process_limited_traffic_add_text, AdminStates.adding_user_limited_traffic)
 
