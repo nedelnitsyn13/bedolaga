@@ -2883,6 +2883,9 @@
 - `scripts/reconcile_email_users.py` — Python-модуль
   Классы: `ReconcileReport` (1 методов)
   Функции: `main`
+- `scripts/reconcile_limited_companion_device_limits.py` — Python-модуль
+  Классы: нет
+  Функции: `main`
 - `scripts/reconcile_limited_companions.py` — Python-модуль
   Классы: `ReconcileReport` (1 методов)
   Функции: `main`
