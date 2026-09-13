@@ -86,7 +86,7 @@
   Функции: `create_bot` — Create a Bot instance with SOCKS5 proxy and/or custom Telegram API server.
 - `app/cabinet/`
 - `app/config.py` — Python-модуль
-  Классы: `Settings` (398 методов)
+  Классы: `Settings` (399 методов)
   Функции: `transliterate_cyrillic` — Заменяет кириллические буквы латинскими, сохраняя регистр («Шмель» → «Shmel»)., `set_period_prices_from_db` — Устанавливает периоды/цены из БД., `get_db_period_prices` — Возвращает периоды/цены из БД если они загружены., `clear_db_period_prices` — Очищает кеш цен из тарифов (при переключении в classic mode)., `refresh_period_prices` — Rebuild cached period price mapping., `refresh_classic_period_prices` — Rebuild CLASSIC_PERIOD_PRICES from current settings., `get_traffic_prices`, `refresh_traffic_prices`
 - `app/database/`
 - `app/external/`
@@ -2913,6 +2913,9 @@
 - `tests/live/`
 - `tests/middlewares/`
 - `tests/services/`
+- `tests/test_config_blank_optional_int_env.py` — Python-модуль
+  Классы: нет
+  Функции: `test_blank_env_value_becomes_none_instead_of_crashing`, `test_a_real_numeric_value_still_parses`, `test_garbage_value_still_fails_loudly` — Only blank strings are forgiven — a typo'd value should still fail fast.
 - `tests/test_config_languages.py` — Python-модуль
   Классы: нет
   Функции: `test_available_languages_default_contains_fa`, `test_available_languages_normalizes_and_deduplicates`
