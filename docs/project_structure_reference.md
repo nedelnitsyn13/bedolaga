@@ -3885,7 +3885,7 @@
 
 - `tests/scripts/test_audit_limited_companion_devices.py` — Python-модуль
   Классы: нет
-  Функции: `test_blames_a_full_companion_when_the_device_is_only_on_main`, `test_blames_a_full_main_when_the_device_is_only_on_the_companion`, `test_reports_drifted_limits_when_neither_side_is_full`, `test_admits_when_nothing_explains_the_gap` — Лимиты одинаковые и обе стороны свободны — панель отказать не могла., `test_does_not_blame_a_limit_the_panel_never_reported` — hwidDeviceLimit=None — безлимит: обвинять его в отказе нельзя.
+  Функции: `test_blames_a_full_companion_when_the_device_is_only_on_main`, `test_blames_a_full_main_when_the_device_is_only_on_the_companion`, `test_reports_drifted_limits_when_neither_side_is_full`, `test_calls_it_a_stale_gap_when_neither_side_is_currently_full` — Лимиты одинаковые и обе стороны свободны сейчас — панель отказать не могла, `test_does_not_blame_a_limit_the_panel_never_reported` — hwidDeviceLimit=None — безлимит: обвинять его в отказе нельзя, это тоже хвост.
 
 ### tests/services
 
