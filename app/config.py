@@ -1744,6 +1744,48 @@ class Settings(BaseSettings):
         log_path.parent.mkdir(parents=True, exist_ok=True)
         return str(log_path)
 
+    @field_validator(
+        'ADMIN_NOTIFICATIONS_TOPIC_ID',
+        'ADMIN_NOTIFICATIONS_TICKET_TOPIC_ID',
+        'ADMIN_NOTIFICATIONS_NALOG_TOPIC_ID',
+        'ADMIN_NOTIFICATIONS_PURCHASES_TOPIC_ID',
+        'ADMIN_NOTIFICATIONS_RENEWALS_TOPIC_ID',
+        'ADMIN_NOTIFICATIONS_TRIALS_TOPIC_ID',
+        'ADMIN_NOTIFICATIONS_BALANCE_TOPIC_ID',
+        'ADMIN_NOTIFICATIONS_ADDONS_TOPIC_ID',
+        'ADMIN_NOTIFICATIONS_INFRASTRUCTURE_TOPIC_ID',
+        'ADMIN_NOTIFICATIONS_ERRORS_TOPIC_ID',
+        'ADMIN_NOTIFICATIONS_PROMO_TOPIC_ID',
+        'ADMIN_NOTIFICATIONS_PARTNERS_TOPIC_ID',
+        'ADMIN_REPORTS_TOPIC_ID',
+        'DEVICES_SELECTION_DISABLED_AMOUNT',
+        'REFERRAL_FIRST_PAYMENT_COMMISSION_PERCENT',
+        'REFERRAL_WITHDRAWAL_NOTIFICATIONS_TOPIC_ID',
+        'SUSPICIOUS_NOTIFICATIONS_TOPIC_ID',
+        'MULENPAY_SHOP_ID',
+        'WATA_LINK_TTL_MINUTES',
+        'FREEKASSA_SHOP_ID',
+        'FREEKASSA_PAYMENT_SYSTEM_ID',
+        'KASSA_AI_SHOP_ID',
+        'SEVERPAY_MID',
+        'APPLE_IAP_APP_APPLE_ID',
+        'ETOPLATEZHI_PROJECT_ID',
+        'LOG_ROTATION_TOPIC_ID',
+        'BACKUP_SEND_TOPIC_ID',
+        mode='before',
+    )
+    @classmethod
+    def blank_optional_int_env_as_none(cls, value):
+        """Пустая строка в ``.env`` для опционального числового id (topic/shop/id) —
+        типичная правка при отключении настройки («стёр значение, но не строку
+        целиком»). Pydantic сам её в ``None`` не приводит и валит весь
+        ``Settings()`` при старте — из-за одного забытого пустого топика
+        переставал подниматься весь бот, а не только не отправлялся отчёт.
+        """
+        if isinstance(value, str) and not value.strip():
+            return None
+        return value
+
     def get_database_url(self) -> str:
         if self.DATABASE_URL and self.DATABASE_URL.strip():
             return self.DATABASE_URL
