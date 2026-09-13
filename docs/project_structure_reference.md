@@ -2862,6 +2862,9 @@
 - `scripts/assign_tariff_to_migrated_subscriptions.py` — Python-модуль
   Классы: `AssignReport` (1 методов)
   Функции: `main`
+- `scripts/audit_limited_companion_devices.py` — Python-модуль
+  Классы: `Divergence` (3 методов)
+  Функции: `main`
 - `scripts/backfill_remnawave_ids.py` — Python-модуль
   Классы: нет
   Функции: `main`
@@ -2915,6 +2918,7 @@
 - `tests/integration/`
 - `tests/live/`
 - `tests/middlewares/`
+- `tests/scripts/`
 - `tests/services/`
 - `tests/test_config_blank_optional_int_env.py` — Python-модуль
   Классы: нет
@@ -3876,6 +3880,12 @@
 - `tests/middlewares/test_stale_callback_answer.py` — Python-модуль
   Классы: нет
   Функции: `test_phrase_matcher_covers_both_telegram_wordings`, `test_stale_answer_becomes_warning_and_returns_true`, `test_other_errors_on_answer_still_raise`, `test_stale_phrases_on_other_methods_are_not_swallowed` — Middleware узкий: только ответ на нажатие. Редактирование сообщения — не его дело., `test_successful_request_passes_through`, `test_bot_factory_installs_the_middleware_for_every_bot` — Все боты (основной, из кабинета, из фоновых задач) создаются фабрикой — защита общая.
+
+### tests/scripts
+
+- `tests/scripts/test_audit_limited_companion_devices.py` — Python-модуль
+  Классы: нет
+  Функции: `test_blames_a_full_companion_when_the_device_is_only_on_main`, `test_blames_a_full_main_when_the_device_is_only_on_the_companion`, `test_reports_drifted_limits_when_neither_side_is_full`, `test_admits_when_nothing_explains_the_gap` — Лимиты одинаковые и обе стороны свободны — панель отказать не могла., `test_does_not_blame_a_limit_the_panel_never_reported` — hwidDeviceLimit=None — безлимит: обвинять его в отказе нельзя.
 
 ### tests/services
 
