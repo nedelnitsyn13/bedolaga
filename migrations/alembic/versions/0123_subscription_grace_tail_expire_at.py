@@ -1,7 +1,7 @@
 """хвост грейса: дата, оставленная грейс-доступом в панели
 
-Revision ID: 0120
-Revises: 0119
+Revision ID: 0123
+Revises: 0122
 Create Date: 2026-09-14
 
 После окончания grace-доступа в панели остаётся дата конца грейса: прошедшую
@@ -18,8 +18,8 @@ import sqlalchemy as sa
 from alembic import op
 
 
-revision: str = '0120'
-down_revision: Union[str, None] = '0119'
+revision: str = '0123'
+down_revision: Union[str, None] = '0122'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

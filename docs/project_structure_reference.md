@@ -2859,7 +2859,7 @@
 - `migrations/alembic/versions/0122_tariff_panel_tag_and_trial_days.py` — Python-модуль
   Классы: нет
   Функции: `upgrade`, `downgrade`
-- `migrations/alembic/versions/0120_subscription_grace_tail_expire_at.py` — Python-модуль
+- `migrations/alembic/versions/0123_subscription_grace_tail_expire_at.py` — Python-модуль
   Классы: нет
   Функции: `upgrade`, `downgrade`
 
