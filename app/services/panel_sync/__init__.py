@@ -9,7 +9,7 @@
 запрещены, сторож — ``tests/services/panel_sync/test_no_bypass.py``.
 """
 
-from app.services.panel_sync.expiry import panel_expire_at, stale_panel_expire_at
+from app.services.panel_sync.expiry import panel_date_is_closing, panel_expire_at, stale_panel_expire_at
 from app.services.panel_sync.identity import (
     PanelIdentity,
     link_subscription_panel_identity,
@@ -61,6 +61,7 @@ __all__ = [
     'is_subscription_live',
     'link_subscription_panel_identity',
     'normalize_panel_tag',
+    'panel_date_is_closing',
     'panel_expire_at',
     'panel_id_is_free_for',
     'panel_status_for_new_subscription',
