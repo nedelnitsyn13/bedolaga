@@ -25,12 +25,15 @@ from sqlalchemy.orm import selectinload
 from app.config import settings
 from app.database.database import AsyncSessionLocal
 from app.database.models import Subscription, SubscriptionStatus, Tariff
+from app.localization.texts import get_texts
 from app.services.limited_squad_service import (
     deactivate_orphaned_limited_squad,
     is_limited_traffic_enabled,
     process_limited_traffic,
 )
+from app.services.notification_settings_service import NotificationSettingsService
 from app.services.remnawave_service import RemnaWaveService
+from app.utils.notification_prefs import is_traffic_warning_enabled
 
 
 logger = structlog.get_logger(__name__)
@@ -89,8 +92,9 @@ class LimitedSquadMonitoringService:
     обработку остальных.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, bot=None) -> None:
         self._task: asyncio.Task | None = None
+        self.bot = bot
 
     async def start_monitoring(self) -> None:
         interval_seconds = max(60, settings.LIMITED_SQUAD_CHECK_INTERVAL_MINUTES * 60)
@@ -120,9 +124,12 @@ class LimitedSquadMonitoringService:
                     user = subscription.user
                     if not is_limited_traffic_enabled(tariff) or not user:
                         continue
+                    was_active = bool(subscription.limited_squad_active)
                     try:
                         await process_limited_traffic(api, db, subscription, tariff, user)
                         processed += 1
+                        if was_active and not subscription.limited_squad_active:
+                            await self._notify_exhausted(user, subscription, tariff)
                     except Exception as error:
                         errors += 1
                         logger.warning(
@@ -153,6 +160,46 @@ class LimitedSquadMonitoringService:
                     errors=errors,
                     total=len(subscriptions) + len(orphaned),
                 )
+
+    async def _notify_exhausted(self, user, subscription: Subscription, tariff: Tariff | None) -> None:
+        """Личное уведомление пользователю: LIMITED squad этой подписки только
+        что отключён за перелимит.
+
+        Без этого сигнала единственное, что видит пользователь — сервер молча
+        пропал из клиента; никакого объяснения почему и что делать. Best-effort:
+        сбой отправки не должен ронять цикл мониторинга остальных подписок.
+        """
+        if not self.bot or not getattr(user, 'telegram_id', None):
+            return
+        if not NotificationSettingsService.are_notifications_globally_enabled():
+            return
+        if not is_traffic_warning_enabled(user):
+            return
+
+        try:
+            texts = get_texts(getattr(user, 'language', 'ru') or 'ru')
+            tariff_name = getattr(tariff, 'name', None) or 'лимитный сервер'
+            message = texts.t(
+                'LIMITED_SQUAD_TRAFFIC_EXHAUSTED',
+                '⛔ <b>Лимит трафика исчерпан</b>\n\n'
+                'На тарифе «{tariff_name}» закончился трафик лимитного сервера — доступ к нему отключён.\n'
+                'Докупите трафик, чтобы восстановить доступ.',
+            ).format(tariff_name=tariff_name)
+
+            from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+
+            keyboard = InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [InlineKeyboardButton(text='📈 Докупить трафик', callback_data=f'blt:{subscription.id}')]
+                ]
+            )
+            await self.bot.send_message(user.telegram_id, message, reply_markup=keyboard, parse_mode='HTML')
+        except Exception as error:
+            logger.debug(
+                '⚠️ Не удалось отправить уведомление об исчерпании LIMITED squad',
+                subscription_id=subscription.id,
+                error=error,
+            )
 
 
 limited_squad_monitoring_service = LimitedSquadMonitoringService()

@@ -3,7 +3,12 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
+from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
+import pytest
+
+from app.config import settings
 from app.database.models import (
     LimitedCompanionTrafficPurchase,
     PromoGroup,
@@ -14,6 +19,7 @@ from app.database.models import (
     tariff_promo_groups,
 )
 from app.services.limited_squad_monitoring_service import (
+    LimitedSquadMonitoringService,
     _load_subscriptions_with_limited_traffic,
     _load_subscriptions_with_orphaned_limited_squad,
 )
@@ -159,3 +165,167 @@ async def test_orphaned_query_ignores_subscriptions_with_squad_already_off(monke
         subscriptions = await _load_subscriptions_with_orphaned_limited_squad(db)
 
         assert subscriptions == []
+
+
+# ── _notify_exhausted: персональное уведомление при отключении squad'а ──
+
+
+def _notify_user(**overrides) -> SimpleNamespace:
+    base = dict(telegram_id=555, language='ru', notification_settings=None)
+    base.update(overrides)
+    return SimpleNamespace(**base)
+
+
+@pytest.mark.asyncio
+async def test_notify_exhausted_sends_message_with_topup_button(monkeypatch):
+    monkeypatch.setattr(settings, 'ENABLE_NOTIFICATIONS', True)
+    service = LimitedSquadMonitoringService(bot=AsyncMock())
+    user = _notify_user()
+    subscription = SimpleNamespace(id=42)
+    tariff = SimpleNamespace(name='LIMITED тариф')
+
+    await service._notify_exhausted(user, subscription, tariff)
+
+    service.bot.send_message.assert_awaited_once()
+    call = service.bot.send_message.await_args
+    assert call.args[0] == 555
+    assert 'LIMITED тариф' in call.args[1]
+    assert call.kwargs['reply_markup'].inline_keyboard[0][0].callback_data == 'blt:42'
+
+
+@pytest.mark.asyncio
+async def test_notify_exhausted_noop_without_bot():
+    service = LimitedSquadMonitoringService(bot=None)
+    user = _notify_user()
+
+    await service._notify_exhausted(user, SimpleNamespace(id=1), SimpleNamespace(name='T'))
+    # Не должно упасть без бота — тест проходит, если исключения не было.
+
+
+@pytest.mark.asyncio
+async def test_notify_exhausted_noop_without_telegram_id(monkeypatch):
+    monkeypatch.setattr(settings, 'ENABLE_NOTIFICATIONS', True)
+    service = LimitedSquadMonitoringService(bot=AsyncMock())
+    user = _notify_user(telegram_id=None)
+
+    await service._notify_exhausted(user, SimpleNamespace(id=1), SimpleNamespace(name='T'))
+
+    service.bot.send_message.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_notify_exhausted_respects_global_notifications_toggle(monkeypatch):
+    monkeypatch.setattr(settings, 'ENABLE_NOTIFICATIONS', False)
+    service = LimitedSquadMonitoringService(bot=AsyncMock())
+    user = _notify_user()
+
+    await service._notify_exhausted(user, SimpleNamespace(id=1), SimpleNamespace(name='T'))
+
+    service.bot.send_message.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_notify_exhausted_respects_user_traffic_warning_pref(monkeypatch):
+    monkeypatch.setattr(settings, 'ENABLE_NOTIFICATIONS', True)
+    service = LimitedSquadMonitoringService(bot=AsyncMock())
+    user = _notify_user(notification_settings={'traffic_warning_enabled': False})
+
+    await service._notify_exhausted(user, SimpleNamespace(id=1), SimpleNamespace(name='T'))
+
+    service.bot.send_message.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_notify_exhausted_swallows_send_errors(monkeypatch):
+    monkeypatch.setattr(settings, 'ENABLE_NOTIFICATIONS', True)
+    bot = AsyncMock()
+    bot.send_message.side_effect = RuntimeError('telegram down')
+    service = LimitedSquadMonitoringService(bot=bot)
+    user = _notify_user()
+
+    await service._notify_exhausted(user, SimpleNamespace(id=1), SimpleNamespace(name='T'))  # must not raise
+
+
+# ── _run_cycle: реально дёргает _notify_exhausted на переходе True→False ──
+
+
+class _FakeApi:
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *exc):
+        return False
+
+
+class _FakeRemnaWaveService:
+    is_configured = True
+
+    def get_api_client(self):
+        return _FakeApi()
+
+
+async def test_run_cycle_notifies_on_transition_to_inactive(monkeypatch):
+    async with memory_session(monkeypatch, TABLES) as db:
+        user = await _create_user(db, telegram_id=9307)
+        tariff = await _create_tariff(db, name='LIMITED', limited_enabled=True)
+        subscription = await _create_subscription(db, user, tariff, short_id='lm-9', limited_squad_active=True)
+
+        import app.services.limited_squad_monitoring_service as mod
+
+        # AsyncSessionLocal обычно контекстный менеджер (async with ... as db) —
+        # memory_session уже отдаёт открытую сессию, оборачиваем в no-op CM.
+        class _SessionCtx:
+            async def __aenter__(self_inner):
+                return db
+
+            async def __aexit__(self_inner, *exc):
+                return False
+
+        monkeypatch.setattr(mod, 'AsyncSessionLocal', lambda: _SessionCtx())
+        monkeypatch.setattr(mod, 'RemnaWaveService', _FakeRemnaWaveService)
+
+        async def _fake_process(api, db_arg, sub, trf, usr):
+            sub.limited_squad_active = False
+
+        monkeypatch.setattr(mod, 'process_limited_traffic', _fake_process)
+
+        service = mod.LimitedSquadMonitoringService(bot=AsyncMock())
+        notify_mock = AsyncMock()
+        service._notify_exhausted = notify_mock
+
+        await service._run_cycle()
+
+        notify_mock.assert_awaited_once()
+        assert notify_mock.await_args.args[1].id == subscription.id
+
+
+async def test_run_cycle_does_not_notify_when_still_active(monkeypatch):
+    async with memory_session(monkeypatch, TABLES) as db:
+        user = await _create_user(db, telegram_id=9308)
+        tariff = await _create_tariff(db, name='LIMITED', limited_enabled=True)
+        await _create_subscription(db, user, tariff, short_id='lm-10', limited_squad_active=True)
+
+        import app.services.limited_squad_monitoring_service as mod
+
+        class _SessionCtx:
+            async def __aenter__(self_inner):
+                return db
+
+            async def __aexit__(self_inner, *exc):
+                return False
+
+        monkeypatch.setattr(mod, 'AsyncSessionLocal', lambda: _SessionCtx())
+        monkeypatch.setattr(mod, 'RemnaWaveService', _FakeRemnaWaveService)
+
+        async def _fake_process_noop(api, db_arg, sub, trf, usr):
+            pass  # состояние не меняется — squad остаётся активным
+
+        monkeypatch.setattr(mod, 'process_limited_traffic', _fake_process_noop)
+
+        service = mod.LimitedSquadMonitoringService(bot=AsyncMock())
+        notify_mock = AsyncMock()
+        service._notify_exhausted = notify_mock
+
+        await service._run_cycle()
+
+        notify_mock.assert_not_awaited()
