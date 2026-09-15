@@ -1031,6 +1031,8 @@
   "INVALID_AMOUNT": "❌ Невірна сума",
   "LIMITED_COMPANION_ALREADY_UNLIMITED": "♾️ Лімітний сервер вже безлімітний — докупка не потрібна",
   "LIMITED_COMPANION_UNAVAILABLE": "⚠️ Лімітний сервер недоступний для цієї підписки",
+  "LIMITED_SQUAD_TRAFFIC_EXHAUSTED": "⛔ <b>Ліміт трафіку вичерпано</b>\n\nНа тарифі «{tariff_name}» закінчився трафік лімітного сервера — доступ до нього вимкнено.",
+  "LIMITED_SQUAD_TRAFFIC_EXHAUSTED_TOPUP_HINT": "Докупіть трафік, щоб відновити доступ.",
   "LANGUAGE_PROMPT": "🌐 Оберіть мову інтерфейсу:",
   "LANGUAGE_SELECTED": "🌐 Мову інтерфейсу встановлено: <b>Українська</b>",
   "LANGUAGE_SELECTION_DISABLED": "⚙️ Вибір мови тимчасово недоступний. Використовуємо мову за замовчуванням.",

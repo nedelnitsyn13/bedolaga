@@ -1217,6 +1217,8 @@
   "INVALID_AMOUNT": "❌ Неверная сумма",
   "LIMITED_COMPANION_ALREADY_UNLIMITED": "♾️ Лимитный сервер уже безлимитный — докупка не требуется",
   "LIMITED_COMPANION_UNAVAILABLE": "⚠️ Лимитный сервер недоступен для этой подписки",
+  "LIMITED_SQUAD_TRAFFIC_EXHAUSTED": "⛔ <b>Лимит трафика исчерпан</b>\n\nНа тарифе «{tariff_name}» закончился трафик лимитного сервера — доступ к нему отключён.",
+  "LIMITED_SQUAD_TRAFFIC_EXHAUSTED_TOPUP_HINT": "Докупите трафик, чтобы восстановить доступ.",
   "LANGUAGE_PROMPT": "🌐 Выберите язык интерфейса:",
   "LANGUAGE_SELECTED": "🌐 Язык интерфейса установлен: <b>Русский</b>",
   "LANGUAGE_SELECTION_DISABLED": "⚙️ Выбор языка временно недоступен. Используем язык по умолчанию.",

@@ -1029,6 +1029,8 @@
   "INVALID_AMOUNT": "❌金额无效",
   "LIMITED_COMPANION_ALREADY_UNLIMITED": "♾️限速服务器已是无限流量，无需加油包",
   "LIMITED_COMPANION_UNAVAILABLE": "⚠️此订阅不支持限速服务器",
+  "LIMITED_SQUAD_TRAFFIC_EXHAUSTED": "⛔ <b>流量限额已用完</b>\n\n套餐「{tariff_name}」的限速服务器流量已用完 — 访问已被禁用。",
+  "LIMITED_SQUAD_TRAFFIC_EXHAUSTED_TOPUP_HINT": "购买更多流量以恢复访问。",
   "LANGUAGE_PROMPT": "🌐请选择界面语言：",
   "LANGUAGE_SELECTED": "🌐界面语言已设置为：<b>中文（简体）</b>",
   "LANGUAGE_SELECTION_DISABLED": "⚙️语言选择暂时不可用。将使用默认语言。",

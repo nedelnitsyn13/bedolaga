@@ -16,6 +16,7 @@ monitoring_service — чтобы не увеличивать нагрузку (
 from __future__ import annotations
 
 import asyncio
+import html
 
 import structlog
 from sqlalchemy import select
@@ -178,21 +179,35 @@ class LimitedSquadMonitoringService:
 
         try:
             texts = get_texts(getattr(user, 'language', 'ru') or 'ru')
-            tariff_name = getattr(tariff, 'name', None) or 'лимитный сервер'
+            tariff_name = html.escape(getattr(tariff, 'name', None) or 'лимитный сервер')
             message = texts.t(
                 'LIMITED_SQUAD_TRAFFIC_EXHAUSTED',
                 '⛔ <b>Лимит трафика исчерпан</b>\n\n'
-                'На тарифе «{tariff_name}» закончился трафик лимитного сервера — доступ к нему отключён.\n'
-                'Докупите трафик, чтобы восстановить доступ.',
+                'На тарифе «{tariff_name}» закончился трафик лимитного сервера — доступ к нему отключён.',
             ).format(tariff_name=tariff_name)
 
-            from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+            keyboard = None
+            # TRAFFIC_TOPUP_ENABLED=false — handle_add_traffic_limited отклонит
+            # этот callback, значит и обещать восстановление докупкой, и давать
+            # на неё кнопку здесь нельзя (см. traffic.py:780).
+            if settings.is_traffic_topup_enabled():
+                message += '\n' + texts.t(
+                    'LIMITED_SQUAD_TRAFFIC_EXHAUSTED_TOPUP_HINT',
+                    'Докупите трафик, чтобы восстановить доступ.',
+                )
 
-            keyboard = InlineKeyboardMarkup(
-                inline_keyboard=[
-                    [InlineKeyboardButton(text='📈 Докупить трафик', callback_data=f'blt:{subscription.id}')]
-                ]
-            )
+                from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+
+                keyboard = InlineKeyboardMarkup(
+                    inline_keyboard=[
+                        [
+                            InlineKeyboardButton(
+                                text=texts.t('BUY_TRAFFIC_LIMITED_BUTTON', '📈 Докупить трафик (лимитный сервер)'),
+                                callback_data=f'blt:{subscription.id}',
+                            )
+                        ]
+                    ]
+                )
             await self.bot.send_message(user.telegram_id, message, reply_markup=keyboard, parse_mode='HTML')
         except Exception as error:
             logger.debug(

@@ -194,6 +194,39 @@ async def test_notify_exhausted_sends_message_with_topup_button(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_notify_exhausted_escapes_html_in_tariff_name(monkeypatch):
+    """Имя тарифа — админский ввод; попадает в сообщение с parse_mode='HTML'.
+    Без экранирования '<b onmouseover=...>' сломал бы разметку у Telegram."""
+    monkeypatch.setattr(settings, 'ENABLE_NOTIFICATIONS', True)
+    service = LimitedSquadMonitoringService(bot=AsyncMock())
+    user = _notify_user()
+    tariff = SimpleNamespace(name='<script>alert(1)</script> & Co')
+
+    await service._notify_exhausted(user, SimpleNamespace(id=1), tariff)
+
+    message = service.bot.send_message.await_args.args[1]
+    assert '<script>' not in message
+    assert '&lt;script&gt;' in message
+    assert '&amp; Co' in message
+
+
+@pytest.mark.asyncio
+async def test_notify_exhausted_omits_topup_cta_when_topup_disabled(monkeypatch):
+    """TRAFFIC_TOPUP_ENABLED=false — handle_add_traffic_limited отклонит
+    callback кнопки, значит ни обещания, ни самой кнопки быть не должно."""
+    monkeypatch.setattr(settings, 'ENABLE_NOTIFICATIONS', True)
+    monkeypatch.setattr(settings, 'TRAFFIC_TOPUP_ENABLED', False)
+    service = LimitedSquadMonitoringService(bot=AsyncMock())
+    user = _notify_user()
+
+    await service._notify_exhausted(user, SimpleNamespace(id=1), SimpleNamespace(name='T'))
+
+    call = service.bot.send_message.await_args
+    assert 'Докупите' not in call.args[1]
+    assert call.kwargs['reply_markup'] is None
+
+
+@pytest.mark.asyncio
 async def test_notify_exhausted_noop_without_bot():
     service = LimitedSquadMonitoringService(bot=None)
     user = _notify_user()
