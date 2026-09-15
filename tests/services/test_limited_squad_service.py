@@ -188,6 +188,88 @@ async def test_multiple_purchases_have_independent_expires_at(monkeypatch) -> No
         assert purchased == 70
 
 
+async def test_remove_purchase_takes_from_oldest_first(monkeypatch) -> None:
+    async with memory_session(monkeypatch, TABLES) as db:
+        user = await _create_user(db, telegram_id=8105)
+        tariff = await _create_tariff(db)
+        subscription = await _create_subscription(db, user, tariff, short_id='ls-5')
+
+        from app.services.limited_squad_service import (
+            add_limited_traffic_purchase,
+            remove_limited_traffic_purchase,
+        )
+
+        await add_limited_traffic_purchase(db, subscription, 20)
+        await add_limited_traffic_purchase(db, subscription, 50)
+
+        removed = await remove_limited_traffic_purchase(db, subscription, 30)
+
+        assert removed == 30
+        purchased = await get_active_limited_traffic_purchases_gb(db, subscription)
+        # 20 (старая, съедена целиком) + 50 (новая, откушено 10) = 40 осталось
+        assert purchased == 40
+
+
+async def test_remove_purchase_caps_at_available_amount(monkeypatch) -> None:
+    async with memory_session(monkeypatch, TABLES) as db:
+        user = await _create_user(db, telegram_id=8106)
+        tariff = await _create_tariff(db)
+        subscription = await _create_subscription(db, user, tariff, short_id='ls-6')
+
+        from app.services.limited_squad_service import (
+            add_limited_traffic_purchase,
+            remove_limited_traffic_purchase,
+        )
+
+        await add_limited_traffic_purchase(db, subscription, 15)
+
+        removed = await remove_limited_traffic_purchase(db, subscription, 100)
+
+        assert removed == 15
+        purchased = await get_active_limited_traffic_purchases_gb(db, subscription)
+        assert purchased == 0
+
+
+async def test_remove_purchase_ignores_expired_rows(monkeypatch) -> None:
+    async with memory_session(monkeypatch, TABLES) as db:
+        user = await _create_user(db, telegram_id=8107)
+        tariff = await _create_tariff(db)
+        subscription = await _create_subscription(db, user, tariff, short_id='ls-7')
+
+        from app.services.limited_squad_service import remove_limited_traffic_purchase
+
+        now = datetime.now(UTC)
+        db.add(
+            LimitedCompanionTrafficPurchase(
+                subscription_id=subscription.id, traffic_gb=999, expires_at=now - timedelta(seconds=1)
+            )
+        )
+        await db.commit()
+
+        removed = await remove_limited_traffic_purchase(db, subscription, 10)
+
+        assert removed == 0
+
+
+async def test_remove_purchase_noop_for_non_positive_amount(monkeypatch) -> None:
+    async with memory_session(monkeypatch, TABLES) as db:
+        user = await _create_user(db, telegram_id=8108)
+        tariff = await _create_tariff(db)
+        subscription = await _create_subscription(db, user, tariff, short_id='ls-8')
+
+        from app.services.limited_squad_service import (
+            add_limited_traffic_purchase,
+            remove_limited_traffic_purchase,
+        )
+
+        await add_limited_traffic_purchase(db, subscription, 20)
+
+        assert await remove_limited_traffic_purchase(db, subscription, 0) == 0
+        assert await remove_limited_traffic_purchase(db, subscription, -5) == 0
+        purchased = await get_active_limited_traffic_purchases_gb(db, subscription)
+        assert purchased == 20
+
+
 async def test_expired_purchase_lowers_effective_limit(monkeypatch) -> None:
     async with memory_session(monkeypatch, TABLES) as db:
         user = await _create_user(db, telegram_id=8103)
