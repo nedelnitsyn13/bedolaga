@@ -118,6 +118,52 @@ async def add_limited_traffic_purchase(db: AsyncSession, subscription: Subscript
     await db.commit()
 
 
+async def remove_limited_traffic_purchase(db: AsyncSession, subscription: Subscription, gb: int) -> int:
+    """Списывает докупленный LIMITED-пул, не трогая базу тарифа.
+
+    Симметрична ``add_limited_traffic_purchase`` — гасит активные докупки
+    (старейшие первыми), а не базовый лимит тарифа: у него нет отдельной
+    записи-докупки, которую можно было бы уменьшить. Возвращает реально
+    списанное количество ГБ — может быть меньше запрошенного, если докупок
+    меньше, чем просят снять.
+    """
+    if gb <= 0:
+        return 0
+
+    now = datetime.now(UTC)
+    rows = (
+        (
+            await db.execute(
+                select(LimitedCompanionTrafficPurchase)
+                .where(
+                    LimitedCompanionTrafficPurchase.subscription_id == subscription.id,
+                    LimitedCompanionTrafficPurchase.expires_at > now,
+                )
+                .order_by(LimitedCompanionTrafficPurchase.expires_at.asc())
+            )
+        )
+        .scalars()
+        .all()
+    )
+
+    remaining = gb
+    removed = 0
+    for purchase in rows:
+        if remaining <= 0:
+            break
+        if purchase.traffic_gb <= remaining:
+            remaining -= purchase.traffic_gb
+            removed += purchase.traffic_gb
+            await db.delete(purchase)
+        else:
+            purchase.traffic_gb -= remaining
+            removed += remaining
+            remaining = 0
+
+    await db.commit()
+    return removed
+
+
 async def get_effective_limited_traffic_limit_gb(
     db: AsyncSession, subscription: Subscription, tariff: Tariff | None
 ) -> int:

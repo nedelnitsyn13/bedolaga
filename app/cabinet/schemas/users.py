@@ -81,6 +81,14 @@ class UserSubscriptionInfo(BaseModel):
     limited_companion_purchased_traffic_gb: int = 0
     limited_companion_panel_id: int | None = None
 
+    # LIMITED squad (новая архитектура, параллельно limited-companion выше) —
+    # пул трафика на самом основном аккаунте, без отдельного панельного юзера.
+    limited_traffic_enabled: bool = False
+    limited_traffic_limit_gb: int = 0
+    limited_traffic_used_gb: float = 0.0
+    limited_traffic_purchased_gb: int = 0
+    limited_squad_active: bool = False
+
     # Platega SBP auto-renewal (admin view only — populated by the async
     # builder; the sync builder leaves both at their None default).
     sbp_recurring_status: str | None = None
