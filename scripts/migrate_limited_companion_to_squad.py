@@ -231,6 +231,16 @@ def _write_audit(report: MigrationReport, *, committed: bool) -> str | None:
     return str(path)
 
 
+def _exit_code(report: MigrationReport) -> int:
+    """report.ok покрывает оба случая отказа: провалилась валидация
+    (report.reason задан) или провалился сам --apply (например, не удалось
+    отключить companion — report.companion_disable_error задан, report.reason
+    нет). Раньше здесь было `report.ok or report.reason is None`, что давало
+    код 0 и для второго случая — вызывающий скрипт/оператор не узнал бы, что
+    legacy companion остался активным."""
+    return 0 if report.ok else 2
+
+
 async def _run(subscription_id: int, *, apply: bool) -> int:
     await bot_configuration_service.initialize(sync_web_api_token=False)
 
@@ -247,7 +257,7 @@ async def _run(subscription_id: int, *, apply: bool) -> int:
     if audit_path:
         print(f'  полный отчёт: {audit_path}')
 
-    return 0 if report.ok or report.reason is None else 2
+    return _exit_code(report)
 
 
 def main() -> int:

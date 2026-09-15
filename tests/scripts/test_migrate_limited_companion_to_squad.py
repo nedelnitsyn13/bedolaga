@@ -188,3 +188,26 @@ async def test_apply_reports_failure_when_disable_raises(monkeypatch):
         assert report.ok is False
         assert report.companion_disabled is False
         assert 'panel unreachable' in report.companion_disable_error
+
+
+# _exit_code — Codex P2: провал --apply (companion не отключился) раньше
+# давал код 0, потому что report.reason пуст в этом случае (reason это только
+# про провал validate()); оператор/обвязка не узнавали, что легаси companion
+# остался активным.
+
+
+def test_exit_code_is_zero_on_success():
+    report = m.MigrationReport(dry_run=False, subscription_id=1, ok=True)
+    assert m._exit_code(report) == 0
+
+
+def test_exit_code_is_nonzero_on_validation_failure():
+    report = m.MigrationReport(dry_run=True, subscription_id=1, ok=False, reason='нет legacy companion')
+    assert m._exit_code(report) != 0
+
+
+def test_exit_code_is_nonzero_when_apply_fails_without_a_validation_reason():
+    report = m.MigrationReport(
+        dry_run=False, subscription_id=1, ok=False, reason=None, companion_disable_error='panel unreachable'
+    )
+    assert m._exit_code(report) != 0

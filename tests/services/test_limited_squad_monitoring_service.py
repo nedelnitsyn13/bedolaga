@@ -13,7 +13,10 @@ from app.database.models import (
     User,
     tariff_promo_groups,
 )
-from app.services.limited_squad_monitoring_service import _load_subscriptions_with_limited_traffic
+from app.services.limited_squad_monitoring_service import (
+    _load_subscriptions_with_limited_traffic,
+    _load_subscriptions_with_orphaned_limited_squad,
+)
 from tests.fixtures.sqlite_memory import memory_session
 
 
@@ -49,7 +52,13 @@ async def _create_tariff(db, *, name: str, limited_enabled: bool) -> Tariff:
 
 
 async def _create_subscription(
-    db, user: User, tariff: Tariff, *, short_id: str, status: str = SubscriptionStatus.ACTIVE.value
+    db,
+    user: User,
+    tariff: Tariff,
+    *,
+    short_id: str,
+    status: str = SubscriptionStatus.ACTIVE.value,
+    limited_squad_active: bool = True,
 ) -> Subscription:
     subscription = Subscription(
         user_id=user.id,
@@ -57,6 +66,7 @@ async def _create_subscription(
         status=status,
         end_date=datetime.now(UTC) + timedelta(days=30),
         remnawave_short_id=short_id,
+        limited_squad_active=limited_squad_active,
     )
     db.add(subscription)
     await db.commit()
@@ -108,3 +118,44 @@ async def test_trial_and_limited_status_subscriptions_are_included(monkeypatch) 
         subscriptions = await _load_subscriptions_with_limited_traffic(db)
 
         assert {s.id for s in subscriptions} == {trial_sub.id, limited_sub.id}
+
+
+# ── orphaned: тариф выключили, а LIMITED squad на подписке ещё активен ──
+
+
+async def test_orphaned_query_finds_subscriptions_left_active_after_tariff_disabled(monkeypatch) -> None:
+    async with memory_session(monkeypatch, TABLES) as db:
+        user = await _create_user(db, telegram_id=9304)
+        tariff = await _create_tariff(db, name='Был LIMITED', limited_enabled=False)
+
+        orphaned = await _create_subscription(db, user, tariff, short_id='lm-6', limited_squad_active=True)
+
+        subscriptions = await _load_subscriptions_with_orphaned_limited_squad(db)
+
+        assert [s.id for s in subscriptions] == [orphaned.id]
+
+
+async def test_orphaned_query_ignores_still_enabled_tariffs(monkeypatch) -> None:
+    """limited_squad_active=True на включённом тарифе — штатный случай, его
+    обрабатывает _load_subscriptions_with_limited_traffic, а не orphaned-запрос."""
+    async with memory_session(monkeypatch, TABLES) as db:
+        user = await _create_user(db, telegram_id=9305)
+        tariff = await _create_tariff(db, name='LIMITED', limited_enabled=True)
+
+        await _create_subscription(db, user, tariff, short_id='lm-7', limited_squad_active=True)
+
+        subscriptions = await _load_subscriptions_with_orphaned_limited_squad(db)
+
+        assert subscriptions == []
+
+
+async def test_orphaned_query_ignores_subscriptions_with_squad_already_off(monkeypatch) -> None:
+    async with memory_session(monkeypatch, TABLES) as db:
+        user = await _create_user(db, telegram_id=9306)
+        tariff = await _create_tariff(db, name='Был LIMITED', limited_enabled=False)
+
+        await _create_subscription(db, user, tariff, short_id='lm-8', limited_squad_active=False)
+
+        subscriptions = await _load_subscriptions_with_orphaned_limited_squad(db)
+
+        assert subscriptions == []

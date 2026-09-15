@@ -152,11 +152,16 @@ async def resolve_limited_node_uuids(api, squad_uuids: list[str]) -> list[str]:
 
 async def fetch_limited_used_bytes(
     api, panel_user_id: int, node_uuids: list[str], start_date: str, end_date: str
-) -> int:
+) -> int | None:
     """Потребление конкретного юзера по конкретным LIMITED-нодам за период.
 
     ``start_date``/``end_date`` строго ``YYYY-MM-DD`` — так у панели, см.
     докстринг ``RemnaWaveAPI.get_bandwidth_stats_nodes_usage``.
+
+    Возвращает ``None``, если панель не ответила — это НЕ то же самое, что
+    «трафика не было»: вызывающий не должен затирать прошлое сохранённое
+    значение нулём и тем самым случайно реактивировать squad, отключённый за
+    превышение лимита, из-за временного сбоя панели (fail open).
     """
     if not node_uuids:
         return 0
@@ -168,7 +173,7 @@ async def fetch_limited_used_bytes(
             panel_user_id=panel_user_id,
             error=error,
         )
-        return 0
+        return None
 
     total_bytes = 0
     for node_entry in usage.get('nodes') or []:
@@ -184,7 +189,9 @@ async def refresh_limited_traffic_usage(
     """Пересчитывает и сохраняет ``subscription.limited_traffic_used_gb``.
 
     Возвращает новое значение в ГБ, либо ``None``, если механика выключена на
-    тарифе или у подписки нет панельного аккаунта/нод LIMITED-пула.
+    тарифе, у подписки нет панельного аккаунта/нод LIMITED-пула, или панель не
+    ответила на запрос usage (тогда прошлое сохранённое значение остаётся как
+    было — см. ``fetch_limited_used_bytes``).
     """
     squad_uuids = get_limited_squad_uuids(tariff)
     if not squad_uuids:
@@ -207,6 +214,8 @@ async def refresh_limited_traffic_usage(
         start_date.strftime('%Y-%m-%d'),
         now.strftime('%Y-%m-%d'),
     )
+    if used_bytes is None:
+        return None
     used_gb = used_bytes / GB_IN_BYTES
 
     subscription.limited_traffic_used_gb = used_gb
@@ -225,8 +234,18 @@ async def sync_limited_squad_state(
     поверх них в самом PATCH-запросе к панели. ``connected_squads`` остаётся
     источником истины для обычной MAIN-синхронизации (``panel_sync``).
 
-    Ничего не PATCH'ит, если состояние не изменилось (экономит вызовы к
-    панели на каждом цикле enforcement-джобы).
+    Всегда PATCH'ит актуальный целевой список сквадов — не пропускает запрос
+    по тому, что ``subscription.limited_squad_active`` уже "совпадает" с
+    вычисленным состоянием. Два случая, из-за которых пропуск ломал фичу:
+    у новой/только что мигрированной подписки это поле по умолчанию ``True``
+    ещё до того, как панель хоть раз получила LIMITED squad в PATCH'е — то
+    есть "совпадение" было бы случайным и squad так и не добавился бы; а
+    любая последующая обычная синхронизация подписки (продление и т.п.)
+    шлёт панели ``connected_squads`` без LIMITED squad'ов и молча его снимает,
+    не трогая это поле — следующий цикл видел бы "без изменений" и не
+    восстановил бы доступ. Reconcile, а не delta: дороже по числу PATCH-
+    запросов на цикл enforcement-джобы, зато самовосстанавливается после
+    любого внешнего расхождения.
 
     Возвращает новое состояние ``limited_squad_active``, либо ``None``, если
     механика выключена, у подписки нет панельного аккаунта, или PATCH не
@@ -246,9 +265,8 @@ async def sync_limited_squad_state(
     # 0 = безлимит (условность, унаследованная от companion-версии — база
     # тарифа 0 означает «лимит не задан», а не «доступ закрыт»).
     should_be_active = effective_limit_gb <= 0 or used_gb < effective_limit_gb
-    if should_be_active == bool(subscription.limited_squad_active):
-        return should_be_active
 
+    previously_active = bool(subscription.limited_squad_active)
     main_squads = list(getattr(subscription, 'connected_squads', None) or [])
     target_squads = main_squads + squad_uuids if should_be_active else main_squads
 
@@ -276,13 +294,14 @@ async def sync_limited_squad_state(
     subscription.limited_squad_active = should_be_active
     await db.flush((subscription,))
     await db.commit()
-    logger.info(
-        '🔀 LIMITED squad переключён',
-        subscription_id=subscription.id,
-        active=should_be_active,
-        used_gb=used_gb,
-        limit_gb=effective_limit_gb,
-    )
+    if should_be_active != previously_active:
+        logger.info(
+            '🔀 LIMITED squad переключён',
+            subscription_id=subscription.id,
+            active=should_be_active,
+            used_gb=used_gb,
+            limit_gb=effective_limit_gb,
+        )
     return should_be_active
 
 
@@ -297,3 +316,66 @@ async def process_limited_traffic(
     """
     await refresh_limited_traffic_usage(api, db, subscription, tariff, user)
     await sync_limited_squad_state(api, db, subscription, tariff, user)
+
+
+async def deactivate_orphaned_limited_squad(
+    api, db: AsyncSession, subscription: Subscription, tariff: Tariff | None, user
+) -> bool | None:
+    """Снимает LIMITED squad(ы) тарифа с ОСНОВНОГО юзера подписки, чей тариф
+    больше не на новой архитектуре, но ``subscription.limited_squad_active``
+    всё ещё ``True``.
+
+    Нужна отдельно от ``sync_limited_squad_state``: та гейтится на
+    ``is_limited_traffic_enabled(tariff)`` и сразу возвращает ``None``, если
+    механика на тарифе выключена — то есть если админ выключил
+    ``limited_traffic_enabled`` у тарифа, чьи подписки уже получили LIMITED
+    squad, штатный enforcement-цикл (``_load_subscriptions_with_limited_traffic``,
+    фильтрующий именно по включённому тарифу) их больше не видит, и доступ
+    остаётся навсегда. Эта функция — обратный случай: вызывается ИМЕННО
+    когда механика на тарифе уже выключена, list на снятие берёт из
+    ``tariff.limited_squad_uuids`` напрямую (тариф мог сохранить список,
+    выключив только флаг).
+
+    Если тариф удалён вовсе (``tariff is None``) — снимать нечего, список
+    сквадов неизвестен; такая подписка остаётся необработанной (редкий край,
+    требует ручного вмешательства).
+    """
+    if tariff is None:
+        return None
+
+    squad_uuids = [str(squad_uuid) for squad_uuid in (getattr(tariff, 'limited_squad_uuids', None) or []) if squad_uuid]
+    if not squad_uuids:
+        return None
+
+    panel_user_id = resolve_main_panel_user_id(subscription, user)
+    if not panel_user_id:
+        return None
+
+    main_squads = list(getattr(subscription, 'connected_squads', None) or [])
+
+    try:
+        # Запись в панель только через panel_sync — см. sync_limited_squad_state.
+        from app.services.panel_sync import patch_panel_squads
+
+        await patch_panel_squads(
+            api,
+            user_id=panel_user_id,
+            squads=main_squads,
+            external_squad_uuid=getattr(tariff, 'external_squad_uuid', None),
+        )
+    except Exception as error:
+        logger.warning(
+            '⚠️ Не удалось снять LIMITED squad с подписки выключенного тарифа',
+            subscription_id=subscription.id,
+            error=error,
+        )
+        return None
+
+    subscription.limited_squad_active = False
+    await db.flush((subscription,))
+    await db.commit()
+    logger.info(
+        '🔻 LIMITED squad снят — тариф больше не на новой архитектуре',
+        subscription_id=subscription.id,
+    )
+    return False

@@ -25,7 +25,11 @@ from sqlalchemy.orm import selectinload
 from app.config import settings
 from app.database.database import AsyncSessionLocal
 from app.database.models import Subscription, SubscriptionStatus, Tariff
-from app.services.limited_squad_service import is_limited_traffic_enabled, process_limited_traffic
+from app.services.limited_squad_service import (
+    deactivate_orphaned_limited_squad,
+    is_limited_traffic_enabled,
+    process_limited_traffic,
+)
 from app.services.remnawave_service import RemnaWaveService
 
 
@@ -56,6 +60,27 @@ async def _load_subscriptions_with_limited_traffic(db: AsyncSession) -> list[Sub
     return list(result.unique().scalars().all())
 
 
+async def _load_subscriptions_with_orphaned_limited_squad(db: AsyncSession) -> list[Subscription]:
+    """Подписки с ещё активным LIMITED squad на тарифе, где механику уже
+    выключили (``Tariff.limited_traffic_enabled=False``).
+
+    Отдельный запрос — ``_load_subscriptions_with_limited_traffic`` фильтрует
+    именно по включённому тарифу и такие подписки не видит вовсе, а без этого
+    запроса им никто и никогда не снимет LIMITED squad с панели после того,
+    как админ выключил фичу на тарифе.
+    """
+    result = await db.execute(
+        select(Subscription)
+        .join(Tariff, Tariff.id == Subscription.tariff_id)
+        .options(selectinload(Subscription.user), selectinload(Subscription.tariff))
+        .where(
+            Subscription.limited_squad_active.is_(True),
+            Tariff.limited_traffic_enabled.is_(False),
+        )
+    )
+    return list(result.unique().scalars().all())
+
+
 class LimitedSquadMonitoringService:
     """Фоновый цикл: раз в LIMITED_SQUAD_CHECK_INTERVAL_MINUTES обновляет usage
 
@@ -79,7 +104,8 @@ class LimitedSquadMonitoringService:
     async def _run_cycle(self) -> None:
         async with AsyncSessionLocal() as db:
             subscriptions = await _load_subscriptions_with_limited_traffic(db)
-            if not subscriptions:
+            orphaned = await _load_subscriptions_with_orphaned_limited_squad(db)
+            if not subscriptions and not orphaned:
                 return
 
             service = RemnaWaveService()
@@ -105,12 +131,27 @@ class LimitedSquadMonitoringService:
                             error=error,
                         )
 
+                for subscription in orphaned:
+                    user = subscription.user
+                    if not user:
+                        continue
+                    try:
+                        await deactivate_orphaned_limited_squad(api, db, subscription, subscription.tariff, user)
+                        processed += 1
+                    except Exception as error:
+                        errors += 1
+                        logger.warning(
+                            '⚠️ Ошибка снятия orphaned LIMITED squad',
+                            subscription_id=subscription.id,
+                            error=error,
+                        )
+
             if processed or errors:
                 logger.info(
                     '🎯 Цикл мониторинга LIMITED squad завершён',
                     processed=processed,
                     errors=errors,
-                    total=len(subscriptions),
+                    total=len(subscriptions) + len(orphaned),
                 )
 
 
