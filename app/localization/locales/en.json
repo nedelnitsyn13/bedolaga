@@ -2102,6 +2102,7 @@
   "TARIFF_SWITCH_CONFIRM": "✅ <b>Plan switch confirmation</b>\n\n📌 Current plan: <b>{current}</b>\n📦 New plan: <b>{name}</b>\n📊 Traffic: {traffic}\n📱 Devices: {devices}\n{time_info}\n{discount}\n💰 <b>To pay: {total}</b>\n\n💳 Your balance: {balance}\nAfter payment: {after}",
   "TARIFF_SWITCH_CONFIRM_BUTTON": "✅ Confirm switch",
   "TARIFF_SWITCH_CURRENT_LINE": "📌 Current: <b>{name}</b>",
+  "TARIFF_ALREADY_OWNED": "❌ You already have an active subscription for this plan",
   "TARIFF_SWITCH_CURRENT_NOT_FOUND": "Current plan not found",
   "TARIFF_SWITCH_DAILY_CONFIRM": "✅ <b>Plan change confirmation</b>\n\n📦 New plan: <b>{name}</b>\n📊 Traffic: {traffic}\n📱 Devices: {devices}\n🔄 Type: <b>Daily</b>\n\n💰 <b>Price: {price}/day</b>{discount}\n\n💳 Your balance: {balance}{warning}\n\nℹ️ Funds will be charged automatically once a day.\nYou can pause the subscription at any time.",
   "TARIFF_SWITCH_DAILY_PREVIEW": "🔄 <b>Switching to a daily plan</b>\n\n📌 Current: <b>{current}</b>\n   • Traffic: {current_traffic}\n   • Devices: {current_devices}\n\n📦 New: <b>{name}</b>\n   • Traffic: {traffic}\n   • Devices: {devices}\n   • Type: 🔄 Daily\n\n💰 <b>Price: {price}/day</b>{discount}\n\n💳 Your balance: {balance}{warning}\n\nℹ️ Funds will be charged automatically once a day.",

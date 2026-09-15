@@ -2099,6 +2099,7 @@
   "TARIFF_SWITCH_CONFIRM": "✅ <b>切换套餐确认</b>\n\n📌 当前套餐：<b>{current}</b>\n📦 新套餐：<b>{name}</b>\n📊 流量：{traffic}\n📱 设备：{devices}\n{time_info}\n{discount}\n💰 <b>应付：{total}</b>\n\n💳 您的余额：{balance}\n支付后：{after}",
   "TARIFF_SWITCH_CONFIRM_BUTTON": "✅ 确认切换",
   "TARIFF_SWITCH_CURRENT_LINE": "📌 当前：<b>{name}</b>",
+  "TARIFF_ALREADY_OWNED": "❌ 您已经拥有该套餐的有效订阅",
   "TARIFF_SWITCH_CURRENT_NOT_FOUND": "未找到当前套餐",
   "TARIFF_SWITCH_DAILY_CONFIRM": "✅ <b>更换套餐确认</b>\n\n📦 新套餐：<b>{name}</b>\n📊 流量：{traffic}\n📱 设备：{devices}\n🔄 类型：<b>每日</b>\n\n💰 <b>价格：{price}/天</b>{discount}\n\n💳 您的余额：{balance}{warning}\n\nℹ️ 费用将每天自动扣除。\n您可以随时暂停订阅。",
   "TARIFF_SWITCH_DAILY_PREVIEW": "🔄 <b>切换为每日套餐</b>\n\n📌 当前：<b>{current}</b>\n   • 流量：{current_traffic}\n   • 设备：{current_devices}\n\n📦 新套餐：<b>{name}</b>\n   • 流量：{traffic}\n   • 设备：{devices}\n   • 类型：🔄 每日\n\n💰 <b>价格：{price}/天</b>{discount}\n\n💳 您的余额：{balance}{warning}\n\nℹ️ 费用将每天自动扣除。",

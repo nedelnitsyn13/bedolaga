@@ -4169,6 +4169,20 @@ async def confirm_daily_tariff_switch(
         await callback.answer(texts.t('NO_SUBSCRIPTION_ERROR', '❌ У вас нет активной подписки'), show_alert=True)
         return
 
+    # Guard: не даём переключить на тариф, который уже занят другой живой
+    # подпиской пользователя — иначе commit падает на
+    # uq_subscriptions_user_tariff_active.
+    if settings.is_multi_tariff_enabled():
+        from app.database.crud.subscription import get_subscription_by_user_and_tariff
+
+        existing_target = await get_subscription_by_user_and_tariff(db, db_user.id, tariff_id)
+        if existing_target and existing_target.id != subscription.id:
+            await callback.answer(
+                texts.t('TARIFF_ALREADY_OWNED', '❌ У вас уже есть активная подписка на этот тариф'),
+                show_alert=True,
+            )
+            return
+
     # Проверяем разрешение на смену в данном направлении
     if subscription.tariff_id and subscription.tariff_id != tariff_id:
         cur_tariff_daily = await get_tariff_by_id(db, subscription.tariff_id)
@@ -5032,6 +5046,20 @@ async def confirm_instant_switch(
     if not subscription:
         await callback.answer(texts.t('SUBSCRIPTION_NOT_FOUND', '❌ Подписка не найдена'), show_alert=True)
         return
+
+    # Guard: не даём переключить на тариф, который уже занят другой живой
+    # подпиской пользователя — иначе commit падает на
+    # uq_subscriptions_user_tariff_active.
+    if settings.is_multi_tariff_enabled():
+        from app.database.crud.subscription import get_subscription_by_user_and_tariff
+
+        existing_target = await get_subscription_by_user_and_tariff(db, db_user.id, tariff_id)
+        if existing_target and existing_target.id != subscription.id:
+            await callback.answer(
+                texts.t('TARIFF_ALREADY_OWNED', '❌ У вас уже есть активная подписка на этот тариф'),
+                show_alert=True,
+            )
+            return
 
     from app.database.crud.user import lock_user_for_pricing
 
