@@ -510,12 +510,12 @@ async def test_patch_is_sent_even_when_computed_state_matches_the_flag(monkeypat
 
 
 async def test_first_activation_adds_squad_despite_default_active_flag(monkeypatch) -> None:
-    """Регрессия: у новой (или только что мигрированной companion → LIMITED
-    squad) подписки ``limited_squad_active`` по умолчанию ``True`` ЕЩЁ ДО того,
-    как панель хоть раз получила LIMITED squad в PATCH'е. Если бы sync
-    пропускал PATCH из-за "совпадения" флага с вычисленным состоянием, squad
-    так и не добавился бы ни разу — это и есть баг, который здесь проверяется
-    закрытым."""
+    """Регрессия: даже когда вычисленное ``should_be_active`` для новой подписки
+    ОТЛИЧАЕТСЯ от дефолта колонки (``limited_squad_active=False``, см. 0125 —
+    исходный дефолт ``True`` делал orphaned-запрос неотличимым от «вообще не
+    касалась новой архитектуры», см. миграцию), sync всё равно шлёт PATCH и
+    правильно включает squad — а не полагается на то, что дефолт когда-либо
+    "случайно совпадёт" с реальным состоянием панели."""
     from app.services.limited_squad_service import sync_limited_squad_state
 
     async with memory_session(monkeypatch, TABLES) as db:
@@ -525,9 +525,10 @@ async def test_first_activation_adds_squad_despite_default_active_flag(monkeypat
         user.remnawave_id = 507
         subscription.connected_squads = ['main-squad-1']
         subscription.limited_traffic_used_gb = 5.0
-        # Дефолт колонки — True, но панель ещё ни разу не видела LIMITED squad
-        # в PATCH'е (это первый цикл enforcement для этой подписки).
-        assert subscription.limited_squad_active is True
+        # Дефолт колонки — False (новая подписка ещё не была в LIMITED-пуле);
+        # это первый цикл enforcement для неё, usage < базы, значит должна
+        # активироваться.
+        assert subscription.limited_squad_active is False
         await db.commit()
 
         api = _RecordingApi(nodes_by_squad={}, usage_by_node={})

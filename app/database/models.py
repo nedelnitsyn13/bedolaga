@@ -2582,11 +2582,15 @@ class Subscription(Base):
     # Параллельно limited_companion_* выше: та же идея (общий лимит на
     # отдельный сквад), но без второго панельного пользователя — LIMITED
     # squad подключается/отключается на activeInternalSquads ОСНОВНОГО
-    # юзера. limited_squad_active — текущее состояние (включён ли сейчас
-    # LIMITED squad у юзера), чтобы enforcement-джоба не слала лишний PATCH
-    # каждый цикл, если состояние не изменилось.
+    # юзера. limited_squad_active — последнее известное состояние (включён ли
+    # сейчас LIMITED squad у юзера), используется limited_squad_monitoring_service
+    # для поиска подписок, у которых squad остался висеть после того, как
+    # тариф выключили (см. deactivate_orphaned_limited_squad). Дефолт False —
+    # подписка не в пуле, пока enforcement-джоба явно не добавила её туда
+    # (см. миграцию 0125: изначальный дефолт True делал орфан-запрос
+    # неотличимым от «вообще никогда не касалась новой архитектуры»).
     limited_traffic_used_gb = Column(Float, default=0.0, server_default='0')
-    limited_squad_active = Column(Boolean, default=True, server_default='true', nullable=False)
+    limited_squad_active = Column(Boolean, default=False, server_default='false', nullable=False)
 
     # Тариф (для режима продаж "Тарифы")
     tariff_id = Column(Integer, ForeignKey('tariffs.id', ondelete='RESTRICT'), nullable=True, index=True)
