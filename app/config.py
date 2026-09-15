@@ -255,6 +255,11 @@ class Settings(BaseSettings):
     LIMITED_COMPANION_ENABLED: bool = False
     LIMITED_COMPANION_SQUAD_UUID: str | None = None
     LIMITED_COMPANION_TRAFFIC_GB: int = 50
+
+    # LIMITED squad на основном Remnawave user (новая архитектура, параллельно
+    # LIMITED_COMPANION_*) — интервал периодической проверки usage/enforcement,
+    # см. app/services/limited_squad_service.py и limited_squad_monitoring_service.py.
+    LIMITED_SQUAD_CHECK_INTERVAL_MINUTES: int = 10
     # Публичный URL и общий секрет эндпоинта регистрации subscription-merger
     # (внутренний адрес панели, например http://remnawave-nginx:8081 или
     # http://subscription-merger:8080 — смотря как эндпоинт добавлен на панели).

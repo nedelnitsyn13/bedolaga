@@ -191,6 +191,10 @@ async def create_tariff(
     max_device_limit: int | None = None,
     allowed_squads: list[str] | None = None,
     server_traffic_limits: dict[str, dict] | None = None,
+    # LIMITED squad (новая архитектура, параллельно limited_companion_*)
+    limited_traffic_enabled: bool = False,
+    limited_squad_uuids: list[str] | None = None,
+    limited_base_traffic_gb: int = 0,
     period_prices: dict[int, int] | None = None,
     highlight_period_days: int | None = None,
     is_highlighted: bool = False,
@@ -240,6 +244,9 @@ async def create_tariff(
         max_device_limit=max_device_limit,
         allowed_squads=allowed_squads or [],
         server_traffic_limits=server_traffic_limits or {},
+        limited_traffic_enabled=limited_traffic_enabled,
+        limited_squad_uuids=limited_squad_uuids or [],
+        limited_base_traffic_gb=max(0, limited_base_traffic_gb),
         period_prices=normalized_prices,
         highlight_period_days=_resolve_highlight_period(normalized_prices, highlight_period_days),
         is_highlighted=is_highlighted,
@@ -313,6 +320,10 @@ async def update_tariff(
     max_device_limit: int | None = ...,  # ... = не передан, None = сбросить (без лимита)
     allowed_squads: list[str] | None = None,
     server_traffic_limits: dict[str, dict] | None = None,
+    # LIMITED squad (новая архитектура, параллельно limited_companion_*)
+    limited_traffic_enabled: bool | None = None,
+    limited_squad_uuids: list[str] | None = None,
+    limited_base_traffic_gb: int | None = None,
     period_prices: dict[int, int] | None = None,
     highlight_period_days: int | None = ...,  # ... = не передан, None = снять выделение
     is_highlighted: bool | None = None,
@@ -369,6 +380,12 @@ async def update_tariff(
         tariff.allowed_squads = allowed_squads
     if server_traffic_limits is not None:
         tariff.server_traffic_limits = server_traffic_limits
+    if limited_traffic_enabled is not None:
+        tariff.limited_traffic_enabled = limited_traffic_enabled
+    if limited_squad_uuids is not None:
+        tariff.limited_squad_uuids = limited_squad_uuids
+    if limited_base_traffic_gb is not None:
+        tariff.limited_base_traffic_gb = max(0, limited_base_traffic_gb)
     if allow_traffic_topup is not None:
         tariff.allow_traffic_topup = allow_traffic_topup
     if period_prices is not None:

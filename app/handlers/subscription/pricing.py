@@ -10,6 +10,7 @@ from app.database.crud.subscription import (
     housekeep_limited_companion_traffic,
 )
 from app.database.models import User
+from app.services.limited_squad_service import get_effective_limited_traffic_limit_gb, is_limited_traffic_enabled
 from app.utils.pricing_utils import (
     format_period_description,
 )
@@ -402,7 +403,14 @@ async def get_subscription_info_text(subscription, texts, db_user, db: AsyncSess
                 info_text += f'\n• {purchase.traffic_gb} ГБ — {time_text}'
                 info_text += f'\n  {bar} {progress_percent:.0f}% | до {expire_date}'
 
-    if settings.is_limited_companion_enabled() and getattr(subscription, 'limited_companion_remnawave_id', None):
+    if is_limited_traffic_enabled(getattr(subscription, 'tariff', None)):
+        limited_limit = await get_effective_limited_traffic_limit_gb(db, subscription, subscription.tariff)
+        info_text += (
+            f'\n\n🌐 <b>Лимитный сервер</b>\n'
+            f'Использовано: {texts.format_traffic(subscription.limited_traffic_used_gb or 0, is_limit=False)}\n'
+            f'Лимит: {texts.format_traffic(limited_limit)}'
+        )
+    elif settings.is_limited_companion_enabled() and getattr(subscription, 'limited_companion_remnawave_id', None):
         companion_purchased = await housekeep_limited_companion_traffic(db, subscription)
         companion_limit = get_limited_companion_total_traffic_limit_gb(subscription, companion_purchased)
         info_text += (

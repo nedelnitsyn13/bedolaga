@@ -22,6 +22,11 @@ from app.database.crud.subscription import (
 )
 from app.database.models import Subscription, SubscriptionStatus, User
 from app.localization.texts import Texts, get_texts
+from app.services.limited_squad_service import (
+    get_effective_limited_traffic_limit_gb,
+    get_limited_base_traffic_gb,
+    is_limited_traffic_enabled,
+)
 
 
 logger = structlog.get_logger(__name__)
@@ -72,7 +77,15 @@ def _format_subscription_line(sub, idx: int) -> str:
 
     parts = [f'{emoji} <b>{idx}. {tariff_name}</b>{label}']
     parts.append(f'   📊 Трафик: {traffic}')
-    if settings.is_limited_companion_enabled() and getattr(sub, 'limited_companion_remnawave_id', None):
+    if is_limited_traffic_enabled(sub.tariff):
+        # Компактный список — синхронный форматтер, без похода в БД за
+        # активными докупками (см. детальную карточку ниже, там точный
+        # итог). Показываем базу тарифа — не точный total, но честно.
+        limited_base = get_limited_base_traffic_gb(sub.tariff)
+        limited_used = f'{sub.limited_traffic_used_gb:.1f}' if sub.limited_traffic_used_gb else '0'
+        limited_traffic = '∞' if limited_base == 0 else f'{limited_used}/{limited_base}+ ГБ'
+        parts.append(f'   🌐 Лимитный сервер: {limited_traffic}')
+    elif settings.is_limited_companion_enabled() and getattr(sub, 'limited_companion_remnawave_id', None):
         companion_purchased = sub.limited_companion_purchased_traffic_gb or 0
         companion_limit = get_limited_companion_total_traffic_limit_gb(sub, companion_purchased)
         companion_used = (
@@ -153,13 +166,17 @@ def _build_subscription_detail_keyboard(sub_id: int, sub=None) -> types.InlineKe
             buttons.append([types.InlineKeyboardButton(text='📊 Трафик', callback_data=f'st:{sub_id}')])
         buttons.append([types.InlineKeyboardButton(text='📱 Устройства', callback_data=f'sd:{sub_id}')])
 
-        if (
-            settings.is_limited_companion_enabled()
-            and sub is not None
-            and getattr(sub, 'limited_companion_remnawave_id', None)
-            and settings.is_traffic_topup_enabled()
-            and get_limited_companion_base_traffic_gb(sub) != 0
-        ):
+        limited_topup_available = sub is not None and settings.is_traffic_topup_enabled()
+        sub_tariff = getattr(sub, 'tariff', None)
+        if limited_topup_available and is_limited_traffic_enabled(sub_tariff):
+            limited_topup_available = get_limited_base_traffic_gb(sub_tariff) != 0
+        elif limited_topup_available:
+            limited_topup_available = bool(
+                settings.is_limited_companion_enabled()
+                and getattr(sub, 'limited_companion_remnawave_id', None)
+                and get_limited_companion_base_traffic_gb(sub) != 0
+            )
+        if limited_topup_available:
             buttons.append(
                 [
                     types.InlineKeyboardButton(
@@ -274,7 +291,12 @@ async def show_subscription_detail(
         f'📅 До: {end_date}\n'
     )
 
-    if settings.is_limited_companion_enabled() and getattr(subscription, 'limited_companion_remnawave_id', None):
+    if is_limited_traffic_enabled(subscription.tariff):
+        limited_limit = await get_effective_limited_traffic_limit_gb(db, subscription, subscription.tariff)
+        limited_used = subscription.limited_traffic_used_gb or 0
+        limited_limit_text = '∞' if limited_limit == 0 else f'{limited_limit} ГБ'
+        text += f'\n🌐 Лимитный сервер: {limited_used:.1f} / {limited_limit_text}\n'
+    elif settings.is_limited_companion_enabled() and getattr(subscription, 'limited_companion_remnawave_id', None):
         companion_purchased = await housekeep_limited_companion_traffic(db, subscription)
         companion_limit = get_limited_companion_total_traffic_limit_gb(subscription, companion_purchased)
         companion_used = subscription.limited_companion_traffic_used_gb or 0

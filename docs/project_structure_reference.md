@@ -438,7 +438,7 @@
   Функции: `preview_tariff_switch` — Preview tariff switch - shows cost calculation., `switch_tariff` — Switch to a different tariff without changing end date.
 - `app/cabinet/routes/subscription_modules/traffic.py` — Python-модуль
   Классы: нет
-  Функции: `get_traffic_packages` — Get available traffic packages., `purchase_traffic` — Purchase additional traffic., `save_traffic_cart` — Save cart for traffic purchase (for insufficient balance flow)., `switch_traffic_package` — Switch to a different traffic package (change limit)., `refresh_traffic` — Refresh traffic usage from RemnaWave panel., `get_limited_companion_traffic` — Current usage/limit for the limited-companion server's traffic pool., `get_limited_companion_traffic_packages` — Packages for topping up the limited-companion server's traffic (flat monthly price)., `purchase_limited_companion_traffic` — Purchase additional traffic for the limited-companion server., `save_limited_companion_traffic_cart` — Save cart for limited-companion traffic purchase (insufficient-balance flow)., `refresh_limited_companion_traffic` — Refresh the limited-companion server's traffic usage from the RemnaWave panel.
+  Функции: `get_traffic_packages` — Get available traffic packages., `purchase_traffic` — Purchase additional traffic., `save_traffic_cart` — Save cart for traffic purchase (for insufficient balance flow)., `switch_traffic_package` — Switch to a different traffic package (change limit)., `refresh_traffic` — Refresh traffic usage from RemnaWave panel., `get_limited_companion_traffic` — Current usage/limit for the limited-traffic pool (LIMITED squad or legacy companion)., `get_limited_companion_traffic_packages` — Packages for topping up the limited-traffic pool (LIMITED squad or legacy companion)., `purchase_limited_companion_traffic` — Purchase additional traffic for the limited-traffic pool (LIMITED squad or legacy companion)., `save_limited_companion_traffic_cart` — Save cart for limited-companion traffic purchase (insufficient-balance flow)., `refresh_limited_companion_traffic` — Refresh the limited-companion server's traffic usage from the RemnaWave panel.
 
 #### app/cabinet/schemas
 
@@ -1055,6 +1055,9 @@
 - `app/handlers/admin/tariff_custom_traffic.py` — Python-модуль
   Классы: нет
   Функции: `format_custom_traffic_settings` — Format custom-traffic state for the main tariff card., `render_custom_traffic_settings` — Render the dedicated custom-traffic settings screen., `get_custom_traffic_keyboard` — Build the dedicated custom-traffic settings keyboard., `show_custom_traffic_settings` — Show custom-traffic settings for a tariff and leave any field-edit state., `toggle_custom_traffic` — Enable or disable custom traffic after validating stored settings., `start_edit_custom_traffic_price` — Start editing the custom-traffic price per gigabyte., `start_edit_custom_traffic_min` — Start editing the minimum selectable traffic amount., `start_edit_custom_traffic_max` — Start editing the maximum selectable traffic amount., `process_custom_traffic_price_input` — Persist a validated custom-traffic price per gigabyte., `process_custom_traffic_min_input` — Persist a validated minimum selectable traffic amount., `process_custom_traffic_max_input` — Persist a validated maximum selectable traffic amount., `register_custom_traffic_handlers` — Register callbacks and FSM handlers for custom-traffic administration.
+- `app/handlers/admin/tariff_limited_squad.py` — Python-модуль
+  Классы: нет
+  Функции: `format_limited_squad_summary` — Строка для карточки тарифа., `render_limited_squad_screen`, `get_limited_squad_keyboard`, `show_limited_squad`, `toggle_limited_squad_enabled`, `toggle_limited_squad_member`, `start_edit_limited_base_gb`, `process_limited_base_gb_input`, `register_limited_squad_handlers`
 - `app/handlers/admin/tariff_panel_settings.py` — Python-модуль
   Классы: нет
   Функции: `format_panel_settings` — Блок для карточки тарифа., `render_panel_settings`, `get_panel_settings_keyboard`, `show_panel_settings`, `toggle_show_in_gift`, `toggle_allow_traffic_topup`, `start_edit_panel_tag`, `start_edit_lava_product`, `start_edit_display_order`, `process_panel_tag_input`, `process_lava_product_input`, `process_display_order_input`, `load_external_squads` — Внешние сквады из панели; при сбое — пустой список (выбор «без сквада» остаётся)., `start_edit_external_squad`, `set_external_squad`, `register_panel_settings_handlers`
@@ -1499,6 +1502,12 @@
 - `app/services/legal_consent_service.py` — Python-модуль
   Классы: `LegalConsentRequirement`
   Функции: `get_requirement` — Требование согласия для НОВОГО пользователя кабинета., `missing_documents` — Какие из обязательных документов пользователь не отметил., `record_consent` — Записать факт согласия. Сбой записи не должен ронять регистрацию.
+- `app/services/limited_squad_monitoring_service.py` — Python-модуль
+  Классы: `LimitedSquadMonitoringService` (3 методов)
+  Функции: нет
+- `app/services/limited_squad_service.py` — Python-модуль
+  Классы: нет
+  Функции: `is_limited_traffic_enabled` — Включена ли LIMITED-механика (новая архитектура) на тарифе., `get_limited_squad_uuids` — UUID squad'ов LIMITED-пула тарифа. Пусто, если механика выключена., `get_limited_base_traffic_gb` — Базовый лимит LIMITED-пула в ГБ, без докупок. 0 = механика выключена., `resolve_main_panel_user_id` — Тот же id, что уходит в panel_sync для MAIN-аккаунта подписки., `get_active_limited_traffic_purchases_gb` — Housekeep + сумма активных докупок LIMITED-пула., `add_limited_traffic_purchase` — Регистрирует докупку LIMITED-пула с истечением через 30 дней., `get_effective_limited_traffic_limit_gb` — База тарифа + активные докупки. 0 = безлимит (либо механика выключена)., `resolve_limited_node_uuids` — Ноды всех LIMITED squad'ов тарифа, одним списком без дублей., `fetch_limited_used_bytes` — Потребление конкретного юзера по конкретным LIMITED-нодам за период., `refresh_limited_traffic_usage` — Пересчитывает и сохраняет ``subscription.limited_traffic_used_gb``., `sync_limited_squad_state` — Снимает/возвращает LIMITED squad на ``activeInternalSquads`` ОСНОВНОГО юзера., `process_limited_traffic` — Один цикл для подписки: обновить usage, затем при необходимости, `deactivate_orphaned_limited_squad` — Снимает LIMITED squad(ы) тарифа с ОСНОВНОГО юзера подписки, чей тариф
 - `app/services/log_rotation_service.py` — Python-модуль
   Классы: `LogRotationStatus`, `LogRotationService` (16 методов)
   Функции: нет
@@ -1862,7 +1871,7 @@
   Функции: `get_traffic_reset_strategy` — Стратегия сброса трафика: настройка тарифа, иначе общая из конфига.
 - `app/services/panel_sync/writer.py` — Python-модуль
   Классы: `PanelWriteResult`
-  Функции: `reset_companion_devices` — Mirror a full device reset onto the limited-companion account., `remove_companion_device` — Mirror removing one device (by hwid) onto the limited-companion account., `sync_companion_device_limit` — Mirror ``hwid_device_limit`` onto the limited-companion account., `push_subscription` — Отправить состояние подписки в панель., `patch_panel_account` — Обновить карточку аккаунта в панели, не трогая состояние подписки., `patch_panel_squads` — Переназначить аккаунту сквады тарифа., `write_companion_account` — Создать/обновить панельный аккаунт, у которого нет своей строки Subscription.
+  Функции: `reset_companion_devices` — Mirror a full device reset onto the limited-companion account., `remove_companion_device` — Mirror removing one device (by hwid) onto the limited-companion account., `sync_companion_device_limit` — Mirror ``hwid_device_limit`` onto the limited-companion account., `disable_companion_account` — Узкий PATCH статуса компаньона на DISABLED — не трогает сквады/трафик/срок., `push_subscription` — Отправить состояние подписки в панель., `patch_panel_account` — Обновить карточку аккаунта в панели, не трогая состояние подписки., `patch_panel_squads` — Переназначить аккаунту сквады тарифа., `write_companion_account` — Создать/обновить панельный аккаунт, у которого нет своей строки Subscription.
 
 #### app/services/payment
 
@@ -2862,6 +2871,9 @@
 - `migrations/alembic/versions/0123_subscription_grace_tail_expire_at.py` — Python-модуль
   Классы: нет
   Функции: `upgrade`, `downgrade`
+- `migrations/alembic/versions/0124_limited_squad_columns.py` — Python-модуль
+  Классы: нет
+  Функции: `upgrade`, `downgrade`
 
 ## scripts
 
@@ -2886,6 +2898,9 @@
 - `scripts/generate_structure_reference.py` — Python-модуль
   Классы: нет
   Функции: `tracked_paths` — Файлы проекта: отслеживаемые плюс новые, которые git не игнорирует., `describe_module` — Строки «Классы:» и «Функции:» для модуля., `render_entries`, `render`, `build`, `main`
+- `scripts/migrate_limited_companion_to_squad.py` — Python-модуль
+  Классы: `MigrationReport` (1 методов)
+  Функции: `main`
 - `scripts/migrate_shopbot.py` — Python-модуль
   Классы: `MigrationReport` (1 методов)
   Функции: `main`
@@ -3238,6 +3253,9 @@
 - `tests/cabinet/test_lava_recurrent_routes.py` — Python-модуль
   Классы: нет
   Функции: `user`, `test_enable_gated_before_touching_db`, `test_get_gated_before_touching_db`, `test_cancel_works_even_when_gate_off` — Отмена — операция безопасности, флагом не гейтится., `test_enable_rejects_trial_subscription`, `test_enable_surfaces_missing_product_reason` — У тарифа не задан продукт Lava — причина доходит до пользователя., `test_enable_returns_payment_url`, `test_get_returns_none_status_without_binding`, `test_get_returns_binding_state`, `test_purchase_gated_and_maps_errors` — Покупка привязкой: гейт фичи, отказы доносятся как 400., `test_purchase_returns_payment_url_and_subscription`
+- `tests/cabinet/test_limited_traffic_new_architecture.py` — Python-модуль
+  Классы: нет
+  Функции: `test_get_limited_traffic_reports_new_architecture_fields`, `test_get_limited_traffic_includes_active_purchases`, `test_get_limited_traffic_packages_available_without_legacy_companion`, `test_purchase_charges_balance_and_persists_purchase`, `test_purchase_rejects_when_new_architecture_base_is_unlimited`, `test_purchase_saves_cart_on_insufficient_balance`
 - `tests/cabinet/test_linked_providers_forgets_email.py` — Python-модуль
   Классы: нет
   Функции: `test_google_row_names_the_email_that_unlinking_forgets`, `test_nothing_is_forgotten_once_a_password_exists`, `test_email_verified_elsewhere_is_not_tied_to_the_provider`
@@ -3940,6 +3958,9 @@
 - `tests/scripts/test_audit_limited_companion_devices.py` — Python-модуль
   Классы: нет
   Функции: `test_blames_a_full_companion_when_the_device_is_only_on_main`, `test_blames_a_full_main_when_the_device_is_only_on_the_companion`, `test_reports_drifted_limits_when_neither_side_is_full`, `test_calls_it_a_stale_gap_when_neither_side_is_currently_full` — Лимиты одинаковые и обе стороны свободны сейчас — панель отказать не могла, `test_does_not_blame_a_limit_the_panel_never_reported` — hwidDeviceLimit=None — безлимит: обвинять его в отказе нельзя, это тоже хвост.
+- `tests/scripts/test_migrate_limited_companion_to_squad.py` — Python-модуль
+  Классы: нет
+  Функции: `test_dry_run_reports_state_without_touching_anything`, `test_validation_fails_when_subscription_missing`, `test_validation_fails_when_tariff_not_on_new_architecture`, `test_validation_fails_when_tariff_has_no_squads`, `test_validation_fails_without_a_legacy_companion`, `test_apply_runs_enforcement_then_disables_companion`, `test_apply_reports_failure_when_disable_raises`, `test_exit_code_is_zero_on_success`, `test_exit_code_is_nonzero_on_validation_failure`, `test_exit_code_is_nonzero_when_apply_fails_without_a_validation_reason`
 
 ### tests/services
 
@@ -4152,6 +4173,12 @@
 - `tests/services/test_legal_consent.py` — Python-модуль
   Классы: нет
   Функции: `test_both_documents_required_by_default`, `test_setting_disables_the_gate`, `test_prechecked_flag_is_reported`, `test_document_hidden_from_web_is_not_required` — Документ только для бота нельзя прочитать в кабинете — галочки по нему нет., `test_empty_document_is_not_required`, `test_no_documents_at_all_disables_the_gate` — Иначе установка без юр. документов заблокировала бы регистрацию всем., `test_broken_document_read_does_not_block_login`, `test_missing_documents_reports_unchecked_boxes`, `test_record_consent_writes_a_row_per_document`, `test_record_consent_with_no_documents_is_a_noop`, `test_gate_rejects_missing_consent`, `test_gate_passes_with_full_consent`, `test_gate_is_transparent_when_disabled` — Выключенная настройка не должна ломать регистрацию без чекбоксов.
+- `tests/services/test_limited_squad_monitoring_service.py` — Python-модуль
+  Классы: нет
+  Функции: `test_only_subscriptions_on_limited_enabled_tariffs_are_selected`, `test_expired_subscriptions_are_excluded`, `test_trial_and_limited_status_subscriptions_are_included`, `test_orphaned_query_finds_subscriptions_left_active_after_tariff_disabled`, `test_orphaned_query_ignores_still_enabled_tariffs` — limited_squad_active=True на включённом тарифе — штатный случай, его, `test_orphaned_query_ignores_subscriptions_with_squad_already_off`
+- `tests/services/test_limited_squad_service.py` — Python-модуль
+  Классы: нет
+  Функции: `test_disabled_tariff_reports_no_squads_and_zero_base`, `test_enabled_tariff_reports_squads_and_base`, `test_none_tariff_is_disabled`, `test_purchase_lives_exactly_30_days_from_its_own_purchase_time`, `test_multiple_purchases_have_independent_expires_at`, `test_expired_purchase_lowers_effective_limit`, `test_effective_limit_is_zero_unlimited_when_base_is_zero`, `test_main_traffic_never_enters_limited_usage` — MAIN-нода не передаётся в fetch — даже если панель вернула бы по ней данные, их некому суммировать., `test_multiple_limited_nodes_are_summed`, `test_usage_ignores_other_users_on_same_nodes`, `test_multiple_limited_squads_pool_their_nodes`, `test_fetch_returns_none_not_zero_when_panel_call_fails` — Транзиентный сбой панели — это не «трафика не было»: fetch не должен, `test_refresh_preserves_previous_usage_when_panel_call_fails`, `test_squad_removed_when_usage_reaches_base_limit` — п.3: база 50 ГБ, usage 50 ГБ → LIMITED squad снимается., `test_main_squads_untouched_when_limited_removed` — п.4 отдельно: несколько MAIN squads — все остаются после снятия LIMITED., `test_purchase_restores_limited_squad` — п.5: +20 ГБ докупка поднимает effective limit выше usage → LIMITED возвращается., `test_expired_purchase_removes_limited_squad_again` — п.10: usage=85, лимит был 100 (база 50 + докупка 50) — докупка истекла,, `test_patch_is_sent_even_when_computed_state_matches_the_flag` — Reconcile, а не delta: PATCH шлётся каждый цикл, даже когда вычисленное, `test_first_activation_adds_squad_despite_default_active_flag` — Регрессия: у новой (или только что мигрированной companion → LIMITED, `test_disabled_tariff_never_touches_panel` — Механика выключена на тарифе — sync_limited_squad_state не лезет в панель вообще., `test_deactivate_orphaned_removes_squad_and_clears_flag`, `test_deactivate_orphaned_noop_without_a_tariff`
 - `tests/services/test_log_level_resolver.py` — Python-модуль
   Классы: нет
   Функции: `test_resolves_canonical_uppercase_names`, `test_resolves_lowercase_names` — REGRESSION: ``LOG_LEVEL=warning`` from .env must NOT return, `test_resolves_mixed_case_and_whitespace` — Whitespace and mixed-case variants normalize to the canonical level., `test_lowercase_does_not_return_the_logger_function` — The exact failure mode: the ``logging`` module has BOTH, `test_unknown_or_empty_falls_back_to_default`, `test_non_string_input_falls_back_to_default` — The resolver accepts only str input. Anything else → default., `test_default_argument_is_respected` — Custom default values flow through the fallback paths., `test_resolver_output_is_acceptable_to_structlog` — REGRESSION smoke: ``make_filtering_bound_logger`` must accept
@@ -4440,6 +4467,9 @@
 - `tests/services/test_sync_from_panel_skips_foreign_accounts.py` — Python-модуль
   Классы: нет
   Функции: `db`, `service`, `test_import_skips_accounts_without_identity_and_says_so`
+- `tests/services/test_sync_limited_companion_respects_new_architecture.py` — Python-модуль
+  Классы: нет
+  Функции: `test_new_architecture_tariff_skips_companion_sync`, `test_legacy_tariff_still_syncs_companion`, `test_no_tariff_at_all_still_syncs_companion` — A subscription with no tariff row (single-mode legacy account) must keep
 - `tests/services/test_sync_users_to_panel_adoption.py` — Python-модуль
   Классы: нет
   Функции: `harness` — Один батч из одной подписки, gracce-lease разрешён, клиент — мок., `test_adopts_existing_panel_user_instead_of_creating_a_duplicate`, `test_creates_when_the_panel_does_not_know_the_short_uuid`, `test_single_tariff_writes_identity_onto_the_user` — Мутация «поменять ветки местами» схлопывала все подписки юзера на один id., `test_update_branch_does_not_wipe_squads_when_the_local_list_is_empty` — Сиблинг того же дефекта: ветка обновления по УЖЕ известному id., `test_update_branch_forwards_a_non_empty_squad_list`, `test_identity_is_written_into_the_session_that_owns_the_locked_row` — Связь пишется в сессию лизы, а не в общую сессию прохода.
@@ -4562,7 +4592,7 @@
   Функции: `test_normalize_upper_cases_and_treats_blank_as_absent`, `test_normalize_rejects_what_the_panel_rejects`, `test_tariff_tag_wins_for_paid_subscription`, `test_tariff_tag_wins_over_trial_tag_too`, `test_without_tariff_tag_trial_uses_global_trial_tag`, `test_without_tariff_tag_paid_uses_global_paid_tag`, `test_blank_tariff_tag_counts_as_absent`, `test_payload_resolves_tag_from_tariff_when_caller_passed_none`, `test_payload_keeps_explicit_tag_from_caller`
 - `tests/services/panel_sync/test_writer.py` — Python-модуль
   Классы: нет
-  Функции: `test_known_account_is_updated_not_created`, `test_unknown_account_is_created`, `test_panel_says_user_is_gone_so_it_is_recreated` — Протухший id в базе не должен ронять синхронизацию., `test_transient_panel_error_is_not_a_reason_to_create_a_duplicate`, `test_expired_subscription_extinguishes_a_future_date_known_in_advance` — Дата панели уже на руках — гасим тем же запросом, без второго., `test_expired_subscription_extinguishes_a_future_date_learned_from_the_answer` — Дату панели узнали только из ответа — гасим вторым запросом., `test_live_subscription_is_written_once`, `test_identity_is_written_onto_the_subscription`, `test_panel_id_taken_by_a_sibling_row_is_not_written` — Колонка частично уникальна: IntegrityError откатил бы уже сделанный PATCH., `test_single_tariff_records_the_account_on_the_user_too`, `test_only_fields_narrows_the_patch` — Узкая правка описания не должна тащить в панель дату и сквады., `test_recreated_account_replaces_the_stale_link` — Иначе следующий проход снова не найдёт аккаунт и заведёт ещё один дубль., `test_extinguish_learned_from_the_answer_retries_with_a_bigger_margin` — Второй PATCH отвергнут как «прошлое» — повтор с большим запасом, а не ошибка прохода., `test_extinguish_known_in_advance_falls_back_to_status_first` — Дата уехала одним PATCH с остальными полями, и панель отвергла всё: поля важнее — шлём без даты, дату гасим отдельно., `test_a_second_rejection_is_a_real_error` — Если и большой запас панель считает прошлым, это не разъезд часов — ошибку не глотаем., `test_other_validation_errors_are_not_mistaken_for_clock_skew`, `test_reset_companion_devices_resets_the_companion_account`, `test_reset_companion_devices_noop_without_a_companion`, `test_reset_companion_devices_swallows_panel_errors`, `test_remove_companion_device_removes_the_same_hwid`, `test_remove_companion_device_noop_without_a_companion`, `test_push_subscription_mirrors_reset_onto_the_companion`, `test_sync_companion_device_limit_patches_the_companion_account`, `test_sync_companion_device_limit_noop_without_a_companion`, `test_sync_companion_device_limit_swallows_panel_errors`
+  Функции: `test_known_account_is_updated_not_created`, `test_unknown_account_is_created`, `test_panel_says_user_is_gone_so_it_is_recreated` — Протухший id в базе не должен ронять синхронизацию., `test_transient_panel_error_is_not_a_reason_to_create_a_duplicate`, `test_expired_subscription_extinguishes_a_future_date_known_in_advance` — Дата панели уже на руках — гасим тем же запросом, без второго., `test_expired_subscription_extinguishes_a_future_date_learned_from_the_answer` — Дату панели узнали только из ответа — гасим вторым запросом., `test_live_subscription_is_written_once`, `test_identity_is_written_onto_the_subscription`, `test_panel_id_taken_by_a_sibling_row_is_not_written` — Колонка частично уникальна: IntegrityError откатил бы уже сделанный PATCH., `test_single_tariff_records_the_account_on_the_user_too`, `test_only_fields_narrows_the_patch` — Узкая правка описания не должна тащить в панель дату и сквады., `test_recreated_account_replaces_the_stale_link` — Иначе следующий проход снова не найдёт аккаунт и заведёт ещё один дубль., `test_extinguish_learned_from_the_answer_retries_with_a_bigger_margin` — Второй PATCH отвергнут как «прошлое» — повтор с большим запасом, а не ошибка прохода., `test_extinguish_known_in_advance_falls_back_to_status_first` — Дата уехала одним PATCH с остальными полями, и панель отвергла всё: поля важнее — шлём без даты, дату гасим отдельно., `test_a_second_rejection_is_a_real_error` — Если и большой запас панель считает прошлым, это не разъезд часов — ошибку не глотаем., `test_other_validation_errors_are_not_mistaken_for_clock_skew`, `test_reset_companion_devices_resets_the_companion_account`, `test_reset_companion_devices_noop_without_a_companion`, `test_reset_companion_devices_swallows_panel_errors`, `test_remove_companion_device_removes_the_same_hwid`, `test_remove_companion_device_noop_without_a_companion`, `test_push_subscription_mirrors_reset_onto_the_companion`, `test_sync_companion_device_limit_patches_the_companion_account`, `test_sync_companion_device_limit_noop_without_a_companion`, `test_sync_companion_device_limit_swallows_panel_errors`, `test_disable_companion_account_patches_status_only`, `test_disable_companion_account_noop_without_a_companion`, `test_disable_companion_account_raises_on_panel_error`
 
 #### tests/services/reachability
 

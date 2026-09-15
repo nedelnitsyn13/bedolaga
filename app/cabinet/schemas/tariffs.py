@@ -111,6 +111,12 @@ class TariffDetailResponse(BaseModel):
     highlight_period_days: int | None = None
     allowed_squads: list[str]  # UUIDs
     server_traffic_limits: dict[str, ServerTrafficLimit] = Field(default_factory=dict)  # {uuid: {traffic_limit_gb}}
+    # LIMITED squad (новая архитектура, параллельно limited_companion_*):
+    # общий лимит трафика на все ноды этих squad'ов на ОСНОВНОМ панельном
+    # аккаунте, без отдельного компаньон-пользователя.
+    limited_traffic_enabled: bool = False
+    limited_squad_uuids: list[str] = Field(default_factory=list)
+    limited_base_traffic_gb: int = 0
     servers: list[ServerInfo]
     promo_groups: list[PromoGroupInfo]
     subscriptions_count: int
@@ -180,6 +186,10 @@ class TariffCreateRequest(BaseModel):
     server_traffic_limits: dict[str, ServerTrafficLimit] = Field(
         default_factory=dict, description='Per-server traffic limits'
     )
+    # LIMITED squad (новая архитектура, параллельно limited_companion_*)
+    limited_traffic_enabled: bool = False
+    limited_squad_uuids: list[str] = Field(default_factory=list, description='LIMITED pool server UUIDs')
+    limited_base_traffic_gb: int = Field(0, ge=0)
     promo_group_ids: list[int] = Field(default_factory=list)
     # Произвольное количество дней
     custom_days_enabled: bool = False
@@ -236,6 +246,10 @@ class TariffUpdateRequest(BaseModel):
     highlight_period_days: int | None = Field(None, ge=0)
     allowed_squads: list[str] | None = None
     server_traffic_limits: dict[str, ServerTrafficLimit] | None = None
+    # LIMITED squad (новая архитектура, параллельно limited_companion_*)
+    limited_traffic_enabled: bool | None = None
+    limited_squad_uuids: list[str] | None = None
+    limited_base_traffic_gb: int | None = Field(None, ge=0)
     promo_group_ids: list[int] | None = None
     # Произвольное количество дней
     custom_days_enabled: bool | None = None

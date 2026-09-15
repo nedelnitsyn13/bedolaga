@@ -9,6 +9,7 @@ import pytest
 from app.database.models import SubscriptionStatus
 from app.external.remnawave_api import RemnaWaveAPIError, RemnaWaveTransientError
 from app.services.panel_sync import (
+    disable_companion_account,
     push_subscription,
     remove_companion_device,
     reset_companion_devices,
@@ -418,3 +419,44 @@ async def test_sync_companion_device_limit_swallows_panel_errors():
     api.update_user.side_effect = RemnaWaveAPIError('boom', 500, {})
 
     await sync_companion_device_limit(api, _sub(limited_companion_remnawave_id=857))  # must not raise
+
+
+# disable_companion_account — used by scripts/migrate_limited_companion_to_squad.py
+# to cut a subscription's legacy companion over when its tariff switches to the
+# new per-tariff LIMITED squad architecture. Unlike the mirror-helpers above it
+# does NOT swallow panel errors: it's a deliberate one-off migration action, and
+# the caller needs to know if the PATCH failed.
+
+
+@pytest.mark.asyncio
+async def test_disable_companion_account_patches_status_only():
+    api = AsyncMock()
+
+    result = await disable_companion_account(api, _sub(limited_companion_remnawave_id=857))
+
+    assert result is True
+    api.update_user.assert_awaited_once()
+    kwargs = api.update_user.await_args.kwargs
+    assert kwargs['user_id'] == 857
+    assert kwargs['status'].value == 'DISABLED'
+    assert 'active_internal_squads' not in kwargs
+    assert 'traffic_limit_bytes' not in kwargs
+
+
+@pytest.mark.asyncio
+async def test_disable_companion_account_noop_without_a_companion():
+    api = AsyncMock()
+
+    result = await disable_companion_account(api, _sub())
+
+    assert result is False
+    api.update_user.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_disable_companion_account_raises_on_panel_error():
+    api = AsyncMock()
+    api.update_user.side_effect = RemnaWaveAPIError('boom', 500, {})
+
+    with pytest.raises(RemnaWaveAPIError):
+        await disable_companion_account(api, _sub(limited_companion_remnawave_id=857))

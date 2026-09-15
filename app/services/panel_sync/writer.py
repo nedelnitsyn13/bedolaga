@@ -102,6 +102,30 @@ async def sync_companion_device_limit(api, subscription) -> None:
         )
 
 
+async def disable_companion_account(api, subscription) -> bool:
+    """Узкий PATCH статуса компаньона на DISABLED — не трогает сквады/трафик/срок.
+
+    Используется при переводе подписки на новую LIMITED squad архитектуру
+    (см. ``scripts/migrate_limited_companion_to_squad.py`` и развилку в
+    ``SubscriptionService._sync_limited_companion_user``, которая после этого
+    перестаёт заново создавать/обновлять компаньона для такой подписки —
+    без неё компаньон бы "воскрес" в статус ACTIVE на следующей пушке
+    подписки). Возвращает ``False``, если у подписки нет компаньона.
+
+    В отличие от ``sync_companion_device_limit`` ошибку не глотает: это
+    разовое осознанное действие миграции, а не фоновое зеркалирование —
+    вызывающий должен узнать об отказе и сообщить о нём.
+    """
+    companion_id = getattr(subscription, 'limited_companion_remnawave_id', None) if subscription else None
+    if not companion_id:
+        return False
+
+    from app.external.remnawave_api import UserStatus
+
+    await api.update_user(user_id=companion_id, status=UserStatus.DISABLED)
+    return True
+
+
 @dataclass(frozen=True)
 class PanelWriteResult:
     """Чем закончилась запись."""

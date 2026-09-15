@@ -34,6 +34,7 @@ from app.services.panel_sync.tags import normalize_panel_tag, resolve_panel_user
 from app.services.panel_sync.traffic_strategy import get_traffic_reset_strategy
 from app.services.panel_sync.writer import (
     PanelWriteResult,
+    disable_companion_account,
     patch_panel_account,
     patch_panel_squads,
     push_subscription,
@@ -56,6 +57,7 @@ __all__ = [
     'ProjectionPolicy',
     'SyncStats',
     'build_panel_payload',
+    'disable_companion_account',
     'get_traffic_reset_strategy',
     'is_subscription_expired',
     'is_subscription_live',

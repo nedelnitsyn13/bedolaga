@@ -23,6 +23,7 @@ from app.services.broadcast_service import broadcast_service
 from app.services.contest_rotation_service import contest_rotation_service
 from app.services.daily_subscription_service import daily_subscription_service
 from app.services.grace_access_runtime import grace_access_runtime
+from app.services.limited_squad_monitoring_service import limited_squad_monitoring_service
 from app.services.log_rotation_service import log_rotation_service
 from app.services.maintenance_service import maintenance_service
 from app.services.monitoring_service import monitoring_service
@@ -175,6 +176,7 @@ async def main():
     maintenance_task = None
     version_check_task = None
     traffic_monitoring_task = None
+    limited_squad_task = None
     daily_subscription_task = None
     polling_task = None
     web_api_server = None
@@ -714,6 +716,14 @@ async def main():
                 stage.skip('Мониторинг трафика отключен настройками')
 
         async with timeline.stage(
+            'LIMITED squad',
+            '🎯',
+            success_message='Мониторинг LIMITED squad запущен',
+        ) as stage:
+            limited_squad_task = asyncio.create_task(limited_squad_monitoring_service.start_monitoring())
+            stage.log(f'Интервал проверки: {settings.LIMITED_SQUAD_CHECK_INTERVAL_MINUTES} мин')
+
+        async with timeline.stage(
             'Суточные подписки',
             '💳',
             success_message='Сервис суточных подписок запущен',
@@ -803,6 +813,7 @@ async def main():
             f'Мониторинг: {"Включен" if monitoring_task else "Отключен"}',
             f'Техработы: {"Включен" if maintenance_task else "Отключен"}',
             f'Мониторинг трафика: {"Включен" if traffic_monitoring_task else "Отключен"}',
+            f'Мониторинг LIMITED squad: {"Включен" if limited_squad_task else "Отключен"}',
             f'Суточные подписки: {"Включен" if daily_subscription_task else "Отключен"}',
             f'Проверка версий: {"Включен" if version_check_task else "Отключен"}',
             f'Отчеты: {"Включен" if reporting_service.is_running() else "Отключен"}',
@@ -960,6 +971,14 @@ async def main():
             daily_subscription_task.cancel()
             try:
                 await daily_subscription_task
+            except asyncio.CancelledError:
+                pass
+
+        if limited_squad_task and not limited_squad_task.done():
+            logger.info('ℹ️ Остановка мониторинга LIMITED squad...')
+            limited_squad_task.cancel()
+            try:
+                await limited_squad_task
             except asyncio.CancelledError:
                 pass
 

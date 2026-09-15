@@ -2036,6 +2036,15 @@ class Tariff(Base):
     # Максимальный лимит трафика после докупки (0 = без ограничений)
     max_topup_traffic_gb = Column(Integer, default=0, nullable=False)
 
+    # ── LIMITED squad (новая архитектура, параллельно limited_companion_*) ──
+    # Один Remnawave user, у которого MAIN squads — безлимит, а LIMITED squads
+    # (allowed_squads сюда не входят) — общий пул трафика на все ноды пула.
+    # См. Subscription.limited_traffic_used_gb/limited_squad_active и
+    # LimitedCompanionTrafficPurchase (переиспользуется для докупок пула).
+    limited_traffic_enabled = Column(Boolean, default=False, server_default='false', nullable=False)
+    limited_squad_uuids = Column(JSON, default=list)  # список UUID squad'ов LIMITED-пула
+    limited_base_traffic_gb = Column(Integer, default=0, server_default='0', nullable=False)
+
     # Суточный тариф - ежедневное списание
     is_daily = Column(Boolean, default=False, nullable=False)  # Является ли тариф суточным
     daily_price_kopeks = Column(Integer, default=0, nullable=False)  # Цена за день в копейках
@@ -2568,6 +2577,16 @@ class Subscription(Base):
     # трафика лимитного сервера пользователю, тем же способом, что и у основной.
     limited_companion_purchased_traffic_gb = Column(Integer, default=0, server_default='0')
     limited_companion_traffic_used_gb = Column(Float, default=0.0, server_default='0')
+
+    # ── LIMITED squad на основном Remnawave user (новая архитектура) ──
+    # Параллельно limited_companion_* выше: та же идея (общий лимит на
+    # отдельный сквад), но без второго панельного пользователя — LIMITED
+    # squad подключается/отключается на activeInternalSquads ОСНОВНОГО
+    # юзера. limited_squad_active — текущее состояние (включён ли сейчас
+    # LIMITED squad у юзера), чтобы enforcement-джоба не слала лишний PATCH
+    # каждый цикл, если состояние не изменилось.
+    limited_traffic_used_gb = Column(Float, default=0.0, server_default='0')
+    limited_squad_active = Column(Boolean, default=True, server_default='true', nullable=False)
 
     # Тариф (для режима продаж "Тарифы")
     tariff_id = Column(Integer, ForeignKey('tariffs.id', ondelete='RESTRICT'), nullable=True, index=True)
