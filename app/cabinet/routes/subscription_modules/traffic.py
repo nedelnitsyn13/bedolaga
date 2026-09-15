@@ -34,6 +34,13 @@ from app.database.crud.tariff import get_tariff_by_id
 from app.database.crud.transaction import create_transaction
 from app.database.crud.user import subtract_user_balance
 from app.database.models import TransactionType, User
+from app.services.limited_squad_service import (
+    add_limited_traffic_purchase,
+    get_active_limited_traffic_purchases_gb,
+    get_effective_limited_traffic_limit_gb,
+    get_limited_base_traffic_gb,
+    is_limited_traffic_enabled,
+)
 from app.services.pricing_engine import pricing_engine
 from app.services.remnawave_service import RemnaWaveService
 from app.services.subscription_service import SubscriptionService
@@ -900,13 +907,29 @@ async def get_limited_companion_traffic(
     db: AsyncSession = Depends(get_cabinet_db),
     subscription_id: int | None = QueryParam(None, description='Subscription ID for multi-tariff'),
 ):
-    """Current usage/limit for the limited-companion server's traffic pool."""
+    """Current usage/limit for the limited-traffic pool (LIMITED squad or legacy companion)."""
     subscription = await resolve_subscription(db, user, subscription_id)
-    if (
-        not subscription
-        or not settings.is_limited_companion_enabled()
-        or not subscription.limited_companion_remnawave_id
-    ):
+    if not subscription:
+        return LimitedCompanionTrafficResponse(available=False)
+
+    tariff = getattr(subscription, 'tariff', None)
+    if is_limited_traffic_enabled(tariff):
+        # Новая архитектура: LIMITED squad на основном аккаунте, без companion.
+        base_gb = get_limited_base_traffic_gb(tariff)
+        purchased_gb = await get_active_limited_traffic_purchases_gb(db, subscription)
+        total_limit_gb = await get_effective_limited_traffic_limit_gb(db, subscription, tariff)
+        used_gb = subscription.limited_traffic_used_gb or 0.0
+        used_percent = round(min(100.0, (used_gb / total_limit_gb) * 100), 1) if total_limit_gb > 0 else 0.0
+        return LimitedCompanionTrafficResponse(
+            available=True,
+            used_gb=round(used_gb, 2),
+            base_limit_gb=base_gb,
+            purchased_gb=purchased_gb,
+            total_limit_gb=total_limit_gb,
+            used_percent=used_percent,
+        )
+
+    if not settings.is_limited_companion_enabled() or not subscription.limited_companion_remnawave_id:
         return LimitedCompanionTrafficResponse(available=False)
 
     base_limit_gb = get_limited_companion_base_traffic_gb(subscription)
@@ -931,14 +954,15 @@ async def get_limited_companion_traffic_packages(
     db: AsyncSession = Depends(get_cabinet_db),
     subscription_id: int | None = QueryParam(None, description='Subscription ID for multi-tariff'),
 ):
-    """Packages for topping up the limited-companion server's traffic (flat monthly price)."""
+    """Packages for topping up the limited-traffic pool (LIMITED squad or legacy companion)."""
     subscription = await resolve_subscription(db, user, subscription_id)
-    if (
-        not subscription
-        or not settings.is_limited_companion_enabled()
-        or not subscription.limited_companion_remnawave_id
-        or not settings.is_traffic_topup_enabled()
-    ):
+    if not subscription or not settings.is_traffic_topup_enabled():
+        return []
+
+    tariff = getattr(subscription, 'tariff', None)
+    has_new_pool = is_limited_traffic_enabled(tariff)
+    has_legacy_companion = settings.is_limited_companion_enabled() and subscription.limited_companion_remnawave_id
+    if not has_new_pool and not has_legacy_companion:
         return []
 
     packages = settings.get_traffic_topup_packages()
@@ -976,7 +1000,7 @@ async def purchase_limited_companion_traffic(
     db: AsyncSession = Depends(get_cabinet_db),
     subscription_id: int | None = QueryParam(None, description='Subscription ID for multi-tariff'),
 ):
-    """Purchase additional traffic for the limited-companion server."""
+    """Purchase additional traffic for the limited-traffic pool (LIMITED squad or legacy companion)."""
     if getattr(user, 'restriction_subscription', False):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -987,7 +1011,11 @@ async def purchase_limited_companion_traffic(
     if not subscription:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='No subscription found')
 
-    if not settings.is_limited_companion_enabled() or not subscription.limited_companion_remnawave_id:
+    tariff = getattr(subscription, 'tariff', None)
+    is_new_arch = is_limited_traffic_enabled(tariff)
+    if not is_new_arch and (
+        not settings.is_limited_companion_enabled() or not subscription.limited_companion_remnawave_id
+    ):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail='Limited companion server is not available for this subscription',
@@ -999,7 +1027,8 @@ async def purchase_limited_companion_traffic(
             detail='Traffic top-up feature is disabled',
         )
 
-    if get_limited_companion_base_traffic_gb(subscription) == 0:
+    base_gb = get_limited_base_traffic_gb(tariff) if is_new_arch else get_limited_companion_base_traffic_gb(subscription)
+    if base_gb == 0:
         # Безлимитная база (обычно у триала) — докупка ничего не добавит
         # (см. get_limited_companion_total_traffic_limit_gb), денег не берём.
         raise HTTPException(
@@ -1078,15 +1107,31 @@ async def purchase_limited_companion_traffic(
     if not success:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail='Failed to charge balance')
 
-    await add_limited_companion_traffic(db, subscription, request.gb)
+    if is_new_arch:
+        await add_limited_traffic_purchase(db, subscription, request.gb)
+        try:
+            service = RemnaWaveService()
+            if service.is_configured:
+                async with service.get_api_client() as api:
+                    from app.services.limited_squad_service import process_limited_traffic
 
-    subscription_service = SubscriptionService()
-    synced = await subscription_service.resync_limited_companion(db, subscription)
-    if not synced:
-        logger.error(
-            'Оплаченный трафик лимитного сервера не удалось применить в панели',
-            subscription_id=subscription.id,
-        )
+                    await process_limited_traffic(api, db, subscription, tariff, user)
+        except Exception as error:
+            logger.error(
+                'Оплаченный трафик LIMITED squad не удалось применить в панели',
+                subscription_id=subscription.id,
+                error=error,
+            )
+    else:
+        await add_limited_companion_traffic(db, subscription, request.gb)
+
+        subscription_service = SubscriptionService()
+        synced = await subscription_service.resync_limited_companion(db, subscription)
+        if not synced:
+            logger.error(
+                'Оплаченный трафик лимитного сервера не удалось применить в панели',
+                subscription_id=subscription.id,
+            )
 
     await create_transaction(
         db=db,
@@ -1099,14 +1144,21 @@ async def purchase_limited_companion_traffic(
     await db.refresh(user)
     await db.refresh(subscription)
 
+    if is_new_arch:
+        new_purchased_gb = await get_active_limited_traffic_purchases_gb(db, subscription)
+        new_total_limit_gb = await get_effective_limited_traffic_limit_gb(db, subscription, tariff)
+    else:
+        new_purchased_gb = subscription.limited_companion_purchased_traffic_gb
+        new_total_limit_gb = get_limited_companion_total_traffic_limit_gb(
+            subscription, subscription.limited_companion_purchased_traffic_gb
+        )
+
     response: dict[str, Any] = {
         'success': True,
         'message': 'Limited companion traffic purchased successfully',
         'gb_added': request.gb,
-        'new_purchased_traffic_gb': subscription.limited_companion_purchased_traffic_gb,
-        'new_total_limit_gb': get_limited_companion_total_traffic_limit_gb(
-            subscription, subscription.limited_companion_purchased_traffic_gb
-        ),
+        'new_purchased_traffic_gb': new_purchased_gb,
+        'new_total_limit_gb': new_total_limit_gb,
         'amount_paid_kopeks': final_price,
         'new_balance_kopeks': user.balance_kopeks,
     }
@@ -1137,7 +1189,10 @@ async def save_limited_companion_traffic_cart(
     if not subscription:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='У вас нет активной подписки')
 
-    if not settings.is_limited_companion_enabled() or not subscription.limited_companion_remnawave_id:
+    tariff = getattr(subscription, 'tariff', None)
+    if not is_limited_traffic_enabled(tariff) and (
+        not settings.is_limited_companion_enabled() or not subscription.limited_companion_remnawave_id
+    ):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail='Лимитный сервер недоступен для этой подписки',
@@ -1191,10 +1246,16 @@ async def refresh_limited_companion_traffic(
     request per 60 seconds per subscription.
     """
     subscription = await resolve_subscription(db, user, subscription_id)
-    if (
-        not subscription
-        or not settings.is_limited_companion_enabled()
-        or not subscription.limited_companion_remnawave_id
+    if not subscription:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='Limited companion server is not available for this subscription',
+        )
+
+    tariff = getattr(subscription, 'tariff', None)
+    is_new_arch = is_limited_traffic_enabled(tariff)
+    if not is_new_arch and (
+        not settings.is_limited_companion_enabled() or not subscription.limited_companion_remnawave_id
     ):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -1218,6 +1279,36 @@ async def refresh_limited_companion_traffic(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail=f'Rate limited. Try again in {TRAFFIC_REFRESH_RATE_WINDOW} seconds.',
             headers={'Retry-After': str(TRAFFIC_REFRESH_RATE_WINDOW)},
+        )
+
+    if is_new_arch:
+        service = RemnaWaveService()
+        if service.is_configured:
+            try:
+                async with service.get_api_client() as api:
+                    from app.services.limited_squad_service import process_limited_traffic
+
+                    await process_limited_traffic(api, db, subscription, tariff, user)
+                    await db.refresh(subscription)
+            except Exception as error:
+                logger.warning(
+                    'Не удалось обновить usage LIMITED squad',
+                    subscription_id=subscription.id,
+                    error=error,
+                )
+
+        base_gb = get_limited_base_traffic_gb(tariff)
+        purchased_gb = await get_active_limited_traffic_purchases_gb(db, subscription)
+        total_limit_gb = await get_effective_limited_traffic_limit_gb(db, subscription, tariff)
+        used_gb = subscription.limited_traffic_used_gb or 0.0
+        used_percent = round(min(100.0, (used_gb / total_limit_gb) * 100), 1) if total_limit_gb > 0 else 0.0
+        return LimitedCompanionTrafficResponse(
+            available=True,
+            used_gb=round(used_gb, 2),
+            base_limit_gb=base_gb,
+            purchased_gb=purchased_gb,
+            total_limit_gb=total_limit_gb,
+            used_percent=used_percent,
         )
 
     remnawave_service = RemnaWaveService()
