@@ -213,3 +213,77 @@ async def refresh_limited_traffic_usage(
     await db.flush((subscription,))
     await db.commit()
     return used_gb
+
+
+async def sync_limited_squad_state(
+    api, db: AsyncSession, subscription: Subscription, tariff: Tariff | None, user
+) -> bool | None:
+    """Снимает/возвращает LIMITED squad на ``activeInternalSquads`` ОСНОВНОГО юзера.
+
+    MAIN squads (``subscription.connected_squads``) никогда не трогаются и не
+    переписываются в БД — этот модуль лишь добавляет/убирает LIMITED squad(ы)
+    поверх них в самом PATCH-запросе к панели. ``connected_squads`` остаётся
+    источником истины для обычной MAIN-синхронизации (``panel_sync``).
+
+    Ничего не PATCH'ит, если состояние не изменилось (экономит вызовы к
+    панели на каждом цикле enforcement-джобы).
+
+    Возвращает новое состояние ``limited_squad_active``, либо ``None``, если
+    механика выключена, у подписки нет панельного аккаунта, или PATCH не
+    удался (тогда предыдущее состояние сохраняется как было).
+    """
+    squad_uuids = get_limited_squad_uuids(tariff)
+    if not squad_uuids:
+        return None
+
+    panel_user_id = resolve_main_panel_user_id(subscription, user)
+    if not panel_user_id:
+        return None
+
+    effective_limit_gb = await get_effective_limited_traffic_limit_gb(db, subscription, tariff)
+    used_gb = subscription.limited_traffic_used_gb or 0.0
+
+    # 0 = безлимит (условность, унаследованная от companion-версии — база
+    # тарифа 0 означает «лимит не задан», а не «доступ закрыт»).
+    should_be_active = effective_limit_gb <= 0 or used_gb < effective_limit_gb
+    if should_be_active == bool(subscription.limited_squad_active):
+        return should_be_active
+
+    main_squads = list(getattr(subscription, 'connected_squads', None) or [])
+    target_squads = main_squads + squad_uuids if should_be_active else main_squads
+
+    try:
+        await api.update_user(user_id=panel_user_id, active_internal_squads=target_squads)
+    except Exception as error:
+        logger.warning(
+            '⚠️ Не удалось переключить LIMITED squad',
+            subscription_id=subscription.id,
+            should_be_active=should_be_active,
+            error=error,
+        )
+        return None
+
+    subscription.limited_squad_active = should_be_active
+    await db.flush((subscription,))
+    await db.commit()
+    logger.info(
+        '🔀 LIMITED squad переключён',
+        subscription_id=subscription.id,
+        active=should_be_active,
+        used_gb=used_gb,
+        limit_gb=effective_limit_gb,
+    )
+    return should_be_active
+
+
+async def process_limited_traffic(
+    api, db: AsyncSession, subscription: Subscription, tariff: Tariff | None, user
+) -> None:
+    """Один цикл для подписки: обновить usage, затем при необходимости
+    переключить LIMITED squad. Точка входа для периодической enforcement-джобы.
+
+    Best-effort — ошибки здесь не должны ронять весь цикл мониторинга других
+    подписок, вызывающий код оборачивает per-subscription try/except.
+    """
+    await refresh_limited_traffic_usage(api, db, subscription, tariff, user)
+    await sync_limited_squad_state(api, db, subscription, tariff, user)

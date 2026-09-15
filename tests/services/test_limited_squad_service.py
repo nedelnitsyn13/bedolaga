@@ -275,3 +275,175 @@ async def test_multiple_limited_squads_pool_their_nodes() -> None:
     assert set(node_uuids) == {'node-1', 'node-2'}
     used_bytes = await fetch_limited_used_bytes(api, 42, node_uuids, '2026-09-01', '2026-09-15')
     assert used_bytes == 25 * 1024**3
+
+
+# ── enforcement: снятие/возврат LIMITED squad, MAIN не трогается ──
+
+
+class _RecordingApi(_FakeApi):
+    """Как _FakeApi, но запоминает PATCH-вызовы update_user."""
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.update_calls: list[dict] = []
+
+    async def update_user(self, *, user_id, active_internal_squads):
+        self.update_calls.append({'user_id': user_id, 'active_internal_squads': list(active_internal_squads)})
+
+
+async def _create_subscription_for_enforcement(
+    db,
+    user: User,
+    tariff: Tariff,
+    *,
+    short_id: str,
+    panel_user_id: int,
+    used_gb: float,
+    squad_active: bool,
+    main_squads=None,
+) -> Subscription:
+    user.remnawave_id = panel_user_id
+    await db.commit()
+
+    subscription = Subscription(
+        user_id=user.id,
+        tariff_id=tariff.id,
+        end_date=datetime.now(UTC) + timedelta(days=30),
+        remnawave_short_id=short_id,
+        remnawave_id=panel_user_id,
+        connected_squads=list(main_squads or ['main-squad-1']),
+        limited_traffic_used_gb=used_gb,
+        limited_squad_active=squad_active,
+    )
+    db.add(subscription)
+    await db.commit()
+    await db.refresh(subscription)
+    return subscription
+
+
+async def test_squad_removed_when_usage_reaches_base_limit(monkeypatch) -> None:
+    """п.3: база 50 ГБ, usage 50 ГБ → LIMITED squad снимается."""
+    from app.services.limited_squad_service import sync_limited_squad_state
+
+    async with memory_session(monkeypatch, TABLES) as db:
+        user = await _create_user(db, telegram_id=8201)
+        tariff = await _create_tariff(db, squads=['limited-squad'], base_gb=50)
+        subscription = await _create_subscription_for_enforcement(
+            db, user, tariff, short_id='ls-e1', panel_user_id=501, used_gb=50.0, squad_active=True,
+            main_squads=['main-squad-1'],
+        )
+
+        api = _RecordingApi(nodes_by_squad={}, usage_by_node={})
+        result = await sync_limited_squad_state(api, db, subscription, tariff, user)
+
+        assert result is False
+        assert subscription.limited_squad_active is False
+        assert len(api.update_calls) == 1
+        # п.4: MAIN squad остаётся в PATCH-списке, LIMITED — нет.
+        assert api.update_calls[0]['active_internal_squads'] == ['main-squad-1']
+        assert api.update_calls[0]['user_id'] == 501
+
+
+async def test_main_squads_untouched_when_limited_removed(monkeypatch) -> None:
+    """п.4 отдельно: несколько MAIN squads — все остаются после снятия LIMITED."""
+    from app.services.limited_squad_service import sync_limited_squad_state
+
+    async with memory_session(monkeypatch, TABLES) as db:
+        user = await _create_user(db, telegram_id=8202)
+        tariff = await _create_tariff(db, squads=['limited-squad'], base_gb=10)
+        subscription = await _create_subscription_for_enforcement(
+            db, user, tariff, short_id='ls-e2', panel_user_id=502, used_gb=10.0, squad_active=True,
+            main_squads=['main-1', 'main-2', 'main-3'],
+        )
+
+        api = _RecordingApi(nodes_by_squad={}, usage_by_node={})
+        await sync_limited_squad_state(api, db, subscription, tariff, user)
+
+        assert api.update_calls[0]['active_internal_squads'] == ['main-1', 'main-2', 'main-3']
+
+
+async def test_purchase_restores_limited_squad(monkeypatch) -> None:
+    """п.5: +20 ГБ докупка поднимает effective limit выше usage → LIMITED возвращается."""
+    from app.services.limited_squad_service import add_limited_traffic_purchase, sync_limited_squad_state
+
+    async with memory_session(monkeypatch, TABLES) as db:
+        user = await _create_user(db, telegram_id=8203)
+        tariff = await _create_tariff(db, squads=['limited-squad'], base_gb=50)
+        subscription = await _create_subscription_for_enforcement(
+            db, user, tariff, short_id='ls-e3', panel_user_id=503, used_gb=50.0, squad_active=False,
+            main_squads=['main-squad-1'],
+        )
+
+        await add_limited_traffic_purchase(db, subscription, 20)
+
+        api = _RecordingApi(nodes_by_squad={}, usage_by_node={})
+        result = await sync_limited_squad_state(api, db, subscription, tariff, user)
+
+        assert result is True
+        assert subscription.limited_squad_active is True
+        assert set(api.update_calls[0]['active_internal_squads']) == {'main-squad-1', 'limited-squad'}
+
+
+async def test_expired_purchase_removes_limited_squad_again(monkeypatch) -> None:
+    """п.10: usage=85, лимит был 100 (база 50 + докупка 50) — докупка истекла,
+    новый лимит 50 — 85 >= 50 → LIMITED снимается."""
+    from app.services.limited_squad_service import sync_limited_squad_state
+
+    async with memory_session(monkeypatch, TABLES) as db:
+        user = await _create_user(db, telegram_id=8204)
+        tariff = await _create_tariff(db, squads=['limited-squad'], base_gb=50)
+        subscription = await _create_subscription_for_enforcement(
+            db, user, tariff, short_id='ls-e4', panel_user_id=504, used_gb=85.0, squad_active=True,
+            main_squads=['main-squad-1'],
+        )
+
+        # Докупка уже истекла — не учитывается в effective limit.
+        db.add(
+            LimitedCompanionTrafficPurchase(
+                subscription_id=subscription.id, traffic_gb=50, expires_at=datetime.now(UTC) - timedelta(seconds=1)
+            )
+        )
+        await db.commit()
+
+        api = _RecordingApi(nodes_by_squad={}, usage_by_node={})
+        result = await sync_limited_squad_state(api, db, subscription, tariff, user)
+
+        assert result is False
+        assert subscription.limited_squad_active is False
+
+
+async def test_no_patch_sent_when_state_unchanged(monkeypatch) -> None:
+    """Экономия вызовов к панели: состояние не поменялось — PATCH не шлём."""
+    from app.services.limited_squad_service import sync_limited_squad_state
+
+    async with memory_session(monkeypatch, TABLES) as db:
+        user = await _create_user(db, telegram_id=8205)
+        tariff = await _create_tariff(db, squads=['limited-squad'], base_gb=50)
+        subscription = await _create_subscription_for_enforcement(
+            db, user, tariff, short_id='ls-e5', panel_user_id=505, used_gb=10.0, squad_active=True,
+            main_squads=['main-squad-1'],
+        )
+
+        api = _RecordingApi(nodes_by_squad={}, usage_by_node={})
+        result = await sync_limited_squad_state(api, db, subscription, tariff, user)
+
+        assert result is True  # уже активен, под лимитом — остаётся активен
+        assert api.update_calls == []
+
+
+async def test_disabled_tariff_never_touches_panel(monkeypatch) -> None:
+    """Механика выключена на тарифе — sync_limited_squad_state не лезет в панель вообще."""
+    from app.services.limited_squad_service import sync_limited_squad_state
+
+    async with memory_session(monkeypatch, TABLES) as db:
+        user = await _create_user(db, telegram_id=8206)
+        tariff = await _create_tariff(db, enabled=False)
+        subscription = await _create_subscription_for_enforcement(
+            db, user, tariff, short_id='ls-e6', panel_user_id=506, used_gb=999.0, squad_active=True,
+        )
+
+        api = _RecordingApi(nodes_by_squad={}, usage_by_node={})
+        result = await sync_limited_squad_state(api, db, subscription, tariff, user)
+
+        assert result is None
+        assert api.update_calls == []
