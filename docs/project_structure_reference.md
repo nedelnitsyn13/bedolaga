@@ -2862,6 +2862,9 @@
 - `migrations/alembic/versions/0123_subscription_grace_tail_expire_at.py` — Python-модуль
   Классы: нет
   Функции: `upgrade`, `downgrade`
+- `migrations/alembic/versions/0124_limited_squad_columns.py` — Python-модуль
+  Классы: нет
+  Функции: `upgrade`, `downgrade`
 
 ## scripts
 
