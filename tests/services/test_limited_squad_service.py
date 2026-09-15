@@ -594,6 +594,164 @@ async def test_deactivate_orphaned_removes_squad_and_clears_flag(monkeypatch) ->
         assert api.update_calls[0]['active_internal_squads'] == ['main-squad-1']
 
 
+# ── push_limited_traffic_usage: публикация usage на сторону панели ──
+
+
+class _FakeResponse:
+    def __init__(self, status: int, body: str = '') -> None:
+        self.status = status
+        self._body = body
+
+    async def text(self) -> str:
+        return self._body
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *exc) -> bool:
+        return False
+
+
+class _FakeSession:
+    def __init__(self, response: _FakeResponse, calls: list) -> None:
+        self._response = response
+        self._calls = calls
+
+    def post(self, url, json=None, headers=None):
+        self._calls.append({'url': url, 'json': json, 'headers': headers})
+        return self._response
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *exc) -> bool:
+        return False
+
+
+def _patch_merger_settings(monkeypatch, *, url='https://merger.local', token='secret-token') -> None:  # noqa: S107
+    from app.config import settings
+
+    monkeypatch.setattr(settings, 'SUBSCRIPTION_MERGER_URL', url)
+    monkeypatch.setattr(settings, 'SUBSCRIPTION_MERGER_TOKEN', token)
+    monkeypatch.setattr(settings, 'SUBSCRIPTION_MERGER_REQUEST_TIMEOUT', 10)
+
+
+def _patch_aiohttp(monkeypatch, *, status: int = 200, body: str = '') -> list:
+    import app.services.limited_squad_service as m
+
+    calls: list = []
+    response = _FakeResponse(status, body)
+    monkeypatch.setattr(m.aiohttp, 'ClientSession', lambda timeout=None: _FakeSession(response, calls))
+    return calls
+
+
+async def test_push_usage_noop_without_merger_settings(monkeypatch) -> None:
+    from app.config import settings
+    from app.services.limited_squad_service import push_limited_traffic_usage
+
+    monkeypatch.setattr(settings, 'SUBSCRIPTION_MERGER_URL', None)
+    monkeypatch.setattr(settings, 'SUBSCRIPTION_MERGER_TOKEN', None)
+    calls = _patch_aiohttp(monkeypatch)
+
+    async with memory_session(monkeypatch, TABLES) as db:
+        user = await _create_user(db, telegram_id=8301)
+        tariff = await _create_tariff(db, base_gb=50)
+        subscription = await _create_subscription(db, user, tariff, short_id='push-1')
+
+        await push_limited_traffic_usage(subscription, user, 10.0, 50)
+
+    assert calls == []
+
+
+async def test_push_usage_noop_without_a_token(monkeypatch) -> None:
+    _patch_merger_settings(monkeypatch)
+    calls = _patch_aiohttp(monkeypatch)
+    from app.services.limited_squad_service import push_limited_traffic_usage
+
+    async with memory_session(monkeypatch, TABLES) as db:
+        user = await _create_user(db, telegram_id=8302)
+        tariff = await _create_tariff(db, base_gb=50)
+        subscription = await _create_subscription(db, user, tariff, short_id='push-2')
+        subscription.remnawave_short_id = None
+
+        await push_limited_traffic_usage(subscription, user, 10.0, 50)
+
+    assert calls == []
+
+
+async def test_push_usage_noop_when_limit_is_zero(monkeypatch) -> None:
+    """limit_gb<=0 = безлимит — показывать в списке серверов нечего."""
+    _patch_merger_settings(monkeypatch)
+    calls = _patch_aiohttp(monkeypatch)
+    from app.services.limited_squad_service import push_limited_traffic_usage
+
+    async with memory_session(monkeypatch, TABLES) as db:
+        user = await _create_user(db, telegram_id=8303)
+        tariff = await _create_tariff(db, base_gb=0)
+        subscription = await _create_subscription(db, user, tariff, short_id='push-3')
+
+        await push_limited_traffic_usage(subscription, user, 10.0, 0)
+
+    assert calls == []
+
+
+async def test_push_usage_sends_expected_payload(monkeypatch) -> None:
+    _patch_merger_settings(monkeypatch)
+    calls = _patch_aiohttp(monkeypatch)
+    from app.services.limited_squad_service import push_limited_traffic_usage
+
+    async with memory_session(monkeypatch, TABLES) as db:
+        user = await _create_user(db, telegram_id=8304)
+        user.username = 'ivan'
+        await db.commit()
+        tariff = await _create_tariff(db, base_gb=50)
+        subscription = await _create_subscription(db, user, tariff, short_id='push-4')
+
+        await push_limited_traffic_usage(subscription, user, 12.3456, 70)
+
+    assert len(calls) == 1
+    call = calls[0]
+    assert call['url'] == 'https://merger.local/usage'
+    assert call['headers'] == {'Authorization': 'Bearer secret-token'}
+    assert call['json'] == {
+        'token': 'push-4',
+        'used_gb': 12.346,
+        'limit_gb': 70,
+        'username': 'ivan',
+    }
+
+
+async def test_push_usage_logs_but_does_not_raise_on_rejection(monkeypatch) -> None:
+    _patch_merger_settings(monkeypatch)
+    _patch_aiohttp(monkeypatch, status=401, body='bad token')
+    from app.services.limited_squad_service import push_limited_traffic_usage
+
+    async with memory_session(monkeypatch, TABLES) as db:
+        user = await _create_user(db, telegram_id=8305)
+        tariff = await _create_tariff(db, base_gb=50)
+        subscription = await _create_subscription(db, user, tariff, short_id='push-5')
+
+        await push_limited_traffic_usage(subscription, user, 1.0, 50)
+
+
+async def test_push_usage_logs_but_does_not_raise_on_network_error(monkeypatch) -> None:
+    _patch_merger_settings(monkeypatch)
+    import app.services.limited_squad_service as m
+
+    def _raise(timeout=None):
+        raise RuntimeError('connection refused')
+
+    monkeypatch.setattr(m.aiohttp, 'ClientSession', _raise)
+    from app.services.limited_squad_service import push_limited_traffic_usage
+
+    async with memory_session(monkeypatch, TABLES) as db:
+        user = await _create_user(db, telegram_id=8306)
+        tariff = await _create_tariff(db, base_gb=50)
+        subscription = await _create_subscription(db, user, tariff, short_id='push-6')
+
+        await push_limited_traffic_usage(subscription, user, 1.0, 50)
+
+
 async def test_deactivate_orphaned_noop_without_a_tariff(monkeypatch) -> None:
     from app.services.limited_squad_service import deactivate_orphaned_limited_squad
 

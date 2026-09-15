@@ -28,6 +28,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 
+import aiohttp
 import structlog
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -224,6 +225,51 @@ async def refresh_limited_traffic_usage(
     return used_gb
 
 
+async def push_limited_traffic_usage(subscription: Subscription, user, used_gb: float, limit_gb: int) -> None:
+    """Публикует usage LIMITED-пула на сторону панели (``subscription-merger``).
+
+    Remnawave отдаёт в ``subscription-userinfo`` только суммарный расход по
+    ВСЕМУ аккаунту (MAIN + LIMITED squad'ы объединены в одном юзере) — панель
+    не умеет отдать расход конкретно LIMITED-пула. Чтобы клиентское приложение
+    могло показать его отдельной строкой в списке серверов, панельный скрипт
+    подставляет эти цифры сам — но узнать их может только отсюда. Best-effort:
+    недоступность приёмника не должна ронять enforcement-цикл.
+    """
+    if not settings.SUBSCRIPTION_MERGER_URL or not settings.SUBSCRIPTION_MERGER_TOKEN:
+        return
+
+    token = subscription.remnawave_short_id
+    if not token or limit_gb <= 0:
+        return
+
+    payload = {
+        'token': token,
+        'used_gb': round(used_gb, 3),
+        'limit_gb': limit_gb,
+        'username': (user.username or user.full_name or str(user.telegram_id)) if user else None,
+    }
+    url = settings.SUBSCRIPTION_MERGER_URL.rstrip('/') + '/usage'
+    headers = {'Authorization': f'Bearer {settings.SUBSCRIPTION_MERGER_TOKEN}'}
+    timeout = aiohttp.ClientTimeout(total=settings.SUBSCRIPTION_MERGER_REQUEST_TIMEOUT)
+    try:
+        async with (
+            aiohttp.ClientSession(timeout=timeout) as session,
+            session.post(url, json=payload, headers=headers) as response,
+        ):
+            if response.status >= 400:
+                body = await response.text()
+                logger.warning(
+                    '⚠️ subscription-merger отклонил usage LIMITED-пула',
+                    status=response.status,
+                    body=body[:500],
+                )
+    except Exception as error:
+        logger.warning(
+            '⚠️ Не удалось отправить usage LIMITED-пула в subscription-merger',
+            error=error,
+        )
+
+
 async def sync_limited_squad_state(
     api, db: AsyncSession, subscription: Subscription, tariff: Tariff | None, user
 ) -> bool | None:
@@ -316,6 +362,9 @@ async def process_limited_traffic(
     """
     await refresh_limited_traffic_usage(api, db, subscription, tariff, user)
     await sync_limited_squad_state(api, db, subscription, tariff, user)
+
+    limit_gb = await get_effective_limited_traffic_limit_gb(db, subscription, tariff)
+    await push_limited_traffic_usage(subscription, user, subscription.limited_traffic_used_gb or 0.0, limit_gb)
 
 
 async def deactivate_orphaned_limited_squad(
