@@ -333,7 +333,6 @@ async def main():
         await configure_chat_menu_button(bot)
 
         monitoring_service.bot = bot
-        limited_squad_monitoring_service.bot = bot
         grace_access_runtime.bot = bot
         maintenance_service.set_bot(bot)
         broadcast_service.set_bot(bot)

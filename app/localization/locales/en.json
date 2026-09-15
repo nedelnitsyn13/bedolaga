@@ -1092,8 +1092,6 @@
   "INVALID_AMOUNT": "❌ Invalid amount",
   "LIMITED_COMPANION_ALREADY_UNLIMITED": "♾️ The limited server already has unlimited traffic — no top-up needed",
   "LIMITED_COMPANION_UNAVAILABLE": "⚠️ The limited server is not available for this subscription",
-  "LIMITED_SQUAD_TRAFFIC_EXHAUSTED": "⛔ <b>Traffic limit reached</b>\n\nThe limited server traffic on tariff «{tariff_name}» has run out — access to it has been disabled.",
-  "LIMITED_SQUAD_TRAFFIC_EXHAUSTED_TOPUP_HINT": "Buy more traffic to restore access.",
   "LANGUAGE_PROMPT": "🌐 Choose the interface language:",
   "LANGUAGE_SELECTED": "🌐 Interface language set: <b>English</b>",
   "LANGUAGE_SELECTION_DISABLED": "⚙️ Language selection is temporarily unavailable. Using the default language.",
