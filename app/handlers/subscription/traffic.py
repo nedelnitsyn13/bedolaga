@@ -816,10 +816,8 @@ async def handle_add_traffic_limited(
         # одна десятая знака совпадает с детальной карточкой подписки.
         f'Использовано: {companion_used:.1f} ГБ\n'
         f'Текущий лимит: {texts.format_traffic(current_limit)}\n\n'
+        'Выберите дополнительный трафик:'
     )
-    if current_limit > 0 and companion_used >= current_limit:
-        prompt_text += '⛔ Лимит исчерпан — доступ к серверу отключён до докупки.\n\n'
-    prompt_text += 'Выберите дополнительный трафик:'
 
     await callback.message.edit_text(
         prompt_text,

@@ -1217,8 +1217,6 @@
   "INVALID_AMOUNT": "❌ مبلغ نامعتبر",
   "LIMITED_COMPANION_ALREADY_UNLIMITED": "♾️ سرور محدود از قبل نامحدود است — نیازی به شارژ نیست",
   "LIMITED_COMPANION_UNAVAILABLE": "⚠️ سرور محدود برای این اشتراک در دسترس نیست",
-  "LIMITED_SQUAD_TRAFFIC_EXHAUSTED": "⛔ <b>محدودیت ترافیک تمام شد</b>\n\nترافیک سرور محدود در تعرفه «{tariff_name}» تمام شده — دسترسی به آن غیرفعال شده است.",
-  "LIMITED_SQUAD_TRAFFIC_EXHAUSTED_TOPUP_HINT": "برای بازیابی دسترسی، ترافیک بیشتری خریداری کنید.",
   "LANGUAGE_PROMPT": "🌐 زبان رابط را انتخاب کنید:",
   "LANGUAGE_SELECTED": "🌐 زبان رابط انتخاب شد: <b>فارسی</b>",
   "LANGUAGE_SELECTION_DISABLED": "⚙️ انتخاب زبان موقتاً در دسترس نیست. زبان پیش‌فرض استفاده می‌شود.",
