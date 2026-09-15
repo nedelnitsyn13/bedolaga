@@ -512,6 +512,28 @@ class SubscriptionService:
         if not settings.is_limited_companion_enabled():
             return
 
+        from app.database.models import Tariff
+        from app.services.limited_squad_service import is_limited_traffic_enabled
+
+        try:
+            tariff = subscription.tariff
+        except Exception:
+            tariff = None
+        if tariff is None and getattr(subscription, 'tariff_id', None):
+            tariff = await db.get(Tariff, subscription.tariff_id)
+        if is_limited_traffic_enabled(tariff):
+            # Тариф переведён на новую архитектуру LIMITED squad (см.
+            # app/services/limited_squad_service.py) — компаньон для этой
+            # подписки больше не заводится/обновляется. Без этой развилки
+            # компаньон продолжал бы мириться каждую пушку подписки и
+            # "воскрешал" бы статус ACTIVE после ручного отключения через
+            # scripts/migrate_limited_companion_to_squad.py.
+            logger.info(
+                'ℹ️ Тариф на новой LIMITED squad архитектуре — пропускаю синк компаньона',
+                subscription_id=subscription.id,
+            )
+            return
+
         try:
             companion_user: RemnaWaveUser | None = None
             if subscription.limited_companion_remnawave_id:

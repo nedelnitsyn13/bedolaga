@@ -1871,7 +1871,7 @@
   Функции: `get_traffic_reset_strategy` — Стратегия сброса трафика: настройка тарифа, иначе общая из конфига.
 - `app/services/panel_sync/writer.py` — Python-модуль
   Классы: `PanelWriteResult`
-  Функции: `reset_companion_devices` — Mirror a full device reset onto the limited-companion account., `remove_companion_device` — Mirror removing one device (by hwid) onto the limited-companion account., `sync_companion_device_limit` — Mirror ``hwid_device_limit`` onto the limited-companion account., `push_subscription` — Отправить состояние подписки в панель., `patch_panel_account` — Обновить карточку аккаунта в панели, не трогая состояние подписки., `patch_panel_squads` — Переназначить аккаунту сквады тарифа., `write_companion_account` — Создать/обновить панельный аккаунт, у которого нет своей строки Subscription.
+  Функции: `reset_companion_devices` — Mirror a full device reset onto the limited-companion account., `remove_companion_device` — Mirror removing one device (by hwid) onto the limited-companion account., `sync_companion_device_limit` — Mirror ``hwid_device_limit`` onto the limited-companion account., `disable_companion_account` — Узкий PATCH статуса компаньона на DISABLED — не трогает сквады/трафик/срок., `push_subscription` — Отправить состояние подписки в панель., `patch_panel_account` — Обновить карточку аккаунта в панели, не трогая состояние подписки., `patch_panel_squads` — Переназначить аккаунту сквады тарифа., `write_companion_account` — Создать/обновить панельный аккаунт, у которого нет своей строки Subscription.
 
 #### app/services/payment
 
@@ -2898,6 +2898,9 @@
 - `scripts/generate_structure_reference.py` — Python-модуль
   Классы: нет
   Функции: `tracked_paths` — Файлы проекта: отслеживаемые плюс новые, которые git не игнорирует., `describe_module` — Строки «Классы:» и «Функции:» для модуля., `render_entries`, `render`, `build`, `main`
+- `scripts/migrate_limited_companion_to_squad.py` — Python-модуль
+  Классы: `MigrationReport` (1 методов)
+  Функции: `main`
 - `scripts/migrate_shopbot.py` — Python-модуль
   Классы: `MigrationReport` (1 методов)
   Функции: `main`
@@ -3955,6 +3958,9 @@
 - `tests/scripts/test_audit_limited_companion_devices.py` — Python-модуль
   Классы: нет
   Функции: `test_blames_a_full_companion_when_the_device_is_only_on_main`, `test_blames_a_full_main_when_the_device_is_only_on_the_companion`, `test_reports_drifted_limits_when_neither_side_is_full`, `test_calls_it_a_stale_gap_when_neither_side_is_currently_full` — Лимиты одинаковые и обе стороны свободны сейчас — панель отказать не могла, `test_does_not_blame_a_limit_the_panel_never_reported` — hwidDeviceLimit=None — безлимит: обвинять его в отказе нельзя, это тоже хвост.
+- `tests/scripts/test_migrate_limited_companion_to_squad.py` — Python-модуль
+  Классы: нет
+  Функции: `test_dry_run_reports_state_without_touching_anything`, `test_validation_fails_when_subscription_missing`, `test_validation_fails_when_tariff_not_on_new_architecture`, `test_validation_fails_when_tariff_has_no_squads`, `test_validation_fails_without_a_legacy_companion`, `test_apply_runs_enforcement_then_disables_companion`, `test_apply_reports_failure_when_disable_raises`
 
 ### tests/services
 
@@ -4461,6 +4467,9 @@
 - `tests/services/test_sync_from_panel_skips_foreign_accounts.py` — Python-модуль
   Классы: нет
   Функции: `db`, `service`, `test_import_skips_accounts_without_identity_and_says_so`
+- `tests/services/test_sync_limited_companion_respects_new_architecture.py` — Python-модуль
+  Классы: нет
+  Функции: `test_new_architecture_tariff_skips_companion_sync`, `test_legacy_tariff_still_syncs_companion`, `test_no_tariff_at_all_still_syncs_companion` — A subscription with no tariff row (single-mode legacy account) must keep
 - `tests/services/test_sync_users_to_panel_adoption.py` — Python-модуль
   Классы: нет
   Функции: `harness` — Один батч из одной подписки, gracce-lease разрешён, клиент — мок., `test_adopts_existing_panel_user_instead_of_creating_a_duplicate`, `test_creates_when_the_panel_does_not_know_the_short_uuid`, `test_single_tariff_writes_identity_onto_the_user` — Мутация «поменять ветки местами» схлопывала все подписки юзера на один id., `test_update_branch_does_not_wipe_squads_when_the_local_list_is_empty` — Сиблинг того же дефекта: ветка обновления по УЖЕ известному id., `test_update_branch_forwards_a_non_empty_squad_list`, `test_identity_is_written_into_the_session_that_owns_the_locked_row` — Связь пишется в сессию лизы, а не в общую сессию прохода.
@@ -4583,7 +4592,7 @@
   Функции: `test_normalize_upper_cases_and_treats_blank_as_absent`, `test_normalize_rejects_what_the_panel_rejects`, `test_tariff_tag_wins_for_paid_subscription`, `test_tariff_tag_wins_over_trial_tag_too`, `test_without_tariff_tag_trial_uses_global_trial_tag`, `test_without_tariff_tag_paid_uses_global_paid_tag`, `test_blank_tariff_tag_counts_as_absent`, `test_payload_resolves_tag_from_tariff_when_caller_passed_none`, `test_payload_keeps_explicit_tag_from_caller`
 - `tests/services/panel_sync/test_writer.py` — Python-модуль
   Классы: нет
-  Функции: `test_known_account_is_updated_not_created`, `test_unknown_account_is_created`, `test_panel_says_user_is_gone_so_it_is_recreated` — Протухший id в базе не должен ронять синхронизацию., `test_transient_panel_error_is_not_a_reason_to_create_a_duplicate`, `test_expired_subscription_extinguishes_a_future_date_known_in_advance` — Дата панели уже на руках — гасим тем же запросом, без второго., `test_expired_subscription_extinguishes_a_future_date_learned_from_the_answer` — Дату панели узнали только из ответа — гасим вторым запросом., `test_live_subscription_is_written_once`, `test_identity_is_written_onto_the_subscription`, `test_panel_id_taken_by_a_sibling_row_is_not_written` — Колонка частично уникальна: IntegrityError откатил бы уже сделанный PATCH., `test_single_tariff_records_the_account_on_the_user_too`, `test_only_fields_narrows_the_patch` — Узкая правка описания не должна тащить в панель дату и сквады., `test_recreated_account_replaces_the_stale_link` — Иначе следующий проход снова не найдёт аккаунт и заведёт ещё один дубль., `test_extinguish_learned_from_the_answer_retries_with_a_bigger_margin` — Второй PATCH отвергнут как «прошлое» — повтор с большим запасом, а не ошибка прохода., `test_extinguish_known_in_advance_falls_back_to_status_first` — Дата уехала одним PATCH с остальными полями, и панель отвергла всё: поля важнее — шлём без даты, дату гасим отдельно., `test_a_second_rejection_is_a_real_error` — Если и большой запас панель считает прошлым, это не разъезд часов — ошибку не глотаем., `test_other_validation_errors_are_not_mistaken_for_clock_skew`, `test_reset_companion_devices_resets_the_companion_account`, `test_reset_companion_devices_noop_without_a_companion`, `test_reset_companion_devices_swallows_panel_errors`, `test_remove_companion_device_removes_the_same_hwid`, `test_remove_companion_device_noop_without_a_companion`, `test_push_subscription_mirrors_reset_onto_the_companion`, `test_sync_companion_device_limit_patches_the_companion_account`, `test_sync_companion_device_limit_noop_without_a_companion`, `test_sync_companion_device_limit_swallows_panel_errors`
+  Функции: `test_known_account_is_updated_not_created`, `test_unknown_account_is_created`, `test_panel_says_user_is_gone_so_it_is_recreated` — Протухший id в базе не должен ронять синхронизацию., `test_transient_panel_error_is_not_a_reason_to_create_a_duplicate`, `test_expired_subscription_extinguishes_a_future_date_known_in_advance` — Дата панели уже на руках — гасим тем же запросом, без второго., `test_expired_subscription_extinguishes_a_future_date_learned_from_the_answer` — Дату панели узнали только из ответа — гасим вторым запросом., `test_live_subscription_is_written_once`, `test_identity_is_written_onto_the_subscription`, `test_panel_id_taken_by_a_sibling_row_is_not_written` — Колонка частично уникальна: IntegrityError откатил бы уже сделанный PATCH., `test_single_tariff_records_the_account_on_the_user_too`, `test_only_fields_narrows_the_patch` — Узкая правка описания не должна тащить в панель дату и сквады., `test_recreated_account_replaces_the_stale_link` — Иначе следующий проход снова не найдёт аккаунт и заведёт ещё один дубль., `test_extinguish_learned_from_the_answer_retries_with_a_bigger_margin` — Второй PATCH отвергнут как «прошлое» — повтор с большим запасом, а не ошибка прохода., `test_extinguish_known_in_advance_falls_back_to_status_first` — Дата уехала одним PATCH с остальными полями, и панель отвергла всё: поля важнее — шлём без даты, дату гасим отдельно., `test_a_second_rejection_is_a_real_error` — Если и большой запас панель считает прошлым, это не разъезд часов — ошибку не глотаем., `test_other_validation_errors_are_not_mistaken_for_clock_skew`, `test_reset_companion_devices_resets_the_companion_account`, `test_reset_companion_devices_noop_without_a_companion`, `test_reset_companion_devices_swallows_panel_errors`, `test_remove_companion_device_removes_the_same_hwid`, `test_remove_companion_device_noop_without_a_companion`, `test_push_subscription_mirrors_reset_onto_the_companion`, `test_sync_companion_device_limit_patches_the_companion_account`, `test_sync_companion_device_limit_noop_without_a_companion`, `test_sync_companion_device_limit_swallows_panel_errors`, `test_disable_companion_account_patches_status_only`, `test_disable_companion_account_noop_without_a_companion`, `test_disable_companion_account_raises_on_panel_error`
 
 #### tests/services/reachability
 
