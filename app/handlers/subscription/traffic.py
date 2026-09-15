@@ -784,7 +784,9 @@ async def handle_add_traffic_limited(
         )
         return
 
-    base_gb = get_limited_base_traffic_gb(tariff) if is_new_arch else get_limited_companion_base_traffic_gb(subscription)
+    base_gb = (
+        get_limited_base_traffic_gb(tariff) if is_new_arch else get_limited_companion_base_traffic_gb(subscription)
+    )
     if base_gb == 0:
         # Безлимитный базовый трафик (обычно у триала) — докупка ничего не
         # добавит (0 не складывается с докупками, см. get_limited_companion_total_traffic_limit_gb),
@@ -857,7 +859,9 @@ async def add_traffic_limited(callback: types.CallbackQuery, db_user: User, db: 
         )
         return
 
-    base_gb = get_limited_base_traffic_gb(tariff) if is_new_arch else get_limited_companion_base_traffic_gb(subscription)
+    base_gb = (
+        get_limited_base_traffic_gb(tariff) if is_new_arch else get_limited_companion_base_traffic_gb(subscription)
+    )
     if base_gb == 0:
         await callback.answer(
             texts.t('LIMITED_COMPANION_ALREADY_UNLIMITED', '♾️ Лимитный сервер уже безлимитный — докупка не требуется'),

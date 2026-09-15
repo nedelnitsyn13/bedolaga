@@ -83,9 +83,7 @@ async def test_expired_subscriptions_are_excluded(monkeypatch) -> None:
         user = await _create_user(db, telegram_id=9302)
         tariff = await _create_tariff(db, name='LIMITED', limited_enabled=True)
 
-        await _create_subscription(
-            db, user, tariff, short_id='lm-3', status=SubscriptionStatus.EXPIRED.value
-        )
+        await _create_subscription(db, user, tariff, short_id='lm-3', status=SubscriptionStatus.EXPIRED.value)
 
         subscriptions = await _load_subscriptions_with_limited_traffic(db)
 

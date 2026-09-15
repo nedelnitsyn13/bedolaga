@@ -335,7 +335,13 @@ async def test_squad_removed_when_usage_reaches_base_limit(monkeypatch) -> None:
         user = await _create_user(db, telegram_id=8201)
         tariff = await _create_tariff(db, squads=['limited-squad'], base_gb=50)
         subscription = await _create_subscription_for_enforcement(
-            db, user, tariff, short_id='ls-e1', panel_user_id=501, used_gb=50.0, squad_active=True,
+            db,
+            user,
+            tariff,
+            short_id='ls-e1',
+            panel_user_id=501,
+            used_gb=50.0,
+            squad_active=True,
             main_squads=['main-squad-1'],
         )
 
@@ -358,7 +364,13 @@ async def test_main_squads_untouched_when_limited_removed(monkeypatch) -> None:
         user = await _create_user(db, telegram_id=8202)
         tariff = await _create_tariff(db, squads=['limited-squad'], base_gb=10)
         subscription = await _create_subscription_for_enforcement(
-            db, user, tariff, short_id='ls-e2', panel_user_id=502, used_gb=10.0, squad_active=True,
+            db,
+            user,
+            tariff,
+            short_id='ls-e2',
+            panel_user_id=502,
+            used_gb=10.0,
+            squad_active=True,
             main_squads=['main-1', 'main-2', 'main-3'],
         )
 
@@ -376,7 +388,13 @@ async def test_purchase_restores_limited_squad(monkeypatch) -> None:
         user = await _create_user(db, telegram_id=8203)
         tariff = await _create_tariff(db, squads=['limited-squad'], base_gb=50)
         subscription = await _create_subscription_for_enforcement(
-            db, user, tariff, short_id='ls-e3', panel_user_id=503, used_gb=50.0, squad_active=False,
+            db,
+            user,
+            tariff,
+            short_id='ls-e3',
+            panel_user_id=503,
+            used_gb=50.0,
+            squad_active=False,
             main_squads=['main-squad-1'],
         )
 
@@ -399,7 +417,13 @@ async def test_expired_purchase_removes_limited_squad_again(monkeypatch) -> None
         user = await _create_user(db, telegram_id=8204)
         tariff = await _create_tariff(db, squads=['limited-squad'], base_gb=50)
         subscription = await _create_subscription_for_enforcement(
-            db, user, tariff, short_id='ls-e4', panel_user_id=504, used_gb=85.0, squad_active=True,
+            db,
+            user,
+            tariff,
+            short_id='ls-e4',
+            panel_user_id=504,
+            used_gb=85.0,
+            squad_active=True,
             main_squads=['main-squad-1'],
         )
 
@@ -426,7 +450,13 @@ async def test_no_patch_sent_when_state_unchanged(monkeypatch) -> None:
         user = await _create_user(db, telegram_id=8205)
         tariff = await _create_tariff(db, squads=['limited-squad'], base_gb=50)
         subscription = await _create_subscription_for_enforcement(
-            db, user, tariff, short_id='ls-e5', panel_user_id=505, used_gb=10.0, squad_active=True,
+            db,
+            user,
+            tariff,
+            short_id='ls-e5',
+            panel_user_id=505,
+            used_gb=10.0,
+            squad_active=True,
             main_squads=['main-squad-1'],
         )
 
@@ -445,7 +475,13 @@ async def test_disabled_tariff_never_touches_panel(monkeypatch) -> None:
         user = await _create_user(db, telegram_id=8206)
         tariff = await _create_tariff(db, enabled=False)
         subscription = await _create_subscription_for_enforcement(
-            db, user, tariff, short_id='ls-e6', panel_user_id=506, used_gb=999.0, squad_active=True,
+            db,
+            user,
+            tariff,
+            short_id='ls-e6',
+            panel_user_id=506,
+            used_gb=999.0,
+            squad_active=True,
         )
 
         api = _RecordingApi(nodes_by_squad={}, usage_by_node={})

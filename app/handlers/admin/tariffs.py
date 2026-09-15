@@ -227,9 +227,7 @@ def get_tariff_view_keyboard(
             InlineKeyboardButton(
                 text='🗄️ Лимиты по серверам', callback_data=f'admin_tariff_edit_server_limits:{tariff.id}'
             ),
-            InlineKeyboardButton(
-                text='🎯 LIMITED squad', callback_data=f'admin_tariff_edit_limited_squad:{tariff.id}'
-            ),
+            InlineKeyboardButton(text='🎯 LIMITED squad', callback_data=f'admin_tariff_edit_limited_squad:{tariff.id}'),
         ]
     )
     buttons.append(

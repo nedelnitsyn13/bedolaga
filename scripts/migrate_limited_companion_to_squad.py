@@ -190,7 +190,9 @@ async def _migrate_one(db, api, subscription_id: int, *, apply: bool) -> Migrati
 def _print_report(report: MigrationReport) -> None:
     print()
     print('=' * 70)
-    print(f'  {"DRY RUN — ничего не записано" if report.dry_run else "APPLIED"} — subscription #{report.subscription_id}')
+    print(
+        f'  {"DRY RUN — ничего не записано" if report.dry_run else "APPLIED"} — subscription #{report.subscription_id}'
+    )
     print('=' * 70)
     if report.reason:
         print(f'  !! {report.reason}')
@@ -222,7 +224,9 @@ def _write_audit(report: MigrationReport, *, committed: bool) -> str | None:
         with path.open('w', encoding='utf-8') as handle:
             json.dump(report.as_dict(), handle, ensure_ascii=False, indent=2, default=str)
     except OSError as error:
-        logger.warning('migrate_limited_companion_to_squad: не удалось записать отчёт', path=str(path), error=str(error))
+        logger.warning(
+            'migrate_limited_companion_to_squad: не удалось записать отчёт', path=str(path), error=str(error)
+        )
         return None
     return str(path)
 

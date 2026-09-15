@@ -144,9 +144,7 @@ async def toggle_limited_squad_member(
 
 @admin_required
 @error_handler
-async def start_edit_limited_base_gb(
-    callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext
-):
+async def start_edit_limited_base_gb(callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext):
     tariff = await get_tariff_by_id(db, int(callback.data.split(':')[1]))
     if not tariff:
         await callback.answer('Тариф не найден', show_alert=True)

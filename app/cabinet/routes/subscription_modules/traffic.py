@@ -1027,7 +1027,9 @@ async def purchase_limited_companion_traffic(
             detail='Traffic top-up feature is disabled',
         )
 
-    base_gb = get_limited_base_traffic_gb(tariff) if is_new_arch else get_limited_companion_base_traffic_gb(subscription)
+    base_gb = (
+        get_limited_base_traffic_gb(tariff) if is_new_arch else get_limited_companion_base_traffic_gb(subscription)
+    )
     if base_gb == 0:
         # Безлимитная база (обычно у триала) — докупка ничего не добавит
         # (см. get_limited_companion_total_traffic_limit_gb), денег не берём.
