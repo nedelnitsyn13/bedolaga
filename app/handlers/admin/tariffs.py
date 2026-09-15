@@ -27,6 +27,10 @@ from app.handlers.admin.tariff_custom_traffic import (
     format_custom_traffic_settings,
     register_custom_traffic_handlers,
 )
+from app.handlers.admin.tariff_limited_squad import (
+    format_limited_squad_summary,
+    register_limited_squad_handlers,
+)
 from app.handlers.admin.tariff_panel_settings import format_panel_settings, register_panel_settings_handlers
 from app.handlers.admin.tariff_server_limits import format_server_limits_summary, register_server_limits_handlers
 from app.localization.texts import Texts, get_texts
@@ -223,6 +227,13 @@ def get_tariff_view_keyboard(
             InlineKeyboardButton(
                 text='🗄️ Лимиты по серверам', callback_data=f'admin_tariff_edit_server_limits:{tariff.id}'
             ),
+            InlineKeyboardButton(
+                text='🎯 LIMITED squad', callback_data=f'admin_tariff_edit_limited_squad:{tariff.id}'
+            ),
+        ]
+    )
+    buttons.append(
+        [
             InlineKeyboardButton(text='⚙️ Ещё настройки', callback_data=f'admin_tariff_edit_more:{tariff.id}'),
         ]
     )
@@ -353,6 +364,7 @@ def format_tariff_info(tariff: Tariff, language: str, subs_count: int = 0) -> st
     custom_days_display = format_custom_days_settings(tariff)
     traffic_topup_display = _format_traffic_topup_packages(tariff)
     server_limits_display = format_server_limits_summary(tariff)
+    limited_squad_display = format_limited_squad_summary(tariff)
     panel_settings_display = format_panel_settings(tariff)
 
     # Форматируем режим сброса трафика
@@ -400,6 +412,7 @@ def format_tariff_info(tariff: Tariff, language: str, subs_count: int = 0) -> st
 
 <b>Серверы:</b> {squads_display}
 <b>Лимиты по серверам:</b> {server_limits_display}
+<b>LIMITED squad:</b> {limited_squad_display}
 <b>Промогруппы:</b> {promo_display}
 
 <b>Панель и прочее:</b>
@@ -3017,6 +3030,7 @@ def register_handlers(dp: Dispatcher):
     register_custom_days_handlers(dp)
     register_panel_settings_handlers(dp)
     register_server_limits_handlers(dp)
+    register_limited_squad_handlers(dp)
 
     # Список тарифов
     dp.callback_query.register(show_tariffs_list, F.data == 'admin_tariffs')

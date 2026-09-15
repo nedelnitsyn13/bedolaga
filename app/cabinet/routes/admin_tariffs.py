@@ -261,6 +261,9 @@ async def get_tariff(
         is_highlighted=tariff.is_highlighted,
         allowed_squads=allowed_squads,
         server_traffic_limits=server_limits_response,
+        limited_traffic_enabled=tariff.limited_traffic_enabled,
+        limited_squad_uuids=tariff.limited_squad_uuids or [],
+        limited_base_traffic_gb=tariff.limited_base_traffic_gb,
         servers=servers,
         promo_groups=promo_groups,
         subscriptions_count=subs_count,
@@ -326,6 +329,9 @@ async def create_new_tariff(
         is_highlighted=request.is_highlighted,
         allowed_squads=request.allowed_squads,
         server_traffic_limits=server_limits_dict,
+        limited_traffic_enabled=request.limited_traffic_enabled,
+        limited_squad_uuids=request.limited_squad_uuids,
+        limited_base_traffic_gb=request.limited_base_traffic_gb,
         promo_group_ids=request.promo_group_ids or None,
         # Произвольное количество дней
         custom_days_enabled=request.custom_days_enabled,
@@ -421,6 +427,12 @@ async def update_existing_tariff(
         updates['server_traffic_limits'] = {
             uuid: limit.model_dump() for uuid, limit in request.server_traffic_limits.items()
         }
+    if request.limited_traffic_enabled is not None:
+        updates['limited_traffic_enabled'] = request.limited_traffic_enabled
+    if request.limited_squad_uuids is not None:
+        updates['limited_squad_uuids'] = request.limited_squad_uuids
+    if request.limited_base_traffic_gb is not None:
+        updates['limited_base_traffic_gb'] = request.limited_base_traffic_gb
     # Произвольное количество дней
     if request.custom_days_enabled is not None:
         updates['custom_days_enabled'] = request.custom_days_enabled

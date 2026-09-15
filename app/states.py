@@ -246,6 +246,7 @@ class AdminStates(StatesGroup):
     editing_tariff_custom_days_min = State()
     editing_tariff_custom_days_max = State()
     editing_tariff_server_limit = State()
+    editing_tariff_limited_base_gb = State()
 
 
 class SupportStates(StatesGroup):
