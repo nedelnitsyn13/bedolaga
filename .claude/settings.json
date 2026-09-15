@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Read|Grep|Glob",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "if [ -f graphify-out/graph.json ]; then echo 'Graphify graph is available. For architecture/codebase questions, use the graphify skill/query before broad source exploration.' >&2; fi"
+          }
+        ]
+      }
+    ]
+  }
+}
