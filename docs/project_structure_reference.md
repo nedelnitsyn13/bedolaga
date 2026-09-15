@@ -2904,6 +2904,9 @@
 - `scripts/migrate_limited_companion_to_squad.py` — Python-модуль
   Классы: `MigrationReport` (1 методов)
   Функции: `main`
+- `scripts/migrate_limited_companion_to_squad_batch.py` — Python-модуль
+  Классы: нет
+  Функции: `main`
 - `scripts/migrate_shopbot.py` — Python-модуль
   Классы: `MigrationReport` (1 методов)
   Функции: `main`
@@ -3964,6 +3967,9 @@
 - `tests/scripts/test_migrate_limited_companion_to_squad.py` — Python-модуль
   Классы: нет
   Функции: `test_dry_run_reports_state_without_touching_anything`, `test_validation_fails_when_subscription_missing`, `test_validation_fails_when_tariff_not_on_new_architecture`, `test_validation_fails_when_tariff_has_no_squads`, `test_validation_fails_without_a_legacy_companion`, `test_apply_runs_enforcement_then_disables_companion`, `test_apply_reports_failure_when_disable_raises`, `test_exit_code_is_zero_on_success`, `test_exit_code_is_nonzero_on_validation_failure`, `test_exit_code_is_nonzero_when_apply_fails_without_a_validation_reason`
+- `tests/scripts/test_migrate_limited_companion_to_squad_batch.py` — Python-модуль
+  Классы: нет
+  Функции: `test_selects_live_subscription_with_companion_on_migrated_tariff`, `test_ignores_subscriptions_on_tariffs_not_yet_migrated`, `test_ignores_subscriptions_without_a_legacy_companion`, `test_ignores_expired_subscriptions`, `test_includes_trial_and_limited_statuses`
 
 ### tests/services
 
