@@ -28,6 +28,13 @@ from app.keyboards.inline import (
     get_reset_traffic_confirm_keyboard,
 )
 from app.localization.texts import get_texts
+from app.services.limited_squad_service import (
+    add_limited_traffic_purchase,
+    get_effective_limited_traffic_limit_gb,
+    get_limited_base_traffic_gb,
+    is_limited_traffic_enabled,
+    process_limited_traffic,
+)
 from app.services.pricing_engine import PricingEngine
 from app.services.remnawave_service import RemnaWaveService
 from app.services.subscription_service import SubscriptionService
@@ -759,7 +766,11 @@ async def handle_add_traffic_limited(
     if subscription is None:
         return
 
-    if not settings.is_limited_companion_enabled() or not subscription.limited_companion_remnawave_id:
+    tariff = getattr(subscription, 'tariff', None)
+    is_new_arch = is_limited_traffic_enabled(tariff)
+    if not is_new_arch and (
+        not settings.is_limited_companion_enabled() or not subscription.limited_companion_remnawave_id
+    ):
         await callback.answer(
             texts.t('LIMITED_COMPANION_UNAVAILABLE', '⚠️ Лимитный сервер недоступен для этой подписки'),
             show_alert=True,
@@ -773,7 +784,8 @@ async def handle_add_traffic_limited(
         )
         return
 
-    if get_limited_companion_base_traffic_gb(subscription) == 0:
+    base_gb = get_limited_base_traffic_gb(tariff) if is_new_arch else get_limited_companion_base_traffic_gb(subscription)
+    if base_gb == 0:
         # Безлимитный базовый трафик (обычно у триала) — докупка ничего не
         # добавит (0 не складывается с докупками, см. get_limited_companion_total_traffic_limit_gb),
         # деньги списывать не за что.
@@ -786,13 +798,16 @@ async def handle_add_traffic_limited(
     # Note: unlike the main-key flow, TRAFFIC_SELECTION_MODE=fixed does NOT
     # block this — the companion's traffic pool is independent of the main
     # subscription's fixed-traffic tariff, so top-up stays available here.
-    purchased_gb = await housekeep_limited_companion_traffic(db, subscription)
-    current_limit = get_limited_companion_total_traffic_limit_gb(subscription, purchased_gb)
-    # Фиксированный хинт 30 дней — компаньон продаётся только помесячно
+    if is_new_arch:
+        current_limit = await get_effective_limited_traffic_limit_gb(db, subscription, tariff)
+        companion_used = subscription.limited_traffic_used_gb or 0
+    else:
+        purchased_gb = await housekeep_limited_companion_traffic(db, subscription)
+        current_limit = get_limited_companion_total_traffic_limit_gb(subscription, purchased_gb)
+        companion_used = subscription.limited_companion_traffic_used_gb or 0
+    # Фиксированный хинт 30 дней — докупка продаётся только помесячно
     # (см. add_traffic_limited ниже), скидка должна совпадать с кабинетом.
     traffic_discount_percent = PricingEngine.get_addon_discount_percent(db_user, 'traffic', 30)
-
-    companion_used = subscription.limited_companion_traffic_used_gb or 0
     prompt_text = (
         '📈 <b>Докупить трафик — лимитный сервер</b>\n\n'
         # format_traffic округляет использованное до целых ГБ (0.3 -> "0 ГБ") —
@@ -831,14 +846,19 @@ async def add_traffic_limited(callback: types.CallbackQuery, db_user: User, db: 
     if subscription is None:
         return
 
-    if not settings.is_limited_companion_enabled() or not subscription.limited_companion_remnawave_id:
+    tariff = getattr(subscription, 'tariff', None)
+    is_new_arch = is_limited_traffic_enabled(tariff)
+    if not is_new_arch and (
+        not settings.is_limited_companion_enabled() or not subscription.limited_companion_remnawave_id
+    ):
         await callback.answer(
             texts.t('LIMITED_COMPANION_UNAVAILABLE', '⚠️ Лимитный сервер недоступен для этой подписки'),
             show_alert=True,
         )
         return
 
-    if get_limited_companion_base_traffic_gb(subscription) == 0:
+    base_gb = get_limited_base_traffic_gb(tariff) if is_new_arch else get_limited_companion_base_traffic_gb(subscription)
+    if base_gb == 0:
         await callback.answer(
             texts.t('LIMITED_COMPANION_ALREADY_UNLIMITED', '♾️ Лимитный сервер уже безлимитный — докупка не требуется'),
             show_alert=True,
@@ -910,15 +930,29 @@ async def add_traffic_limited(callback: types.CallbackQuery, db_user: User, db: 
             await callback.answer('⚠️ Ошибка списания средств', show_alert=True)
             return
 
-        await add_limited_companion_traffic(db, subscription, traffic_gb)
+        if is_new_arch:
+            await add_limited_traffic_purchase(db, subscription, traffic_gb)
+            try:
+                service = RemnaWaveService()
+                if service.is_configured:
+                    async with service.get_api_client() as api:
+                        await process_limited_traffic(api, db, subscription, tariff, db_user)
+            except Exception as error:
+                logger.error(
+                    'Оплаченный трафик LIMITED squad не удалось применить в панели',
+                    subscription_id=subscription.id,
+                    error=error,
+                )
+        else:
+            await add_limited_companion_traffic(db, subscription, traffic_gb)
 
-        subscription_service = SubscriptionService()
-        synced = await subscription_service.resync_limited_companion(db, subscription)
-        if not synced:
-            logger.error(
-                'Оплаченный трафик лимитного сервера не удалось применить в панели',
-                subscription_id=subscription.id,
-            )
+            subscription_service = SubscriptionService()
+            synced = await subscription_service.resync_limited_companion(db, subscription)
+            if not synced:
+                logger.error(
+                    'Оплаченный трафик лимитного сервера не удалось применить в панели',
+                    subscription_id=subscription.id,
+                )
 
         await create_transaction(
             db=db,
@@ -931,9 +965,12 @@ async def add_traffic_limited(callback: types.CallbackQuery, db_user: User, db: 
         await db.refresh(db_user)
         await db.refresh(subscription)
 
-        new_limit = get_limited_companion_total_traffic_limit_gb(
-            subscription, subscription.limited_companion_purchased_traffic_gb or 0
-        )
+        if is_new_arch:
+            new_limit = await get_effective_limited_traffic_limit_gb(db, subscription, tariff)
+        else:
+            new_limit = get_limited_companion_total_traffic_limit_gb(
+                subscription, subscription.limited_companion_purchased_traffic_gb or 0
+            )
         success_text = '✅ Трафик лимитного сервера успешно добавлен!\n\n'
         success_text += f'📈 Добавлено: {traffic_gb} ГБ\n'
         success_text += f'Новый лимит: {texts.format_traffic(new_limit)}'
