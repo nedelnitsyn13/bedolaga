@@ -2886,12 +2886,6 @@
 - `migrations/alembic/versions/0121_limited_companion_traffic_purchases.py` — Python-модуль
   Классы: нет
   Функции: `upgrade`, `downgrade`
-- `migrations/alembic/versions/0121_subscription_grace_session_open.py` — Python-модуль
-  Классы: нет
-  Функции: `upgrade`, `downgrade`
-- `migrations/alembic/versions/0122_subscription_grace_overlay_expire_at.py` — Python-модуль
-  Классы: нет
-  Функции: `upgrade`, `downgrade`
 - `migrations/alembic/versions/0122_tariff_panel_tag_and_trial_days.py` — Python-модуль
   Классы: нет
   Функции: `upgrade`, `downgrade`
@@ -2902,6 +2896,12 @@
   Классы: нет
   Функции: `upgrade`, `downgrade`
 - `migrations/alembic/versions/0125_fix_limited_squad_active_default.py` — Python-модуль
+  Классы: нет
+  Функции: `upgrade`, `downgrade`
+- `migrations/alembic/versions/0126_subscription_grace_session_open.py` — Python-модуль
+  Классы: нет
+  Функции: `upgrade`, `downgrade`
+- `migrations/alembic/versions/0127_subscription_grace_overlay_expire_at.py` — Python-модуль
   Классы: нет
   Функции: `upgrade`, `downgrade`
 
