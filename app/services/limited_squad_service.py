@@ -253,7 +253,17 @@ async def sync_limited_squad_state(
     target_squads = main_squads + squad_uuids if should_be_active else main_squads
 
     try:
-        await api.update_user(user_id=panel_user_id, active_internal_squads=target_squads)
+        # Запись в панель только через panel_sync (см. patch_panel_squads) —
+        # см. tests/services/panel_sync/test_no_bypass.py. external_squad_uuid
+        # передаём текущий тарифный, чтобы не сбросить его этим узким PATCH'ем.
+        from app.services.panel_sync import patch_panel_squads
+
+        await patch_panel_squads(
+            api,
+            user_id=panel_user_id,
+            squads=target_squads,
+            external_squad_uuid=getattr(tariff, 'external_squad_uuid', None),
+        )
     except Exception as error:
         logger.warning(
             '⚠️ Не удалось переключить LIMITED squad',

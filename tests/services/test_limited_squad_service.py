@@ -287,8 +287,14 @@ class _RecordingApi(_FakeApi):
         super().__init__(**kwargs)
         self.update_calls: list[dict] = []
 
-    async def update_user(self, *, user_id, active_internal_squads):
-        self.update_calls.append({'user_id': user_id, 'active_internal_squads': list(active_internal_squads)})
+    async def update_user(self, *, user_id, active_internal_squads, external_squad_uuid=None):
+        self.update_calls.append(
+            {
+                'user_id': user_id,
+                'active_internal_squads': list(active_internal_squads),
+                'external_squad_uuid': external_squad_uuid,
+            }
+        )
 
 
 async def _create_subscription_for_enforcement(
