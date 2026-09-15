@@ -296,6 +296,8 @@ async def show_subscription_detail(
         limited_used = subscription.limited_traffic_used_gb or 0
         limited_limit_text = '∞' if limited_limit == 0 else f'{limited_limit} ГБ'
         text += f'\n🌐 Лимитный сервер: {limited_used:.1f} / {limited_limit_text}\n'
+        if limited_limit > 0 and limited_used >= limited_limit:
+            text += '⛔ Лимит на лимитном сервере исчерпан — доступ отключён. Докупите трафик, чтобы восстановить.\n'
     elif settings.is_limited_companion_enabled() and getattr(subscription, 'limited_companion_remnawave_id', None):
         companion_purchased = await housekeep_limited_companion_traffic(db, subscription)
         companion_limit = get_limited_companion_total_traffic_limit_gb(subscription, companion_purchased)
