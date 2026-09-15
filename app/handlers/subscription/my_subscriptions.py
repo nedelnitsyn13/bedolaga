@@ -167,8 +167,9 @@ def _build_subscription_detail_keyboard(sub_id: int, sub=None) -> types.InlineKe
         buttons.append([types.InlineKeyboardButton(text='📱 Устройства', callback_data=f'sd:{sub_id}')])
 
         limited_topup_available = sub is not None and settings.is_traffic_topup_enabled()
-        if limited_topup_available and is_limited_traffic_enabled(sub.tariff):
-            limited_topup_available = get_limited_base_traffic_gb(sub.tariff) != 0
+        sub_tariff = getattr(sub, 'tariff', None)
+        if limited_topup_available and is_limited_traffic_enabled(sub_tariff):
+            limited_topup_available = get_limited_base_traffic_gb(sub_tariff) != 0
         elif limited_topup_available:
             limited_topup_available = bool(
                 settings.is_limited_companion_enabled()
