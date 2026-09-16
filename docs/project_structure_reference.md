@@ -3010,6 +3010,9 @@
 - `tests/test_locale_integrity.py` — Python-модуль
   Классы: нет
   Функции: `locales`, `test_all_locales_have_identical_keys`, `test_placeholders_consistent_across_locales` — Every {placeholder} must be identical across languages — the code calls, `test_t_calls_without_default_exist_in_ru` — texts.t('KEY') with NO fallback raises KeyError if the key is absent from ru., `test_t_calls_with_static_default_exist_in_ru` — texts.t('KEY', 'статический дефолт') с ключом вне ru.json отдаёт русский, `test_invite_only_keys_exist_in_every_locale`
+- `tests/test_logging_handler_ignored_loggers.py` — Python-модуль
+  Классы: нет
+  Функции: `test_aiogram_dispatcher_prefix_is_ignored`, `test_aiogram_dispatcher_error_is_not_forwarded`, `test_other_error_loggers_are_still_forwarded`
 - `tests/test_logo_path_validation.py` — Python-модуль
   Классы: нет
   Функции: `test_valid_file_passes_validation`, `test_directory_fails_validation` — The exact failure mode from #586617 — bind-mount created a dir., `test_missing_path_fails_validation` — File doesn't exist at all — sending would raise FileNotFoundError., `test_validator_logs_actionable_message_for_directory` — The warning must mention the path so the operator can fix it without
