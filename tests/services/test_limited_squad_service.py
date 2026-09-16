@@ -69,6 +69,10 @@ async def _create_subscription(db, user: User, tariff: Tariff, *, short_id: str)
         tariff_id=tariff.id,
         end_date=datetime.now(UTC) + timedelta(days=30),
         remnawave_short_id=short_id,
+        # Реальный токен подписки (путь в её публичном URL) — отдельное поле,
+        # remnawave_short_id это суффикс панельного username. В тестах, где это
+        # неважно, оставляем оба равными short_id.
+        remnawave_short_uuid=short_id,
     )
     db.add(subscription)
     await db.commit()
@@ -771,7 +775,7 @@ async def test_push_usage_noop_without_a_token(monkeypatch) -> None:
         user = await _create_user(db, telegram_id=8302)
         tariff = await _create_tariff(db, base_gb=50)
         subscription = await _create_subscription(db, user, tariff, short_id='push-2')
-        subscription.remnawave_short_id = None
+        subscription.remnawave_short_uuid = None
 
         await push_limited_traffic_usage(subscription, user, 10.0, 50)
 
