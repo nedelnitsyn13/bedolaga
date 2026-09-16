@@ -3427,6 +3427,9 @@
 - `tests/cabinet/test_webhook_email_templates.py` — Python-модуль
   Классы: нет
   Функции: `test_every_webhook_type_has_email_template_in_every_language` — Новый WEBHOOK_* тип без email-шаблона — регресс к «почта молча пропущена»., `test_webhook_email_language_fallback_to_ru`, `test_webhook_email_localized_subjects_differ_from_ru` — zh/ua — не заглушки: тема отличается от русской., `test_device_name_substitution_and_placeholder_hygiene`, `test_device_name_is_html_escaped`, `test_winback_types_have_email_template_in_every_language`, `test_winback_discount_renders_percent_everywhere`, `test_winback_expired_1d_escapes_end_date`
+- `tests/cabinet/test_websocket_accept_client_disconnected.py` — Python-модуль
+  Классы: `ClientDisconnected`
+  Функции: `test_client_disconnect_before_accept_is_logged_quietly`, `test_other_accept_failures_still_log_as_errors`
 - `tests/cabinet/test_websocket_dates_are_iso.py` — Python-модуль
   Классы: нет
   Функции: `sent`, `test_renewed_event_carries_iso_utc_date`, `test_activated_event_carries_iso_utc_date`, `test_naive_datetime_is_treated_as_utc`, `test_missing_date_is_an_empty_string`, `test_no_caller_sends_a_human_formatted_date` — Ни один вызов notify_user_* не подсовывает в поле даты отформатированную строку.
@@ -4857,6 +4860,9 @@
 - `tests/webapi/test_subscription_sync_routes.py` — Python-модуль
   Классы: нет
   Функции: `test_users_subscription_trial_calls_remnawave_sync`, `test_users_subscription_paid_calls_remnawave_sync`, `test_users_search_filter_adds_internal_id_for_int32`, `test_users_search_filter_skips_internal_id_for_out_of_int32`, `test_subscriptions_extend_calls_remnawave_sync`, `test_subscriptions_extend_rolls_back_when_sync_fails`, `test_subscriptions_extend_returns_500_when_rollback_fails`, `test_users_patch_subscription_delegates_to_post` — PATCH /users/{id}/subscription is a documented alias for POST and must route, `test_users_patch_subscription_route_returns_201` — The PATCH-as-upsert alias is intentionally annotated 201 (not the REST-typical 200), `test_users_subscription_replace_existing_restores_on_sync_failure` — When replace_existing=True and Remnawave sync fails, the user's prior subscription
+- `tests/webapi/test_websocket_accept_client_disconnected.py` — Python-модуль
+  Классы: `ClientDisconnected`
+  Функции: `test_client_disconnect_before_accept_is_logged_quietly`, `test_other_accept_failures_still_log_as_errors`
 
 ### tests/webserver
 

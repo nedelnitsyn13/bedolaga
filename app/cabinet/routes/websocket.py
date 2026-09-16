@@ -187,7 +187,13 @@ async def cabinet_websocket_endpoint(websocket: WebSocket):
         await websocket.accept()
         logger.debug('Cabinet WS accepted: user_id is_admin', user_id=user_id, is_admin=is_admin)
     except Exception as e:
-        logger.error('Cabinet WS: Failed to accept from', client_host=client_host, e=e)
+        if type(e).__name__ == 'ClientDisconnected':
+            # Клиент ушёл со страницы/закрыл вкладку в узком окне между
+            # WS-хендшейком и нашим accept() — обычное сетевое поведение,
+            # не повод будить админа .error()-алертом на каждый такой обрыв.
+            logger.debug('Cabinet WS: client disconnected before accept', client_host=client_host)
+        else:
+            logger.error('Cabinet WS: Failed to accept from', client_host=client_host, e=e)
         return
 
     # Регистрируем подключение

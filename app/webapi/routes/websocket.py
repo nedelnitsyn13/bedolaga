@@ -75,7 +75,13 @@ async def websocket_endpoint(websocket: WebSocket):
         await websocket.accept()
         logger.debug('WebSocket connection accepted from', client_host=client_host)
     except Exception as e:
-        logger.error('WebSocket: Failed to accept connection from', client_host=client_host, e=e)
+        if type(e).__name__ == 'ClientDisconnected':
+            # Клиент ушёл со страницы/закрыл вкладку в узком окне между
+            # WS-хендшейком и нашим accept() — обычное сетевое поведение,
+            # не повод будить админа .error()-алертом на каждый такой обрыв.
+            logger.debug('WebSocket: client disconnected before accept', client_host=client_host)
+        else:
+            logger.error('WebSocket: Failed to accept connection from', client_host=client_host, e=e)
         return
 
     # Регистрируем подключение
