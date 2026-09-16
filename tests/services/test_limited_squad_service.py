@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
+from types import SimpleNamespace
 
 import pytest
 
@@ -27,6 +28,7 @@ from app.services.limited_squad_service import (
     get_limited_base_traffic_gb,
     get_limited_squad_uuids,
     get_limited_squad_uuids_for_subscription,
+    get_raw_limited_squad_uuids,
     is_limited_traffic_enabled,
     resolve_limited_node_uuids,
 )
@@ -160,6 +162,30 @@ async def test_get_limited_squad_uuids_for_subscription_without_tariff_id(monkey
         subscription.tariff_id = None
 
         assert await get_limited_squad_uuids_for_subscription(db, subscription) == []
+
+
+async def test_get_limited_squad_uuids_for_subscription_ignores_the_enabled_flag(monkeypatch) -> None:
+    """Codex-ревью PR #40 (P1): окно между выключением limited_traffic_enabled
+    и deactivate_orphaned_limited_squad, который реально снимает сквад с
+    панели — до этого момента панель ещё держит его активным, а он не
+    должен считаться MAIN только потому, что флаг уже выключен."""
+    async with memory_session(monkeypatch, TABLES) as db:
+        user = await _create_user(db, telegram_id=8403)
+        tariff = await _create_tariff(db, enabled=False, squads=['squad-orphaned'], base_gb=50)
+        subscription = await _create_subscription(db, user, tariff, short_id='fk-3')
+
+        assert get_limited_squad_uuids(tariff) == []  # гейтится — механика выключена
+        assert await get_limited_squad_uuids_for_subscription(db, subscription) == ['squad-orphaned']
+
+
+def test_get_raw_limited_squad_uuids_ignores_the_enabled_flag() -> None:
+    tariff = SimpleNamespace(limited_traffic_enabled=False, limited_squad_uuids=['squad-orphaned'])
+
+    assert get_raw_limited_squad_uuids(tariff) == ['squad-orphaned']
+
+
+def test_get_raw_limited_squad_uuids_none_tariff() -> None:
+    assert get_raw_limited_squad_uuids(None) == []
 
 
 # ── 30-дневные докупки на переиспользуемой таблице ──

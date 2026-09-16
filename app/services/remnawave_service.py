@@ -2260,7 +2260,7 @@ class RemnaWaveService:
                     # минутами позже, поэтому снимку нельзя верить на слово:
                     # свежее webhook-обновление (оплата во время прохода) важнее.
                     from app.database.crud.subscription import is_recently_updated_by_webhook
-                    from app.services.limited_squad_service import get_limited_squad_uuids_for_subscription
+                    from app.services.limited_squad_service import get_raw_limited_squad_uuids
 
                     project_onto_subscription(
                         subscription,
@@ -2270,7 +2270,11 @@ class RemnaWaveService:
                         policy=BULK_SNAPSHOT,
                         snapshot_taken_at=snapshot_taken_at,
                         trust_status=not is_recently_updated_by_webhook(subscription),
-                        limited_squad_uuids=await get_limited_squad_uuids_for_subscription(db, subscription),
+                        # subscription.tariff уже прогружен selectinload'ом при
+                        # загрузке all_subs выше — идти в БД за ним второй раз
+                        # на каждую подписку прохода незачем (N панельных
+                        # юзеров = N лишних SELECT).
+                        limited_squad_uuids=get_raw_limited_squad_uuids(subscription.tariff),
                     )
 
                     stats['updated'] += 1

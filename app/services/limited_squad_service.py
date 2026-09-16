@@ -51,6 +51,17 @@ def get_limited_squad_uuids(tariff: Tariff | None) -> list[str]:
     """UUID squad'ов LIMITED-пула тарифа. Пусто, если механика выключена."""
     if not is_limited_traffic_enabled(tariff):
         return []
+    return get_raw_limited_squad_uuids(tariff)
+
+
+def get_raw_limited_squad_uuids(tariff: Tariff | None) -> list[str]:
+    """То же самое, но без гейта на ``limited_traffic_enabled``.
+
+    Для мест, которым нужно «эти сквады — не MAIN», а не «механика включена»:
+    см. ``get_limited_squad_uuids_for_subscription`` и
+    ``deactivate_orphaned_limited_squad`` — та тоже читает список напрямую
+    именно потому, что вызывается ПОСЛЕ выключения флага.
+    """
     raw = getattr(tariff, 'limited_squad_uuids', None) or []
     return [str(squad_uuid) for squad_uuid in raw if squad_uuid]
 
@@ -59,9 +70,21 @@ async def get_limited_squad_uuids_for_subscription(db: AsyncSession, subscriptio
     """То же самое, но по подписке — сама подгружает тариф по ``tariff_id``.
 
     ``subscription.tariff`` — ленивая связь, трогать её напрямую в async-коде
-    небезопасно (может уйти в синхронный запрос вне сессии). Отдельный
-    SELECT по id — цена корректности при переносе squad'ов из панели
-    (``project_onto_subscription``), где заранее прогруженного тарифа обычно нет.
+    небезопасно (может уйти в синхронный запрос вне сессии), если он заранее
+    не прогружен ``selectinload``. Отдельный SELECT по id — цена корректности
+    при переносе squad'ов из панели (``project_onto_subscription``), где
+    заранее прогруженного тарифа обычно нет. Если он ЕСТЬ (например, в
+    полном multi-tariff проходе, где ``Subscription.tariff`` уже подгружен
+    ``selectinload``) — вызывающему дешевле позвать ``get_raw_limited_squad_uuids``
+    напрямую и не платить лишним запросом на каждую подписку.
+
+    НЕ гейтится на ``limited_traffic_enabled`` — окно между выключением
+    флага на тарифе и ``deactivate_orphaned_limited_squad`` (которая снимает
+    сквад с панели) панель ещё реально держит его активным: любой pull/
+    webhook в это время записал бы его в ``connected_squads`` как основной,
+    а deactivate тогда PATCH'ит панель уже заражённым списком и не снимает
+    сквад вовсе, хотя выставляет ``limited_squad_active=False`` — доступ
+    остаётся включённым навсегда и никто больше это не перепроверит.
     """
     tariff_id = getattr(subscription, 'tariff_id', None)
     if not tariff_id:
@@ -69,7 +92,7 @@ async def get_limited_squad_uuids_for_subscription(db: AsyncSession, subscriptio
     from app.database.crud.tariff import get_tariff_by_id
 
     tariff = await get_tariff_by_id(db, tariff_id, with_promo_groups=False)
-    return get_limited_squad_uuids(tariff)
+    return get_raw_limited_squad_uuids(tariff)
 
 
 def get_limited_base_traffic_gb(tariff: Tariff | None) -> int:
@@ -470,7 +493,7 @@ async def deactivate_orphaned_limited_squad(
     if tariff is None:
         return None
 
-    squad_uuids = [str(squad_uuid) for squad_uuid in (getattr(tariff, 'limited_squad_uuids', None) or []) if squad_uuid]
+    squad_uuids = get_raw_limited_squad_uuids(tariff)
     if not squad_uuids:
         return None
 
