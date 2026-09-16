@@ -1318,11 +1318,14 @@ class RemnaWaveWebhookService:
         if snapshot.crypto_link and not self._is_valid_link(snapshot.crypto_link):
             snapshot = replace(snapshot, crypto_link=None)
 
+        from app.services.limited_squad_service import get_limited_squad_uuids_for_subscription
+
         changed_fields = project_onto_subscription(
             subscription,
             snapshot,
             policy=WEBHOOK,
             grace_open=grace_open,
+            limited_squad_uuids=await get_limited_squad_uuids_for_subscription(db, subscription),
         )
         changed = bool(changed_fields)
 
