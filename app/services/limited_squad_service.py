@@ -288,7 +288,11 @@ async def push_limited_traffic_usage(
     if not settings.SUBSCRIPTION_MERGER_URL or not settings.SUBSCRIPTION_MERGER_TOKEN:
         return
 
-    token = subscription.remnawave_short_id
+    # remnawave_short_id — суффикс панельного username, не токен подписки.
+    # Публичный URL (и путь, который слушает subscription-merger) собирается
+    # из remnawave_short_uuid — см. get_subscription_info/get_subscription_link
+    # в app/external/remnawave_api.py (GET /api/sub/{short_uuid}).
+    token = subscription.remnawave_short_uuid
     if not token or limit_gb <= 0:
         return
 
