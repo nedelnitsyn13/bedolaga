@@ -715,7 +715,14 @@ class MonitoringService:
             # Хвост грейса (панель ещё несколько минут ACTIVE с погашенной датой) или
             # снимок оверлея, снятый до досрочного закрытия грейса, — не продление.
             return False
-        changed = project_onto_subscription(subscription, snapshot, now=now)
+        from app.services.limited_squad_service import get_limited_squad_uuids_for_subscription
+
+        changed = project_onto_subscription(
+            subscription,
+            snapshot,
+            now=now,
+            limited_squad_uuids=await get_limited_squad_uuids_for_subscription(db, subscription),
+        )
         if changed:
             await db.commit()
         logger.info(

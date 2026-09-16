@@ -38,6 +38,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 
@@ -297,11 +298,21 @@ def project_onto_subscription(
     grace_open: bool = False,
     trust_status: bool = True,
     snapshot_taken_at: datetime | None = None,
+    limited_squad_uuids: Sequence[str] = (),
 ) -> set[str]:
     """Перенести состояние панели в подписку. Возвращает имена изменённых полей.
 
     ``policy`` — насколько доверять панели (см. ROUTINE / BULK_SNAPSHOT /
     ADMIN_PULL в начале модуля).
+
+    ``limited_squad_uuids`` — LIMITED-сквады тарифа этой подписки (см.
+    ``get_limited_squad_uuids_for_subscription``). Панель отдаёт их вперемешку
+    с основными в ``activeInternalSquads``, а ``connected_squads`` — это
+    MAIN-список: ``sync_limited_squad_state`` сам добавляет/убирает LIMITED
+    squad поверх него при каждом PATCH'е и не переживает, если тот уже сидит
+    внутри как «основной» — тогда его никогда не снять при исчерпании
+    лимита. Пустой список (по умолчанию) — вызывающий не проверял тариф,
+    поведение как раньше.
 
     ``trust_status=False`` — статус не трогать вовсе. Так помечают подписку,
     только что обновлённую вебхуком: свежая оплата важнее любого снимка.
@@ -436,9 +447,15 @@ def project_onto_subscription(
         changed.add('device_limit')
 
     # Пустой список сквадов значит «панель ещё не знает», а не «отобрать все».
-    if policy.takes_squads and snapshot.squads and set(snapshot.squads) != set(subscription.connected_squads or []):
-        subscription.connected_squads = list(snapshot.squads)
-        changed.add('connected_squads')
+    if policy.takes_squads and snapshot.squads:
+        main_squads = [uuid for uuid in snapshot.squads if uuid not in limited_squad_uuids]
+        # Панель отдала ТОЛЬКО LIMITED squad(ы) — либо MAIN сквад с неё ещё не
+        # вернулся, либо enforcement только что снял его за исчерпание лимита.
+        # В обоих случаях писать пустой connected_squads нельзя (см. комментарий
+        # выше) — оставляем как было, следующий снимок расставит по местам.
+        if main_squads and set(main_squads) != set(subscription.connected_squads or []):
+            subscription.connected_squads = main_squads
+            changed.add('connected_squads')
 
     return changed
 

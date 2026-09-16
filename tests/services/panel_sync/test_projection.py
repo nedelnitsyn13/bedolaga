@@ -267,6 +267,56 @@ def test_empty_squad_list_means_the_panel_does_not_know():
     assert subscription.connected_squads == ['squad-a']
 
 
+def test_limited_squad_is_not_written_into_connected_squads():
+    """Баг 2026-09-16: панель отдаёт LIMITED squad вперемешку с основными в
+    activeInternalSquads. Без фильтра он оседал в connected_squads как
+    «основной» — а sync_limited_squad_state строит PATCH-список поверх
+    connected_squads, поэтому такой сквад никогда не снимался при
+    исчерпании лимита (проверено на проде: 2 сквада в панели, оба
+    записывались в connected_squads)."""
+    subscription = _sub(connected_squads=['squad-main'])
+
+    project_onto_subscription(
+        subscription,
+        PanelSnapshot(status='ACTIVE', squads=('squad-main', 'squad-limited')),
+        now=NOW,
+        limited_squad_uuids=['squad-limited'],
+    )
+
+    assert subscription.connected_squads == ['squad-main']
+
+
+def test_squads_that_are_only_the_limited_one_do_not_wipe_connected_squads():
+    """Панель на секунду отдала только LIMITED (main ещё не вернулась, или
+    enforcement только что её снял) — писать пустой connected_squads нельзя,
+    это то же правило, что и для пустого списка панели."""
+    subscription = _sub(connected_squads=['squad-main'])
+
+    changed = project_onto_subscription(
+        subscription,
+        PanelSnapshot(status='ACTIVE', squads=('squad-limited',)),
+        now=NOW,
+        limited_squad_uuids=['squad-limited'],
+    )
+
+    assert subscription.connected_squads == ['squad-main']
+    assert 'connected_squads' not in changed
+
+
+def test_without_limited_squad_uuids_behaviour_is_unchanged():
+    """Вызывающий не проверял тариф (limited_squad_uuids не передан) —
+    поведение как раньше, без фильтрации."""
+    subscription = _sub(connected_squads=['squad-main'])
+
+    project_onto_subscription(
+        subscription,
+        PanelSnapshot(status='ACTIVE', squads=('squad-main', 'squad-limited')),
+        now=NOW,
+    )
+
+    assert subscription.connected_squads == ['squad-main', 'squad-limited']
+
+
 def test_links_are_refreshed():
     subscription = _sub()
 

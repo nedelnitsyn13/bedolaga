@@ -4278,11 +4278,14 @@ async def sync_user_from_panel(
                 # ними, а снимок — уже показывать его оверлей. Признак, прочитанный
                 # после снимка, это видит (хранилище пишет его до оверлея в панели).
                 await db.refresh(sync_sub, list(GRACE_MARKER_FIELDS))
+                from app.services.limited_squad_service import get_limited_squad_uuids_for_subscription
+
                 changed_fields = project_onto_subscription(
                     sync_sub,
                     snapshot,
                     policy=ADMIN_PULL if request.update_subscription else ROUTINE,
                     trust_status=request.update_subscription,
+                    limited_squad_uuids=await get_limited_squad_uuids_for_subscription(db, sync_sub),
                 )
                 for field in sorted(changed_fields):
                     old_value = before[field]

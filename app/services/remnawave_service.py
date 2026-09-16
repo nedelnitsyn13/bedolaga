@@ -2260,6 +2260,7 @@ class RemnaWaveService:
                     # минутами позже, поэтому снимку нельзя верить на слово:
                     # свежее webhook-обновление (оплата во время прохода) важнее.
                     from app.database.crud.subscription import is_recently_updated_by_webhook
+                    from app.services.limited_squad_service import get_limited_squad_uuids_for_subscription
 
                     project_onto_subscription(
                         subscription,
@@ -2269,6 +2270,7 @@ class RemnaWaveService:
                         policy=BULK_SNAPSHOT,
                         snapshot_taken_at=snapshot_taken_at,
                         trust_status=not is_recently_updated_by_webhook(subscription),
+                        limited_squad_uuids=await get_limited_squad_uuids_for_subscription(db, subscription),
                     )
 
                     stats['updated'] += 1
@@ -2436,6 +2438,8 @@ class RemnaWaveService:
             # Тот же полный проход, что и в мультитарифе: список панели выгружен
             # минутами раньше, поэтому снимку нельзя верить на слово, а всё, что
             # изменилось в боте после снимка, он не трогает.
+            from app.services.limited_squad_service import get_limited_squad_uuids_for_subscription
+
             changed = project_onto_subscription(
                 subscription,
                 read_panel_user(panel_user),
@@ -2443,6 +2447,7 @@ class RemnaWaveService:
                 grace_open=grace_open,
                 policy=BULK_SNAPSHOT,
                 snapshot_taken_at=snapshot_taken_at,
+                limited_squad_uuids=await get_limited_squad_uuids_for_subscription(db, subscription),
             )
             if changed:
                 logger.debug(

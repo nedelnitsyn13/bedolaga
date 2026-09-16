@@ -55,6 +55,23 @@ def get_limited_squad_uuids(tariff: Tariff | None) -> list[str]:
     return [str(squad_uuid) for squad_uuid in raw if squad_uuid]
 
 
+async def get_limited_squad_uuids_for_subscription(db: AsyncSession, subscription: Subscription) -> list[str]:
+    """То же самое, но по подписке — сама подгружает тариф по ``tariff_id``.
+
+    ``subscription.tariff`` — ленивая связь, трогать её напрямую в async-коде
+    небезопасно (может уйти в синхронный запрос вне сессии). Отдельный
+    SELECT по id — цена корректности при переносе squad'ов из панели
+    (``project_onto_subscription``), где заранее прогруженного тарифа обычно нет.
+    """
+    tariff_id = getattr(subscription, 'tariff_id', None)
+    if not tariff_id:
+        return []
+    from app.database.crud.tariff import get_tariff_by_id
+
+    tariff = await get_tariff_by_id(db, tariff_id, with_promo_groups=False)
+    return get_limited_squad_uuids(tariff)
+
+
 def get_limited_base_traffic_gb(tariff: Tariff | None) -> int:
     """Базовый лимит LIMITED-пула в ГБ, без докупок. 0 = механика выключена."""
     if not is_limited_traffic_enabled(tariff):
