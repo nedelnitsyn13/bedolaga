@@ -1062,6 +1062,7 @@
   "TARIFF_SWITCH_CONFIRM": "✅ <b>تأیید تغییر تعرفه</b>\n\n📌 تعرفه فعلی: <b>{current}</b>\n📦 تعرفه جدید: <b>{name}</b>\n📊 ترافیک: {traffic}\n📱 دستگاه‌ها: {devices}\n{time_info}\n{discount}\n💰 <b>مبلغ قابل پرداخت: {total}</b>\n\n💳 موجودی شما: {balance}\nپس از پرداخت: {after}",
   "TARIFF_SWITCH_CONFIRM_BUTTON": "✅ تأیید تغییر",
   "TARIFF_SWITCH_CURRENT_LINE": "📌 فعلی: <b>{name}</b>",
+  "TARIFF_ALREADY_OWNED": "❌ شما در حال حاضر یک اشتراک فعال برای این تعرفه دارید",
   "TARIFF_SWITCH_CURRENT_NOT_FOUND": "تعرفه فعلی یافت نشد",
   "TARIFF_SWITCH_DAILY_CONFIRM": "✅ <b>تأیید تغییر تعرفه</b>\n\n📦 تعرفه جدید: <b>{name}</b>\n📊 ترافیک: {traffic}\n📱 دستگاه‌ها: {devices}\n🔄 نوع: <b>روزانه</b>\n\n💰 <b>قیمت: {price}/روز</b>{discount}\n\n💳 موجودی شما: {balance}{warning}\n\nℹ️ مبلغ به‌صورت خودکار روزی یک‌بار کسر می‌شود.\nهر زمان می‌توانید اشتراک را متوقف کنید.",
   "TARIFF_SWITCH_DAILY_PREVIEW": "🔄 <b>تغییر به تعرفه روزانه</b>\n\n📌 فعلی: <b>{current}</b>\n   • ترافیک: {current_traffic}\n   • دستگاه‌ها: {current_devices}\n\n📦 جدید: <b>{name}</b>\n   • ترافیک: {traffic}\n   • دستگاه‌ها: {devices}\n   • نوع: 🔄 روزانه\n\n💰 <b>قیمت: {price}/روز</b>{discount}\n\n💳 موجودی شما: {balance}{warning}\n\nℹ️ مبلغ به‌صورت خودکار روزی یک‌بار کسر می‌شود.",

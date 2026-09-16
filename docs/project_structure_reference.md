@@ -3937,6 +3937,9 @@
 - `tests/handlers/test_tariff_preview_price_matches_engine.py` — Python-модуль
   Классы: нет
   Функции: `test_preview_uses_engine_price_with_extra_devices`
+- `tests/handlers/test_tariff_switch_duplicate_guard.py` — Python-модуль
+  Классы: нет
+  Функции: `multi_tariff_enabled`, `test_instant_switch_refuses_already_owned_target` — confirm_instant_switch: цель занята другой подпиской — блокируем ДО lock_user_for_pricing., `test_instant_switch_allows_unowned_target` — Контроль: если целевой тариф свободен, guard не мешает — lock_user_for_pricing вызывается., `test_daily_switch_refuses_already_owned_target` — confirm_daily_tariff_switch: тот же guard, но после расчёта цены/баланса., `test_admin_tariff_change_refuses_already_owned_target` — confirm_admin_tariff_change: у выбранного юзера уже есть живая подписка на этот тариф.
 - `tests/handlers/test_tariff_switch_subscription_resolution.py` — Python-модуль
   Классы: нет
   Функции: `test_switch_resolver_prefers_fsm_over_callback_trailing`, `test_switch_resolver_falls_back_to_single_active_when_no_fsm`, `test_switch_resolver_asks_to_choose_when_ambiguous`
@@ -4842,6 +4845,9 @@
 - `tests/webapi/test_broadcast_list_nullable_text.py` — Python-модуль
   Классы: нет
   Функции: `test_row_without_text_serializes` — Email-рассылка без текста отдаётся как есть, а не ломает сериализацию., `test_one_empty_row_does_not_break_the_whole_list` — Соседние рассылки обязаны доехать до ответа вместе с пустой., `test_list_endpoint_returns_rows_with_null_text` — Сам маршрут отвечает 200, а не 500, когда в выборку попала пустая строка.
+- `tests/webapi/test_miniapp_tariff_switch_duplicate_guard.py` — Python-модуль
+  Классы: нет
+  Функции: `tariffs_mode`, `test_switch_to_already_owned_tariff_is_rejected` — Пользователь пытается переключить подписку #10 (тариф A) на тариф B,
 - `tests/webapi/test_miniapp_zero_price_traffic_package.py` — Python-модуль
   Классы: нет
   Функции: `tariffs_mode`, `test_zero_price_package_is_not_offered` — Список докупки в Mini App не показывает пакет без цены., `test_zero_price_package_cannot_be_bought` — Купить пакет без цены нельзя — иначе это бесплатный трафик.

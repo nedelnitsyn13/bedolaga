@@ -2099,6 +2099,7 @@
   "TARIFF_SWITCH_CONFIRM": "✅ <b>Підтвердження перемикання тарифу</b>\n\n📌 Поточний тариф: <b>{current}</b>\n📦 Новий тариф: <b>{name}</b>\n📊 Трафік: {traffic}\n📱 Пристроїв: {devices}\n{time_info}\n{discount}\n💰 <b>До сплати: {total}</b>\n\n💳 Ваш баланс: {balance}\nПісля оплати: {after}",
   "TARIFF_SWITCH_CONFIRM_BUTTON": "✅ Підтвердити перемикання",
   "TARIFF_SWITCH_CURRENT_LINE": "📌 Поточний: <b>{name}</b>",
+  "TARIFF_ALREADY_OWNED": "❌ У вас вже є активна підписка на цей тариф",
   "TARIFF_SWITCH_CURRENT_NOT_FOUND": "Поточний тариф не знайдено",
   "TARIFF_SWITCH_DAILY_CONFIRM": "✅ <b>Підтвердження зміни тарифу</b>\n\n📦 Новий тариф: <b>{name}</b>\n📊 Трафік: {traffic}\n📱 Пристроїв: {devices}\n🔄 Тип: <b>Добовий</b>\n\n💰 <b>Ціна: {price}/день</b>{discount}\n\n💳 Ваш баланс: {balance}{warning}\n\nℹ️ Кошти списуватимуться автоматично раз на добу.\nВи можете призупинити підписку в будь-який момент.",
   "TARIFF_SWITCH_DAILY_PREVIEW": "🔄 <b>Перемикання на добовий тариф</b>\n\n📌 Поточний: <b>{current}</b>\n   • Трафік: {current_traffic}\n   • Пристроїв: {current_devices}\n\n📦 Новий: <b>{name}</b>\n   • Трафік: {traffic}\n   • Пристроїв: {devices}\n   • Тип: 🔄 Добовий\n\n💰 <b>Ціна: {price}/день</b>{discount}\n\n💳 Ваш баланс: {balance}{warning}\n\nℹ️ Кошти списуватимуться автоматично раз на добу.",

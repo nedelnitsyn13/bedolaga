@@ -6186,6 +6186,16 @@ async def confirm_admin_tariff_change(callback: types.CallbackQuery, db_user: Us
         await callback.answer('❌ У пользователя нет подписки', show_alert=True)
         return
 
+    # Guard: не даём переключить на тариф, который у пользователя уже занят
+    # другой живой подпиской — иначе падаем на uq_subscriptions_user_tariff_active.
+    if settings.is_multi_tariff_enabled():
+        from app.database.crud.subscription import get_subscription_by_user_and_tariff
+
+        existing_target = await get_subscription_by_user_and_tariff(db, user_id, tariff.id)
+        if existing_target and existing_target.id != subscription.id:
+            await callback.answer('❌ У пользователя уже есть активная подписка на этот тариф', show_alert=True)
+            return
+
     try:
         old_tariff_id = subscription.tariff_id
 

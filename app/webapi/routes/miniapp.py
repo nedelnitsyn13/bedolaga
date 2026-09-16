@@ -7064,6 +7064,22 @@ async def switch_tariff_endpoint(
             detail={'code': 'same_tariff', 'message': 'Already on this tariff'},
         )
 
+    # Guard: prevent switching to a tariff the user already owns on another live
+    # subscription (multi-tariff) — otherwise commit fails on
+    # uq_subscriptions_user_tariff_active.
+    if settings.is_multi_tariff_enabled():
+        from app.database.crud.subscription import get_subscription_by_user_and_tariff
+
+        existing_target = await get_subscription_by_user_and_tariff(db, user.id, payload.tariff_id)
+        if existing_target and existing_target.id != subscription.id:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail={
+                    'code': 'tariff_already_owned',
+                    'message': 'You already have an active subscription for the target tariff',
+                },
+            )
+
     if settings.TARIFF_SWITCH_RESET_FREE_DAYS and current_tariff is not None and current_tariff.is_free:
         # Same guard as in preview: free (0₽) source tariffs must go through the
         # purchase flow — prorated switching would charge for and carry the whole
