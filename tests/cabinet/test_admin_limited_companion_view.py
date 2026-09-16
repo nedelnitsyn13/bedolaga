@@ -52,6 +52,8 @@ def _subscription(**overrides) -> SimpleNamespace:
         limited_companion_remnawave_id=PANEL_ID,
         limited_companion_traffic_used_gb=12.5,
         limited_companion_purchased_traffic_gb=0,
+        grace_session_open=False,
+        grace_overlay_expire_at=None,
     )
     base.update(overrides)
     return SimpleNamespace(**base)
