@@ -333,7 +333,6 @@ async def test_other_validation_errors_are_not_mistaken_for_clock_skew():
     assert api.update_user.await_count == 2
 
 
-
 # --- Companion device mirroring ---------------------------------------------
 #
 # The limited-companion account (Subscription.limited_companion_remnawave_id)

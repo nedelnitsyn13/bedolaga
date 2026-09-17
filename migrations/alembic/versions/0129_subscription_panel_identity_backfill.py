@@ -1,7 +1,7 @@
 """id аккаунта панели у подписок, перенесённых из панели
 
-Revision ID: 0124
-Revises: 0123
+Revision ID: 0129
+Revises: 0128
 Create Date: 2026-09-16
 
 Импорт из панели в одиночном режиме записывал id аккаунта панели только в
@@ -21,8 +21,8 @@ import sqlalchemy as sa
 from alembic import op
 
 
-revision: str = '0124'
-down_revision: Union[str, None] = '0123'
+revision: str = '0129'
+down_revision: Union[str, None] = '0128'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
