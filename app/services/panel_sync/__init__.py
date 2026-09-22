@@ -18,6 +18,8 @@ from app.services.panel_sync.identity import (
     link_subscription_panel_identity,
     panel_id_is_free_for,
     resolve_panel_identity,
+    should_create_panel_account,
+    user_panel_id_is_free_for,
 )
 from app.services.panel_sync.liveness import is_subscription_expired, is_subscription_live
 from app.services.panel_sync.payload import PanelPayload, build_panel_payload
@@ -89,7 +91,9 @@ __all__ = [
     'reset_companion_devices',
     'resolve_panel_identity',
     'resolve_panel_user_tag',
+    'should_create_panel_account',
     'stale_panel_expire_at',
     'sync_companion_device_limit',
+    'user_panel_id_is_free_for',
     'write_companion_account',
 ]
