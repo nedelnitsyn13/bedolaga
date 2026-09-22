@@ -1,7 +1,7 @@
 """Аккаунт панели человеку из его подписок (после мультитарифа)
 
-Revision ID: 0125
-Revises: 0124
+Revision ID: 0130
+Revises: 0129
 Create Date: 2026-09-18
 
 Аккаунты, созданные в мультитарифе, записывались только у подписки
@@ -19,8 +19,8 @@ import sqlalchemy as sa
 from alembic import op
 
 
-revision: str = '0125'
-down_revision: Union[str, None] = '0124'
+revision: str = '0130'
+down_revision: Union[str, None] = '0129'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
