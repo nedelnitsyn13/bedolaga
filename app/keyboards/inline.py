@@ -10,6 +10,7 @@ from app.config import PERIOD_PRICES, settings
 from app.database.models import User
 from app.localization.loader import DEFAULT_LANGUAGE
 from app.localization.texts import get_texts
+from app.utils.legacy_subscription import is_legacy_subscription as _legacy_subscription
 from app.utils.miniapp_buttons import build_miniapp_or_callback_button
 from app.utils.price_display import PriceInfo, format_price_button
 from app.utils.pricing_utils import (
@@ -1223,6 +1224,9 @@ def get_subscription_keyboard(
             # Проверяем, является ли тариф суточным
             tariff = getattr(subscription, 'tariff', None) if subscription else None
             is_daily_tariff = tariff and getattr(tariff, 'is_daily', False)
+            # Куплена в классике, потом включили тарифы: продлить нельзя,
+            # автоплатёж не работает — в меню один путь, «Перейти на тариф».
+            is_legacy_subscription = _legacy_subscription(subscription)
 
             if is_daily_tariff:
                 # Для суточного тарифа: проверяем статус подписки
@@ -1244,6 +1248,18 @@ def get_subscription_keyboard(
                 keyboard.append(
                     [InlineKeyboardButton(text=pause_text, callback_data='toggle_daily_subscription_pause')]
                 )
+            elif is_legacy_subscription:
+                # Старая подписка (куплена в классике, тарифа нет, а оператор на
+                # тарифах): продления и автоплатежа у неё нет, единственный путь —
+                # выбрать тариф, он надевается на эту же подписку.
+                keyboard.append(
+                    [
+                        InlineKeyboardButton(
+                            text=texts.t('MOVE_TO_TARIFF_BUTTON', '📦 Перейти на тариф'),
+                            callback_data='tariff_switch',
+                        )
+                    ]
+                )
             else:
                 # Для обычного тарифа: [Продлить] [Автоплатеж]
                 keyboard.append(
@@ -1263,7 +1279,7 @@ def get_subscription_keyboard(
                     callback_data='subscription_settings',
                 )
             ]
-            if settings.is_tariffs_mode() and subscription:
+            if settings.is_tariffs_mode() and subscription and not is_legacy_subscription:
                 # На истёкшей/отключённой подписке смена тарифа недоступна (хендлер её
                 # блокирует) — раньше кнопка «Тариф» всё равно показывалась и вела в тупик.
                 # Теперь для таких подписок показываем «Купить тариф» (покупку с нуля).
@@ -1295,6 +1311,9 @@ def get_subscription_keyboard(
             if subscription and (subscription.traffic_limit_gb or 0) > 0:
                 if settings.is_tariffs_mode() and tariff:
                     show_traffic_topup = tariff.can_topup_traffic()
+                elif is_legacy_subscription:
+                    # Старая подписка: классические пакеты трафика ей не продаём — сперва переход на тариф.
+                    show_traffic_topup = False
                 elif settings.is_traffic_topup_enabled() and not settings.is_traffic_topup_blocked():
                     show_traffic_topup = True
 
@@ -3541,6 +3560,7 @@ def get_updated_subscription_settings_keyboard(
     show_countries_management: bool = True,
     tariff=None,  # Тариф подписки (если есть - ограничиваем настройки)
     subscription=None,  # Подписка (для проверки суточной паузы)
+    is_legacy_subscription: bool = False,  # Старая подписка: без тарифа при включённых тарифах
 ) -> InlineKeyboardMarkup:
     from app.config import settings
 
@@ -3549,10 +3569,15 @@ def get_updated_subscription_settings_keyboard(
 
     # Если подписка на тарифе - отключаем страны, модем, трафик
     has_tariff = tariff is not None
+    # Классические докупки (страны, пакеты трафика, устройства по PRICE_PER_DEVICE)
+    # доступны только настоящей классической подписке. У старой подписки при
+    # включённых тарифах тарифа нет, но и классических цен для неё нет —
+    # единственный путь: перейти на тариф.
+    classic_addons_allowed = not has_tariff and not is_legacy_subscription
 
     # Для суточных тарифов кнопка паузы теперь в главном меню подписки
 
-    if show_countries_management and not has_tariff:
+    if show_countries_management and classic_addons_allowed:
         keyboard.append(
             [
                 InlineKeyboardButton(
@@ -3562,7 +3587,7 @@ def get_updated_subscription_settings_keyboard(
             ]
         )
 
-    if settings.is_traffic_selectable() and not has_tariff:
+    if settings.is_traffic_selectable() and classic_addons_allowed:
         keyboard.append(
             [
                 InlineKeyboardButton(
@@ -3592,7 +3617,7 @@ def get_updated_subscription_settings_keyboard(
                     )
                 ]
             )
-    elif settings.is_devices_selection_enabled():
+    elif classic_addons_allowed and settings.is_devices_selection_enabled():
         keyboard.append(
             [
                 InlineKeyboardButton(
