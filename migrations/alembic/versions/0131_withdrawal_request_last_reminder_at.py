@@ -1,7 +1,7 @@
 """отметка последнего напоминания о заявке на вывод
 
-Revision ID: 0126
-Revises: 0125
+Revision ID: 0131
+Revises: 0130
 Create Date: 2026-09-19
 
 О заявке на вывод реферального баланса админы получали одно уведомление — в
@@ -17,8 +17,8 @@ import sqlalchemy as sa
 from alembic import op
 
 
-revision: str = '0126'
-down_revision: Union[str, None] = '0125'
+revision: str = '0131'
+down_revision: Union[str, None] = '0130'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

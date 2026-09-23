@@ -1,7 +1,7 @@
 """напоминания пользователям: таблицы и встроенное «привяжите второй способ входа»
 
-Revision ID: 0127
-Revises: 0126
+Revision ID: 0132
+Revises: 0131
 Create Date: 2026-09-22
 
 Напоминание создаёт админ в кабинете: условия (способ входа, подписка, дни с
@@ -16,8 +16,8 @@ import sqlalchemy as sa
 from alembic import op
 
 
-revision: str = '0127'
-down_revision: Union[str, None] = '0126'
+revision: str = '0132'
+down_revision: Union[str, None] = '0131'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
