@@ -96,11 +96,6 @@ IGNORED_LOGGER_PREFIXES: Final[tuple[str, ...]] = (
     'uvicorn.protocols',
     'websockets',
     'asyncio',
-    # aiogram.dispatcher.error() имеет ровно один вызов во всей библиотеке —
-    # "Failed to fetch updates" в _listen_updates при сбое getUpdates (сеть,
-    # Telegram Bad Gateway и т.п.). Дальше aiogram сам уходит в backoff и
-    # ретраит бесконечно — это не повод будить админа, лишь докрутить логи.
-    'aiogram.dispatcher',
     # Сам сервис админ-уведомлений: если он логирует error при ошибке отправки
     # в админ-чат, нельзя пересылать эту ошибку обратно в тот же чат — иначе
     # на каждом флуд-контроле получаем петлю усиления. Сервис уже использует
