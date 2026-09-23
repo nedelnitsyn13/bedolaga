@@ -3102,9 +3102,6 @@
 - `tests/test_log_messages_have_no_empty_placeholders.py` — Python-модуль
   Классы: нет
   Функции: `test_scanner_sees_the_codebase` — Страховка от «тест зеленеет, потому что ничего не нашёл»., `test_no_message_carries_an_empty_placeholder`, `test_scanner_catches_known_shapes` — Образцы из issue #3276 — проверка, что сторож ловит именно их.
-- `tests/test_logging_handler_ignored_loggers.py` — Python-модуль
-  Классы: нет
-  Функции: `test_aiogram_dispatcher_prefix_is_ignored`, `test_aiogram_dispatcher_error_is_not_forwarded`, `test_other_error_loggers_are_still_forwarded`
 - `tests/test_logo_file_id_cache_invalidation.py` — Python-модуль
   Классы: нет
   Функции: `logo`, `test_cached_file_id_is_reused_while_the_file_is_the_same`, `test_replaced_logo_file_drops_the_cached_file_id`
@@ -4206,7 +4203,7 @@
 
 ### tests/migrations
 
-- `tests/migrations/test_0127_user_reminders.py` — Python-модуль
+- `tests/migrations/test_0132_user_reminders.py` — Python-модуль
   Классы: нет
   Функции: `test_revision_chain`, `test_builtin_is_shipped_disabled_with_all_languages`, `test_models_roundtrip`
 
