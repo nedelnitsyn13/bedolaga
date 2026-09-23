@@ -1,4 +1,4 @@
-"""Миграция 0127: таблицы напоминаний и встроенное «привяжите второй способ входа»."""
+"""Миграция 0132: таблицы напоминаний и встроенное «привяжите второй способ входа»."""
 
 from __future__ import annotations
 
@@ -12,11 +12,11 @@ from app.database.models import Base, UserReminder, UserReminderState, User
 from tests.fixtures.sqlite_memory import memory_session
 
 
-MIGRATION = Path('migrations/alembic/versions/0127_user_reminders.py')
+MIGRATION = Path('migrations/alembic/versions/0132_user_reminders.py')
 
 
 def _migration():
-    spec = importlib.util.spec_from_file_location('m0127', MIGRATION)
+    spec = importlib.util.spec_from_file_location('m0132', MIGRATION)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
@@ -24,8 +24,8 @@ def _migration():
 
 def test_revision_chain():
     module = _migration()
-    assert module.revision == '0127'
-    assert module.down_revision == '0126'
+    assert module.revision == '0132'
+    assert module.down_revision == '0131'
 
 
 def test_builtin_is_shipped_disabled_with_all_languages():
