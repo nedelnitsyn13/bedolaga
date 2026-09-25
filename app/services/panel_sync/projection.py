@@ -316,6 +316,40 @@ def panel_date_behind_paid_renewal(
     return (end_date - snapshot.expire_at).total_seconds() > _DATE_TOLERANCE_SECONDS
 
 
+def _traffic_capacity(value: int) -> float:
+    """0 — безлимит, для сравнения «сколько трафика доступно» это максимум."""
+    return float('inf') if value == 0 else float(value)
+
+
+def panel_traffic_limit_behind_paid_purchase(
+    subscription,
+    snapshot: PanelSnapshot,
+    *,
+    paid_at: datetime | None,
+    now: datetime | None = None,
+) -> bool:
+    """Панель показывает лимит трафика меньше оплаченного, а оплата была недавно.
+
+    Как ``panel_date_behind_paid_renewal``, но для лимита трафика: PATCH нового
+    лимита в панель при покупке/конверсии триала уходит не мгновенно, и вебхук
+    по несвязанному поводу (например, обновление расхода трафика) может принести
+    снимок аккаунта, снятый панелью ДО того, как её PATCH применился — тогда он
+    откатывает только что оплаченный лимит обратно на старый (подписка #1170:
+    конверсия триала в безлимитный тариф откатилась на лимит триала первым же
+    вебхуком, 2026-09-25). Пока с оплаты не прошло ``PAID_DATE_HOLD``, меньший
+    лимит из панели не принимается; больший (админ расширил ещё и в панели) —
+    принимается как раньше.
+    """
+    if paid_at is None or snapshot.traffic_limit_gb is None or getattr(subscription, 'traffic_limit_gb', None) is None:
+        return False
+    moment = now or datetime.now(UTC)
+    if moment - panel_datetime_to_utc(paid_at) > PAID_DATE_HOLD:
+        return False
+    if snapshot.traffic_limit_gb == subscription.traffic_limit_gb:
+        return False
+    return _traffic_capacity(snapshot.traffic_limit_gb) < _traffic_capacity(subscription.traffic_limit_gb)
+
+
 def project_onto_subscription(
     subscription,
     snapshot: PanelSnapshot,
@@ -473,11 +507,15 @@ def project_onto_subscription(
         changed.add('status')
 
     # Лимиты — тоже истина панели (правка там приезжает в бота); вебхук берёт
-    # только лимит трафика, как и раньше.
+    # только лимит трафика, как и раньше. Но недавно оплаченный лимит, ещё не
+    # успевший доехать до панели, старый снимок не откатывает (см.
+    # panel_traffic_limit_behind_paid_purchase).
+    paid_traffic_held = panel_traffic_limit_behind_paid_purchase(subscription, snapshot, paid_at=paid_at, now=moment)
     if (
         policy.takes_traffic_limit
         and snapshot.traffic_limit_gb is not None
         and subscription.traffic_limit_gb != snapshot.traffic_limit_gb
+        and not paid_traffic_held
     ):
         subscription.traffic_limit_gb = snapshot.traffic_limit_gb
         changed.add('traffic_limit_gb')

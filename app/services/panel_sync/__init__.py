@@ -35,6 +35,7 @@ from app.services.panel_sync.projection import (
     panel_date_is_grace_overlay,
     panel_date_is_grace_tail,
     panel_status_for_new_subscription,
+    panel_traffic_limit_behind_paid_purchase,
     project_onto_subscription,
     read_panel_user,
 )
@@ -83,6 +84,7 @@ __all__ = [
     'panel_expire_at',
     'panel_id_is_free_for',
     'panel_status_for_new_subscription',
+    'panel_traffic_limit_behind_paid_purchase',
     'patch_panel_account',
     'patch_panel_squads',
     'project_onto_subscription',
