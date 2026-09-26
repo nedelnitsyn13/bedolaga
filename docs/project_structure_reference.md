@@ -4191,6 +4191,9 @@
 - `tests/middlewares/test_maintenance_expected_errors.py` — Python-модуль
   Классы: нет
   Функции: `test_stale_callback_logged_quietly`, `test_blocked_bot_logged_quietly`, `test_unexpected_bad_request_stays_error`
+- `tests/middlewares/test_refresh_remnawave_description.py` — Python-модуль
+  Классы: нет
+  Функции: `test_user_not_found_is_warning_not_error`, `test_real_api_failure_is_still_an_error`
 - `tests/middlewares/test_rich_error_report.py` — Python-модуль
   Классы: нет
   Функции: `test_rich_error_report_structure`, `test_rich_error_report_none_when_oversized`, `test_send_error_uses_rich_and_clears_buffer`, `test_send_error_falls_back_to_document_when_rich_unavailable`, `test_rich_error_report_renders_a_plain_note_without_code_block` — Запись без трейса (например, «сообщение некуда доставить») — обычный абзац,
