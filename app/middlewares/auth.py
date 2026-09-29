@@ -13,6 +13,7 @@ from sqlalchemy.exc import InterfaceError, OperationalError
 from app.config import settings
 from app.database.crud.user import get_user_by_telegram_id
 from app.database.database import AsyncSessionLocal
+from app.external.remnawave_api import RemnaWaveAPIError, is_user_not_found_error
 from app.services.remnawave_service import RemnaWaveService
 from app.states import RegistrationStates
 from app.utils.check_reg_process import is_registration_process
@@ -44,7 +45,17 @@ async def _refresh_remnawave_description(remnawave_id: int, description: str, te
             await patch_panel_account(api, user_id=remnawave_id, description=description)
         logger.info('✅ [Middleware] Описание пользователя обновлено в RemnaWave', telegram_id=telegram_id)
     except Exception as remnawave_error:
-        logger.error(
+        # «User not found» — панельного юзера удалили, пока id ещё висит в боте.
+        # Не ошибка API: как и в update_user/subscription_service, error-уровень
+        # здесь только копил бы шум в отчёте об ошибках админ-чату. Пересоздавать
+        # панельного юзера тут не нужно — это лишь косметический синк описания,
+        # реальную пересборку делает актуальный флоу подписки.
+        log = (
+            logger.warning
+            if isinstance(remnawave_error, RemnaWaveAPIError) and is_user_not_found_error(remnawave_error)
+            else logger.error
+        )
+        log(
             '❌ [Middleware] Ошибка обновления описания пользователя в RemnaWave',
             telegram_id=telegram_id,
             remnawave_error=remnawave_error,
