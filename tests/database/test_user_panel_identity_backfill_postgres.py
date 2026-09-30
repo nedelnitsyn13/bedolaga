@@ -1,4 +1,4 @@
-"""Миграция 0125: аккаунт панели человеку из его единственной подписки — на PostgreSQL.
+"""Миграция 0130: аккаунт панели человеку из его единственной подписки — на PostgreSQL.
 
 Аккаунты, созданные в мультитарифе, записывались только у подписки. После
 возврата оператора в одиночный режим у таких людей «0 устройств», а покупка
@@ -24,7 +24,7 @@ from tests.fixtures.postgres_db import postgres_session
 pytestmark = pytest.mark.postgres
 
 TABLES = list(Base.metadata.sorted_tables)
-MIGRATION = Path(__file__).resolve().parents[2] / 'migrations/alembic/versions/0125_user_panel_identity_backfill.py'
+MIGRATION = Path(__file__).resolve().parents[2] / 'migrations/alembic/versions/0130_user_panel_identity_backfill.py'
 NOW = datetime.now(UTC)
 
 
@@ -49,7 +49,7 @@ def _subscription(
 
 
 async def _run_migration(db) -> None:
-    spec = importlib.util.spec_from_file_location('migration_0125', MIGRATION)
+    spec = importlib.util.spec_from_file_location('migration_0130', MIGRATION)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
 
