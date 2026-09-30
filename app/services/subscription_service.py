@@ -1058,7 +1058,8 @@ class SubscriptionService:
             if 'already disabled' in error_msg:
                 logger.info('✅ RemnaWave пользователь уже отключен', panel_user_id=panel_user_id)
                 return True
-            logger.error('Ошибка отключения RemnaWave пользователя', error=e)
+            log = logger.warning if isinstance(e, RemnaWaveAPIError) and is_user_not_found_error(e) else logger.error
+            log('Ошибка отключения RemnaWave пользователя', error=e)
             return False
 
     async def delete_remnawave_user(self, panel_user_id: int) -> bool:
