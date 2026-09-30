@@ -29,7 +29,7 @@ pytestmark = pytest.mark.postgres
 
 TABLES = [Subscription.__table__, User.__table__]
 MIGRATION = (
-    Path(__file__).resolve().parents[2] / 'migrations/alembic/versions/0124_subscription_panel_identity_backfill.py'
+    Path(__file__).resolve().parents[2] / 'migrations/alembic/versions/0129_subscription_panel_identity_backfill.py'
 )
 NOW = datetime.now(UTC)
 
@@ -105,7 +105,7 @@ async def test_update_from_panel_binds_row_left_empty_by_old_import(postgres_dat
 
 
 async def _run_migration(db) -> None:
-    spec = importlib.util.spec_from_file_location('migration_0124', MIGRATION)
+    spec = importlib.util.spec_from_file_location('migration_0129', MIGRATION)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
 
