@@ -49,6 +49,7 @@ from app.database.crud.tariff import get_tariff_by_id
 from app.database.crud.user_message import get_random_active_message
 from app.database.models import User
 from app.localization.texts import Texts
+from app.services.limited_squad_service import get_limited_base_traffic_gb, is_limited_traffic_enabled
 from app.utils.cache import cache
 from app.utils.formatters import format_username_link
 from app.utils.logo_fingerprint import logo_version
@@ -330,7 +331,18 @@ def _renew_link(subscription_id: int | None, texts) -> str:
 
 
 def _companion_traffic_text(subscription, texts) -> str | None:
-    """Трафик лимитного сервера-компаньона, если он есть у подписки."""
+    """Трафик лимитного сервера, если он есть у подписки (LIMITED squad или legacy companion).
+
+    Компактный синхронный форматтер — как в handlers/subscription/my_subscriptions.py:
+    для LIMITED squad показывает базу тарифа с «+», без похода в БД за активными
+    докупками (точный итог — на детальном экране подписки).
+    """
+    tariff = getattr(subscription, 'tariff', None)
+    if is_limited_traffic_enabled(tariff):
+        base = get_limited_base_traffic_gb(tariff)
+        used = f'{subscription.limited_traffic_used_gb:.1f}' if subscription.limited_traffic_used_gb else '0'
+        return '∞' if base == 0 else f'{used}/{base}+ ГБ'
+
     if not settings.is_limited_companion_enabled() or not getattr(subscription, 'limited_companion_remnawave_id', None):
         return None
     purchased = getattr(subscription, 'limited_companion_purchased_traffic_gb', 0) or 0
