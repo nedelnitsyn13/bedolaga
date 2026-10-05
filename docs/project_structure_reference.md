@@ -4409,6 +4409,9 @@
 - `tests/middlewares/test_chat_type_filter_group_callbacks.py` — Python-модуль
   Классы: нет
   Функции: `test_private_chat_passes_everything`, `test_group_messages_are_still_dropped`, `test_group_ticket_card_buttons_reach_handlers`, `test_fsm_and_menu_callbacks_stay_blocked_in_groups` — FSM-ввод в группе не работает (privacy mode), меню админки в общем чате не место., `test_every_button_of_the_group_card_is_allowed_in_groups` — Сторож: новая кнопка в групповой карточке без разрешения в фильтре — падение здесь, а не у оператора., `test_fsm_buttons_are_not_group_safe`
+- `tests/middlewares/test_display_name_restriction.py` — Python-модуль
+  Классы: нет
+  Функции: `middleware`, `test_at_sign_alone_is_allowed`, `test_links_and_banned_keywords_still_blocked`
 - `tests/middlewares/test_invite_only_admin_recovery.py` — Python-модуль
   Классы: нет
   Функции: `test_blocked_env_admin_still_reaches_the_bot` — BLOCKED is set automatically when a user mutes the bot — it must not lock the owner out., `test_refresh_remnawave_description_uses_numeric_panel_id`
