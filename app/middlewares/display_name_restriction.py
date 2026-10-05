@@ -143,9 +143,9 @@ class DisplayNameRestrictionMiddleware(BaseMiddleware):
         cleaned = ZERO_WIDTH_PATTERN.sub('', value)
         lower_value = cleaned.lower()
 
-        if '@' in cleaned or '＠' in cleaned:
-            return True
-
+        # «@» сам по себе не блокируем: люди часто дописывают свой ник в фамилию
+        # («Лидия Родионова @lrodionova»). Рекламу каналов ловят ссылки ниже и
+        # DISPLAY_NAME_BANNED_KEYWORDS.
         if any(pattern.search(lower_value) for pattern in LINK_PATTERNS):
             return True
 
