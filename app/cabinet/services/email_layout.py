@@ -39,6 +39,7 @@ LAYOUT_CONTEXT_VARS = [
     'service_name',
     'footer_text',
     'unsubscribe_block',
+    'manage_notifications_block',
     'unsubscribe_url',
     'cabinet_url',
     'support_username',
@@ -48,7 +49,7 @@ LAYOUT_CONTEXT_VARS = [
     'date',
 ]
 # HTML-значения — не экранируем.
-_RAW_VARS = frozenset({'content', 'unsubscribe_block'})
+_RAW_VARS = frozenset({'content', 'unsubscribe_block', 'manage_notifications_block'})
 
 # Маркеры вокруг тела письма: по ним редактор достаёт фрагмент из готового
 # письма независимо от того, как выглядит обёртка.
@@ -70,6 +71,20 @@ UNSUBSCRIBE_TEXTS = {
     'ua': 'Відписатися від розсилок',
     'fa': 'لغو اشتراک ایمیل‌های تبلیغاتی',
 }
+
+# Строка про настройки уведомлений — в каждом письме, не только в маркетинге:
+# хостинг и почтовики спрашивают «как получатель управляет письмами», и ответ
+# должен быть виден в самом письме, а не только в ссылке отписки у промо.
+MANAGE_NOTIFICATIONS_TEXTS = {
+    'ru': 'Управлять уведомлениями можно в настройках личного кабинета',
+    'en': 'You can manage notifications in your account settings',
+    'zh': '您可以在个人账户设置中管理通知',
+    'ua': 'Керувати сповіщеннями можна в налаштуваннях особистого кабінету',
+    'fa': 'می‌توانید اعلان‌ها را در تنظیمات حساب کاربری مدیریت کنید',
+}
+
+# Страница кабинета с блоком «Настройки уведомлений».
+MANAGE_NOTIFICATIONS_PATH = '/profile'
 
 DEFAULT_EMAIL_LAYOUT = """<!DOCTYPE html>
 <html>
@@ -161,6 +176,7 @@ DEFAULT_EMAIL_LAYOUT = """<!DOCTYPE html>
         <div class="footer">
             <p>&copy; {service_name}</p>
             <p>{footer_text}</p>
+            {manage_notifications_block}
             {unsubscribe_block}
         </div>
     </div>
@@ -181,6 +197,16 @@ def unsubscribe_block(unsubscribe_url: str, language: str) -> str:
     return f'<p><a href="{html.escape(unsubscribe_url, quote=True)}" style="color: #666;">{label}</a></p>'
 
 
+def manage_notifications_block(cabinet_url: str, language: str) -> str:
+    """Ссылка на настройки уведомлений; без CABINET_URL вести некуда — пусто."""
+    base = (cabinet_url or '').strip().rstrip('/')
+    if not base.startswith(('http://', 'https://')):
+        return ''
+    label = MANAGE_NOTIFICATIONS_TEXTS.get(language, MANAGE_NOTIFICATIONS_TEXTS['ru'])
+    href = html.escape(f'{base}{MANAGE_NOTIFICATIONS_PATH}', quote=True)
+    return f'<p><a href="{href}" style="color: #666;">{label}</a></p>'
+
+
 def build_layout_context(language: str, *, content: str = '', unsubscribe_url: str = '') -> dict[str, str]:
     """Реальные значения плейсхолдеров обёртки для языка.
 
@@ -196,6 +222,7 @@ def build_layout_context(language: str, *, content: str = '', unsubscribe_url: s
         'service_name': settings.SMTP_FROM_NAME or 'VPN Service',
         'footer_text': FOOTER_TEXTS.get(language, FOOTER_TEXTS['ru']),
         'unsubscribe_block': unsubscribe_block(unsubscribe_url, language),
+        'manage_notifications_block': manage_notifications_block(getattr(settings, 'CABINET_URL', '') or '', language),
         # Голая ссылка — для своего текста отписки вместо готового блока.
         'unsubscribe_url': unsubscribe_url or '',
         'cabinet_url': getattr(settings, 'CABINET_URL', '') or '',

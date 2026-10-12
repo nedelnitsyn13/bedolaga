@@ -8,6 +8,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.database.models import User, UserReminder, UserReminderState
 from app.services.user_reminders.conditions import ReminderConditions, condition_clauses
 
@@ -98,7 +99,11 @@ async def count_audience(
         clauses.append(User.telegram_id.is_not(None))
     if exclude_promo_opt_out:
         # notification_settings — JSONB (JSON на SQLite в тестах); ключа может не быть
-        # вовсе (старые пользователи) или всего поля — тогда считаем «не отписан».
+        # вовсе (старые пользователи) или всего поля — тогда решает
+        # PROMO_OFFERS_DEFAULT_ENABLED, как и при самой отправке.
         promo_flag = User.notification_settings['promo_offers_enabled'].as_boolean()
-        clauses.append(or_(User.notification_settings.is_(None), promo_flag.is_(None), promo_flag.is_(True)))
+        if settings.PROMO_OFFERS_DEFAULT_ENABLED:
+            clauses.append(or_(User.notification_settings.is_(None), promo_flag.is_(None), promo_flag.is_(True)))
+        else:
+            clauses.append(promo_flag.is_(True))
     return int((await db.execute(select(func.count(User.id)).where(*clauses))).scalar() or 0)

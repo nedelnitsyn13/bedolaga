@@ -8,10 +8,13 @@ from __future__ import annotations
 
 from typing import Any
 
+from app.config import settings
 from app.database.models import User
 
 
-# Defaults match the frontend and cabinet/routes/notifications.py
+# Defaults match the frontend and cabinet/routes/notifications.py.
+# promo_offers_enabled здесь не главный: его умолчание берётся из
+# PROMO_OFFERS_DEFAULT_ENABLED (см. get_notification_defaults).
 _DEFAULTS: dict[str, Any] = {
     'subscription_expiry_enabled': True,
     'subscription_expiry_days': 3,
@@ -24,13 +27,23 @@ _DEFAULTS: dict[str, Any] = {
 }
 
 
+def get_notification_defaults() -> dict[str, Any]:
+    """Умолчания для тех, кто не трогал настройку.
+
+    Промо читается из настроек при каждом вызове, а не при импорте: смена
+    значения действует сразу, без перезагрузки модуля.
+    """
+    return {**_DEFAULTS, 'promo_offers_enabled': bool(settings.PROMO_OFFERS_DEFAULT_ENABLED)}
+
+
 def get_user_notification_pref(user: User, key: str) -> Any:
     """Get a single notification preference for user.
 
     Falls back to default if not set.
     """
     settings_data = getattr(user, 'notification_settings', None) or {}
-    return settings_data.get(key, _DEFAULTS.get(key))
+    value = settings_data.get(key)
+    return get_notification_defaults().get(key) if value is None else value
 
 
 def is_subscription_expiry_enabled(user: User) -> bool:

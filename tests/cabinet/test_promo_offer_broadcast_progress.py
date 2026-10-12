@@ -92,6 +92,11 @@ def _payload(**kwargs) -> PromoOfferBroadcastRequest:
 
 async def test_broadcast_creates_tracked_delivery(monkeypatch):
     """Отправка сегменту заводит запись рассылки с числом получателей и возвращает её id."""
+    # Проверяется учёт рассылки, а не согласие: засеянные пользователи настройку
+    # промо не трогали, поэтому включаем его по умолчанию.
+    from app.utils import notification_prefs
+
+    monkeypatch.setattr(notification_prefs.settings, 'PROMO_OFFERS_DEFAULT_ENABLED', True, raising=False)
     started: list[tuple[int, object]] = []
 
     async def fake_start_broadcast(broadcast_id, config):

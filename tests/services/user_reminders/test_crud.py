@@ -200,7 +200,15 @@ async def test_audience_counts_exclude_promo_opt_out_for_marketing(monkeypatch):
                     balance_kopeks=0,
                     notification_settings={'promo_offers_enabled': False},
                 ),
-                User(id=2, telegram_id=20, first_name='B', language='ru', status='active', balance_kopeks=0),
+                User(
+                    id=2,
+                    telegram_id=20,
+                    first_name='B',
+                    language='ru',
+                    status='active',
+                    balance_kopeks=0,
+                    notification_settings={'promo_offers_enabled': True},
+                ),
             ]
         )
         await db.commit()
@@ -211,3 +219,42 @@ async def test_audience_counts_exclude_promo_opt_out_for_marketing(monkeypatch):
 
         assert marketing == 1
         assert service == 2
+
+
+@pytest.mark.asyncio
+async def test_marketing_audience_skips_users_without_promo_consent(monkeypatch):
+    """Промо по умолчанию выключено: кто не трогал настройку, в маркетинг не попадает."""
+    monkeypatch.setattr(crud.settings, 'PROMO_OFFERS_DEFAULT_ENABLED', False, raising=False)
+    async with memory_session(monkeypatch, TABLES) as db:
+        db.add_all(
+            [
+                User(id=1, telegram_id=10, first_name='A', language='ru', status='active', balance_kopeks=0),
+                User(
+                    id=2,
+                    telegram_id=20,
+                    first_name='B',
+                    language='ru',
+                    status='active',
+                    balance_kopeks=0,
+                    notification_settings={'news_enabled': True},
+                ),
+                User(
+                    id=3,
+                    telegram_id=30,
+                    first_name='C',
+                    language='ru',
+                    status='active',
+                    balance_kopeks=0,
+                    notification_settings={'promo_offers_enabled': True},
+                ),
+            ]
+        )
+        await db.commit()
+        conditions = parse_conditions({})
+
+        marketing = await crud.count_audience(db, conditions, now=NOW, telegram_only=True, exclude_promo_opt_out=True)
+
+        assert marketing == 1
+
+        monkeypatch.setattr(crud.settings, 'PROMO_OFFERS_DEFAULT_ENABLED', True, raising=False)
+        assert await crud.count_audience(db, conditions, now=NOW, telegram_only=True, exclude_promo_opt_out=True) == 3

@@ -31,7 +31,7 @@ class NotificationSettingsResponse(BaseModel):
     balance_low_enabled: bool = False
     balance_low_threshold: int = 100  # kopeks
     news_enabled: bool = True
-    promo_offers_enabled: bool = True
+    promo_offers_enabled: bool = False
 
 
 class NotificationSettingsUpdate(BaseModel):
@@ -53,18 +53,11 @@ class NotificationSettingsUpdate(BaseModel):
 def _get_notification_settings(user: User) -> dict[str, Any]:
     """Get notification settings from user object."""
     # Try to get from user's settings field or use defaults
-    settings_data = getattr(user, 'notification_settings', None) or {}
+    # Те же умолчания, что у рассылок (app.utils.notification_prefs): кабинет не
+    # должен показывать включённое промо тому, кому мы его не шлём.
+    from app.utils.notification_prefs import get_user_notification_pref
 
-    return {
-        'subscription_expiry_enabled': settings_data.get('subscription_expiry_enabled', True),
-        'subscription_expiry_days': settings_data.get('subscription_expiry_days', 3),
-        'traffic_warning_enabled': settings_data.get('traffic_warning_enabled', True),
-        'traffic_warning_percent': settings_data.get('traffic_warning_percent', 80),
-        'balance_low_enabled': settings_data.get('balance_low_enabled', False),
-        'balance_low_threshold': settings_data.get('balance_low_threshold', 100),
-        'news_enabled': settings_data.get('news_enabled', True),
-        'promo_offers_enabled': settings_data.get('promo_offers_enabled', True),
-    }
+    return {key: get_user_notification_pref(user, key) for key in NotificationSettingsResponse.model_fields}
 
 
 def _update_notification_settings(user: User, updates: dict[str, Any]) -> dict[str, Any]:

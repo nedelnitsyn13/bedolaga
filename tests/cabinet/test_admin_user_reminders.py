@@ -146,7 +146,16 @@ async def test_audience_marketing_excludes_promo_opt_out(monkeypatch):
                     balance_kopeks=0,
                     notification_settings={'promo_offers_enabled': False},
                 ),
-                User(id=2, telegram_id=20, first_name='B', language='ru', status='active', balance_kopeks=0),
+                # Промо по умолчанию выключено — маркетинг получает только согласившийся.
+                User(
+                    id=2,
+                    telegram_id=20,
+                    first_name='B',
+                    language='ru',
+                    status='active',
+                    balance_kopeks=0,
+                    notification_settings={'promo_offers_enabled': True},
+                ),
             ]
         )
         await db.commit()
@@ -176,7 +185,16 @@ async def test_response_audience_bot_uses_reminder_category(monkeypatch):
                     balance_kopeks=0,
                     notification_settings={'promo_offers_enabled': False},
                 ),
-                User(id=2, telegram_id=20, first_name='B', language='ru', status='active', balance_kopeks=0),
+                # Промо по умолчанию выключено — маркетинг получает только согласившийся.
+                User(
+                    id=2,
+                    telegram_id=20,
+                    first_name='B',
+                    language='ru',
+                    status='active',
+                    balance_kopeks=0,
+                    notification_settings={'promo_offers_enabled': True},
+                ),
             ]
         )
         await db.commit()
