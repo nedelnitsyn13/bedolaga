@@ -101,8 +101,14 @@ def test_editor_payload_keeps_placeholders_not_sample_values(type_key):
         )
 
 
-def test_verification_template_placeholder_survives_roundtrip():
+def test_verification_template_placeholder_survives_roundtrip(monkeypatch):
     """Сценарий бага: сохранить дефолтный шаблон как override и отправить письмо."""
+    # Подвал ссылается на настоящий CABINET_URL (настройки уведомлений). В тестах
+    # он example.com — тот же домен, что у образцов редактора, и проверка ниже
+    # ловила бы не утёкший образец, а законную ссылку. Разводим домены.
+    from app.cabinet.services import email_layout
+
+    monkeypatch.setattr(email_layout.settings, 'CABINET_URL', 'https://cab.vpn.test', raising=False)
     template = _get_default_template('email_verification', 'ru', _placeholder_context('email_verification'))
     real_url = 'https://vpn.example.org/cabinet/verify-email?token=deadbeef'
     rendered = substitute_context_vars(

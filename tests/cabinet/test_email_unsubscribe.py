@@ -196,20 +196,45 @@ class _StubUser:
         self.notification_settings = notification_settings
 
 
-def test_email_broadcast_filters_by_category():
-    """Тумблеры кабинета обязаны резать email-рассылку так же, как Telegram."""
+def test_email_broadcast_filters_by_category(monkeypatch):
+    """Тумблеры кабинета обязаны резать email-рассылку так же, как Telegram.
+
+    Промо по умолчанию выключено (PROMO_OFFERS_DEFAULT_ENABLED=False): его
+    получает только тот, кто сам включил переключатель.
+    """
+    from app.utils import notification_prefs
     from app.utils.notification_prefs import filter_users_by_broadcast_category
+
+    monkeypatch.setattr(notification_prefs.settings, 'PROMO_OFFERS_DEFAULT_ENABLED', False, raising=False)
 
     opted_out_news = _StubUser({'news_enabled': False})
     opted_out_promo = _StubUser({'promo_offers_enabled': False})
+    opted_in_promo = _StubUser({'promo_offers_enabled': True})
     default_user = _StubUser(None)
 
-    users = [opted_out_news, opted_out_promo, default_user]
+    users = [opted_out_news, opted_out_promo, opted_in_promo, default_user]
 
-    assert filter_users_by_broadcast_category(users, 'news') == [opted_out_promo, default_user]
-    assert filter_users_by_broadcast_category(users, 'promo') == [opted_out_news, default_user]
+    assert filter_users_by_broadcast_category(users, 'news') == [opted_out_promo, opted_in_promo, default_user]
+    assert filter_users_by_broadcast_category(users, 'promo') == [opted_in_promo]
     # Системные письма (истечение подписки, оплата) отписке не подлежат.
     assert filter_users_by_broadcast_category(users, 'system') == users
+
+
+def test_promo_default_can_be_switched_back_on(monkeypatch):
+    """PROMO_OFFERS_DEFAULT_ENABLED=True возвращает прежнее поведение, но явная отписка главнее."""
+    from app.utils import notification_prefs
+    from app.utils.notification_prefs import filter_users_by_broadcast_category
+
+    monkeypatch.setattr(notification_prefs.settings, 'PROMO_OFFERS_DEFAULT_ENABLED', True, raising=False)
+
+    opted_out_promo = _StubUser({'promo_offers_enabled': False})
+    default_user = _StubUser(None)
+    no_key_user = _StubUser({'news_enabled': True})
+
+    assert filter_users_by_broadcast_category([opted_out_promo, default_user, no_key_user], 'promo') == [
+        default_user,
+        no_key_user,
+    ]
 
 
 # --- Публичный маршрут: состояние меняет только POST -----------------------
@@ -380,7 +405,9 @@ async def test_marketing_email_carries_unsubscribe_url(monkeypatch):
     monkeypatch.setattr(unsub.settings, 'CABINET_URL', 'https://cab.example.com', raising=False)
     captured = _capture_email(monkeypatch, service)
 
-    await service._send_email_notification(_email_user(), NotificationType.PROMO_OFFER, {})
+    # Промо по умолчанию выключено — шлём тому, кто его включил.
+    user = _email_user(notification_settings={'promo_offers_enabled': True})
+    await service._send_email_notification(user, NotificationType.PROMO_OFFER, {})
 
     assert captured, 'маркетинговое письмо не ушло'
     assert captured[0]['unsubscribe_url'], 'письмо ушло без ссылки отписки'

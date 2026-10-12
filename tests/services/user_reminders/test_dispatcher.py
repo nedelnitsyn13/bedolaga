@@ -179,7 +179,10 @@ async def test_marketing_respects_promo_opt_out_without_starving_the_queue(monke
     async with memory_session(monkeypatch, TABLES) as db:
         await _seed(
             db,
-            [_user(1, notification_settings={'promo_offers_enabled': False}), _user(2)],
+            [
+                _user(1, notification_settings={'promo_offers_enabled': False}),
+                _user(2, notification_settings={'promo_offers_enabled': True}),
+            ],
             [_reminder(1, category='marketing')],
         )
         deliver = Recorder()
@@ -203,7 +206,8 @@ async def test_opted_out_prefix_larger_than_budget_does_not_block_later_people(m
     async with memory_session(monkeypatch, TABLES) as db:
         await _seed(
             db,
-            [_user(i, notification_settings=opted_out) for i in (1, 2, 3)] + [_user(i) for i in (4, 5, 6)],
+            [_user(i, notification_settings=opted_out) for i in (1, 2, 3)]
+            + [_user(i, notification_settings={'promo_offers_enabled': True}) for i in (4, 5, 6)],
             [_reminder(1, category='marketing')],
         )
         deliver = Recorder()

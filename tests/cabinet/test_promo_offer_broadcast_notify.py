@@ -96,6 +96,11 @@ async def _seed_subscriber(
 
 async def test_delivery_runs_off_plain_ids(monkeypatch):
     """В сервис рассылок уходят голые telegram_id, без ORM-объектов сессии запроса."""
+    # Здесь проверяется доставка, а не согласие: засеянные подписчики настроек не
+    # трогали, поэтому включаем промо по умолчанию (PROMO_OFFERS_DEFAULT_ENABLED).
+    from app.utils import notification_prefs
+
+    monkeypatch.setattr(notification_prefs.settings, 'PROMO_OFFERS_DEFAULT_ENABLED', True, raising=False)
     started: list[object] = []
 
     async def fake_start_broadcast(broadcast_id, config):

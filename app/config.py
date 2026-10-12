@@ -1632,6 +1632,11 @@ class Settings(BaseSettings):
     EMAIL_UNSUBSCRIBE_BASE_URL: str = ''
     # Необязательный mailto-вариант в List-Unsubscribe для клиентов без HTTP one-click.
     EMAIL_UNSUBSCRIBE_MAILTO: str = ''
+    # Промо-предложения для тех, кто ещё не трогал переключатель в кабинете.
+    # Рекламу (38-ФЗ) шлют только с согласия, а включённая по умолчанию галочка
+    # согласием не считается: по умолчанию промо выключено, пользователь включает
+    # его сам в «Настройках уведомлений». Явный выбор пользователя всегда главнее.
+    PROMO_OFFERS_DEFAULT_ENABLED: bool = False
 
     # Ban System Integration (BedolagaBan monitoring)
     BAN_SYSTEM_ENABLED: bool = False
