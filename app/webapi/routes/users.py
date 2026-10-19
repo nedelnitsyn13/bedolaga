@@ -409,6 +409,7 @@ async def notify_user(
                     subject=payload.email_subject or 'Уведомление',
                     body_html=payload.email_html or f'<p>{text if payload.parse_mode else html.escape(text)}</p>',
                     body_text=text,
+                    email_type='api_notification',
                 )
                 email = UserNotifyChannelResult(sent=bool(sent), reason=None if sent else 'send_failed')
             except Exception as error:

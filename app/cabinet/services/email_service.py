@@ -166,6 +166,7 @@ class EmailService:
         attachments: list[tuple[str, bytes, str]] | None,
         unsubscribe_url: str | None,
         retry_until: datetime | None,
+        email_type: str | None = None,
     ) -> bool:
         """Отложить письмо для повторной отправки.
 
@@ -183,7 +184,34 @@ class EmailService:
             attachments=attachments,
             unsubscribe_url=unsubscribe_url,
             retry_until=retry_until,
+            email_type=email_type,
         )
+
+    @staticmethod
+    def _journal(
+        record: bool,
+        *,
+        to_email: str,
+        subject: str,
+        status: str,
+        email_type: str | None,
+        error: str | None = None,
+    ) -> None:
+        """Строка в журнале писем. Тело письма туда не передаётся никогда."""
+        if not record:
+            return
+        try:
+            from app.services.email_log_service import email_log_service
+
+            email_log_service.record(
+                to_email=to_email,
+                subject=subject,
+                status=status,
+                email_type=email_type,
+                error=error,
+            )
+        except Exception as e:
+            logger.debug('Не удалось записать письмо в журнал', error=str(e)[:200])
 
     def send_email(
         self,
@@ -195,6 +223,8 @@ class EmailService:
         unsubscribe_url: str | None = None,
         queue_on_failure: bool = True,
         retry_until: datetime | None = None,
+        email_type: str | None = None,
+        record_in_log: bool = True,
     ) -> bool:
         """
         Send an email.
@@ -208,17 +238,34 @@ class EmailService:
             unsubscribe_url: One-click unsubscribe URL. Задаётся ТОЛЬКО для
                 маркетинговых писем — на транзакционных (код входа, чек об
                 оплате) List-Unsubscribe не ставят.
+            email_type: Тип письма для журнала (email_verification, broadcast, ...).
+            record_in_log: False — попытку не записывать в журнал писем: так
+                делает очередь повторов, которая пишет туда итог сама.
 
         Returns:
             True if email was sent successfully, False otherwise
         """
+        from app.services.email_log_service import STATUS_FAILED, STATUS_QUEUED, STATUS_SENT
+
+        def journal(status: str, error: str | None = None) -> None:
+            self._journal(
+                record_in_log,
+                to_email=to_email,
+                subject=subject,
+                status=status,
+                email_type=email_type,
+                error=error,
+            )
+
         if not self.is_configured():
             logger.warning('SMTP is not configured, cannot send email')
+            journal(STATUS_FAILED, 'SMTP не настроен')
             return False
 
         sender_email = self.from_email
         if not sender_email or '@' not in sender_email:
             logger.error('Invalid or missing SMTP from_email, cannot send email', from_email=sender_email)
+            journal(STATUS_FAILED, 'Не задан адрес отправителя SMTP_FROM_EMAIL')
             return False
 
         # Defensive: strip newlines to prevent header injection
@@ -236,7 +283,7 @@ class EmailService:
                 **self._endpoint(),
             )
             if queue_on_failure:
-                self._queue_for_retry(
+                queued = self._queue_for_retry(
                     to_email=to_email,
                     subject=subject,
                     body_html=body_html,
@@ -244,7 +291,11 @@ class EmailService:
                     attachments=attachments,
                     unsubscribe_url=unsubscribe_url,
                     retry_until=retry_until,
+                    email_type=email_type,
                 )
+            else:
+                queued = False
+            journal(STATUS_QUEUED if queued else STATUS_FAILED, 'SMTP-сервер недоступен')
             return False
 
         try:
@@ -321,8 +372,9 @@ class EmailService:
             except (smtplib.SMTPConnectError, smtplib.SMTPServerDisconnected) as connection_error:
                 self._note_connection_failure(connection_error)
                 self._log_connection_failure(to_email, connection_error)
+                queued = False
                 if queue_on_failure:
-                    self._queue_for_retry(
+                    queued = self._queue_for_retry(
                         to_email=to_email,
                         subject=subject,
                         body_html=body_html,
@@ -330,7 +382,12 @@ class EmailService:
                         attachments=attachments,
                         unsubscribe_url=unsubscribe_url,
                         retry_until=retry_until,
+                        email_type=email_type,
                     )
+                journal(
+                    STATUS_QUEUED if queued else STATUS_FAILED,
+                    f'{type(connection_error).__name__}: {connection_error}',
+                )
                 return False
             except smtplib.SMTPException as smtp_error:
                 # Сервер ответил отказом: отклонён адрес, не прошла авторизация,
@@ -342,13 +399,15 @@ class EmailService:
                     reason=f'{type(smtp_error).__name__}: {smtp_error}',
                     **self._endpoint(),
                 )
+                journal(STATUS_FAILED, f'{type(smtp_error).__name__}: {smtp_error}')
                 return False
             except OSError as connection_error:
                 # Сеть: недоступный маршрут, таймаут, отказ в соединении, DNS.
                 self._note_connection_failure(connection_error)
                 self._log_connection_failure(to_email, connection_error)
+                queued = False
                 if queue_on_failure:
-                    self._queue_for_retry(
+                    queued = self._queue_for_retry(
                         to_email=to_email,
                         subject=subject,
                         body_html=body_html,
@@ -356,17 +415,24 @@ class EmailService:
                         attachments=attachments,
                         unsubscribe_url=unsubscribe_url,
                         retry_until=retry_until,
+                        email_type=email_type,
                     )
+                journal(
+                    STATUS_QUEUED if queued else STATUS_FAILED,
+                    f'{type(connection_error).__name__}: {connection_error}',
+                )
                 return False
 
             self._note_success()
             logger.info('Email sent successfully to', to_email=to_email)
+            journal(STATUS_SENT)
             return True
 
         except Exception as e:
             # Сюда попадает уже не работа сети, а ошибка сборки письма — такой
             # трейсбек нужен.
             logger.error('Failed to send email to', to_email=to_email, error=e)
+            journal(STATUS_FAILED, f'{type(e).__name__}: {e}')
             return False
 
     def _render_default_template(
@@ -430,7 +496,9 @@ class EmailService:
         """
         retry_until = datetime.now(tz=UTC) + timedelta(hours=settings.get_cabinet_email_verification_expire_hours())
         if custom_subject and custom_body_html:
-            return self.send_email(to_email, custom_subject, custom_body_html, retry_until=retry_until)
+            return self.send_email(
+                to_email, custom_subject, custom_body_html, retry_until=retry_until, email_type='email_verification'
+            )
 
         rendered = self._render_default_template(
             'email_verification',
@@ -443,7 +511,7 @@ class EmailService:
         )
         if not rendered:
             return False
-        return self.send_email(to_email, *rendered, retry_until=retry_until)
+        return self.send_email(to_email, *rendered, retry_until=retry_until, email_type='email_verification')
 
     def send_password_reset_email(
         self,
@@ -472,7 +540,9 @@ class EmailService:
         """
         retry_until = datetime.now(tz=UTC) + timedelta(hours=settings.get_cabinet_password_reset_expire_hours())
         if custom_subject and custom_body_html:
-            return self.send_email(to_email, custom_subject, custom_body_html, retry_until=retry_until)
+            return self.send_email(
+                to_email, custom_subject, custom_body_html, retry_until=retry_until, email_type='password_reset'
+            )
 
         rendered = self._render_default_template(
             'password_reset',
@@ -485,7 +555,7 @@ class EmailService:
         )
         if not rendered:
             return False
-        return self.send_email(to_email, *rendered, retry_until=retry_until)
+        return self.send_email(to_email, *rendered, retry_until=retry_until, email_type='password_reset')
 
     def send_email_change_code(
         self,
@@ -512,7 +582,9 @@ class EmailService:
         """
         retry_until = datetime.now(tz=UTC) + timedelta(minutes=settings.get_cabinet_email_change_code_expire_minutes())
         if custom_subject and custom_body_html:
-            return self.send_email(to_email, custom_subject, custom_body_html, retry_until=retry_until)
+            return self.send_email(
+                to_email, custom_subject, custom_body_html, retry_until=retry_until, email_type='email_change_code'
+            )
 
         rendered = self._render_default_template(
             'email_change_code',
@@ -525,7 +597,41 @@ class EmailService:
         )
         if not rendered:
             return False
-        return self.send_email(to_email, *rendered, retry_until=retry_until)
+        return self.send_email(to_email, *rendered, retry_until=retry_until, email_type='email_change_code')
+
+    def send_admin_email_confirmation(
+        self,
+        to_email: str,
+        confirm_url: str,
+        username: str | None = None,
+        language: str = 'ru',
+        custom_subject: str | None = None,
+        custom_body_html: str | None = None,
+    ) -> bool:
+        """Письмо со ссылкой подтверждения почты, которую указал администратор.
+
+        confirm_url — полная ссылка с токеном. Ссылка только подтверждает адрес
+        и не входит в аккаунт: опечатка админа в адресе не должна открывать
+        чужой аккаунт тому, кто получил письмо.
+        """
+        retry_until = datetime.now(tz=UTC) + timedelta(hours=settings.get_cabinet_email_verification_expire_hours())
+        if custom_subject and custom_body_html:
+            return self.send_email(
+                to_email, custom_subject, custom_body_html, retry_until=retry_until, email_type='email_admin_set'
+            )
+
+        rendered = self._render_default_template(
+            'email_admin_set',
+            language,
+            {
+                'username': username or '',
+                'confirm_url': confirm_url,
+                'expire_hours': settings.get_cabinet_email_verification_expire_hours(),
+            },
+        )
+        if not rendered:
+            return False
+        return self.send_email(to_email, *rendered, retry_until=retry_until, email_type='email_admin_set')
 
 
 # Singleton instance

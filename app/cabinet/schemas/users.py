@@ -4,7 +4,7 @@ from datetime import datetime
 from enum import StrEnum
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, EmailStr, Field
 
 
 class UserStatusEnum(StrEnum):
@@ -900,3 +900,34 @@ class AdminUserGiftsResponse(BaseModel):
     received: list[AdminUserGiftItem] = []
     sent_total: int = 0
     received_total: int = 0
+
+
+class AdminSetUserEmailRequest(BaseModel):
+    """Админ указывает пользователю почту; на неё уходит ссылка подтверждения."""
+
+    email: EmailStr = Field(..., description='New email address')
+
+
+class AdminUserEmailResponse(BaseModel):
+    user_id: int
+    email: str | None = None
+    email_verified: bool = False
+    # None — письмо не отправлялось (например, почту удалили)
+    email_sent: bool | None = None
+
+
+class AdminUserEmailLogItem(BaseModel):
+    id: int
+    to_email: str
+    email_type: str
+    subject: str
+    # sent | queued | failed
+    status: str
+    error: str | None = None
+    created_at: datetime
+
+
+class AdminUserEmailLogResponse(BaseModel):
+    items: list[AdminUserEmailLogItem] = []
+    total: int = 0
+    retention_days: int

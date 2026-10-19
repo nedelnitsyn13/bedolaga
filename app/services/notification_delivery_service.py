@@ -50,6 +50,7 @@ class NotificationDeliveryService:
             NotificationType.EMAIL_VERIFICATION,
             NotificationType.PASSWORD_RESET,
             NotificationType.EMAIL_CHANGE_CODE,
+            NotificationType.EMAIL_ADMIN_SET,
             NotificationType.GUEST_SUBSCRIPTION_DELIVERED,
             NotificationType.GUEST_ACTIVATION_REQUIRED,
             NotificationType.GUEST_GIFT_RECEIVED,
@@ -457,6 +458,7 @@ class NotificationDeliveryService:
                 body_html=template['body_html'],
                 body_text=template.get('body_text'),
                 unsubscribe_url=unsubscribe_url or None,
+                email_type=notification_type.value,
             )
 
             if success:

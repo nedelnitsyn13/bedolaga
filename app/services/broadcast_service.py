@@ -1071,6 +1071,7 @@ class EmailBroadcastService:
                             # посреди рассылки забил бы её тысячами писем,
                             # которые потом сутки долбились бы повторами.
                             queue_on_failure=False,
+                            email_type='broadcast',
                         ),
                     )
                     return success

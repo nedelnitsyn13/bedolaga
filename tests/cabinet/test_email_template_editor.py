@@ -71,13 +71,20 @@ def test_default_template_renders_for_editor(type_key):
 
 
 # Sample-значения, утечка которых в редактор и означает баг
-SAMPLE_LEAK_MARKERS = ['verify?token=abc123', 'reset?token=abc123', 'SecurePass123', 'buy/success/abc123']
+SAMPLE_LEAK_MARKERS = [
+    'verify?token=abc123',
+    'confirm-email?token=abc123',
+    'reset?token=abc123',
+    'SecurePass123',
+    'buy/success/abc123',
+]
 
 # Критичные плейсхолдеры: без них письмо бесполезно, редактор обязан их отдать
 CRITICAL_PLACEHOLDERS = {
     'email_verification': '{verification_url}',
     'password_reset': '{reset_url}',
     'email_change_code': '{code}',
+    'email_admin_set': '{confirm_url}',
     'guest_cabinet_credentials': '{cabinet_password}',
 }
 

@@ -1637,6 +1637,9 @@ class Settings(BaseSettings):
     # согласием не считается: по умолчанию промо выключено, пользователь включает
     # его сам в «Настройках уведомлений». Явный выбор пользователя всегда главнее.
     PROMO_OFFERS_DEFAULT_ENABLED: bool = False
+    # Журнал писем (кому, тип, тема, результат — без текста письма). Строки
+    # старше этого срока удаляются автоматически.
+    EMAIL_LOG_RETENTION_DAYS: int = 90
 
     # Ban System Integration (BedolagaBan monitoring)
     BAN_SYSTEM_ENABLED: bool = False
@@ -4520,6 +4523,9 @@ class Settings(BaseSettings):
 
     def get_cabinet_email_verification_expire_hours(self) -> int:
         return max(1, self.CABINET_EMAIL_VERIFICATION_EXPIRE_HOURS)
+
+    def get_email_log_retention_days(self) -> int:
+        return max(1, self.EMAIL_LOG_RETENTION_DAYS)
 
     def get_cabinet_password_reset_expire_hours(self) -> int:
         return max(1, self.CABINET_PASSWORD_RESET_EXPIRE_HOURS)

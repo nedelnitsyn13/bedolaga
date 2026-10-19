@@ -60,6 +60,19 @@ STATUS_DEAD = 'dead'
 NO_SMTP_REASON = 'SMTP не настроен — отправлять письмо некому'
 
 
+def _journal(to_email: str, subject: str, email_type: str | None, queue_status: str, error: str | None) -> None:
+    """Итог повторной отправки — в журнал писем (без тела письма)."""
+    from app.services.email_log_service import STATUS_FAILED, STATUS_SENT as LOG_SENT, email_log_service
+
+    email_log_service.record(
+        to_email=to_email,
+        subject=subject,
+        status=LOG_SENT if queue_status == STATUS_SENT else STATUS_FAILED,
+        email_type=email_type,
+        error=error,
+    )
+
+
 class EmailRetryService:
     def __init__(self) -> None:
         # Про отсутствующий SMTP говорим один раз, а не на каждом опросе очереди.
@@ -139,6 +152,7 @@ class EmailRetryService:
         attachments: list[tuple[str, bytes, str]] | None = None,
         unsubscribe_url: str | None = None,
         retry_until: datetime | None = None,
+        email_type: str | None = None,
     ) -> bool:
         """Поставить письмо в очередь повторной отправки.
 
@@ -169,6 +183,7 @@ class EmailRetryService:
             'attempts': 0,
             'next_attempt_at': datetime.now(tz=UTC) + timedelta(minutes=BACKOFF_MINUTES[0]),
             'expires_at': retry_until,
+            'email_type': email_type,
         }
 
         try:
@@ -289,7 +304,8 @@ class EmailRetryService:
                 .scalars()
                 .all()
             )
-            expired = [row.id for row in rows if row.expires_at and row.expires_at <= now]
+            expired_rows = [row for row in rows if row.expires_at and row.expires_at <= now]
+            expired = [row.id for row in expired_rows]
             if expired:
                 # Код внутри уже мёртв: доставить такое письмо хуже, чем не
                 # доставить — человек получает настоящее с виду письмо и
@@ -301,6 +317,8 @@ class EmailRetryService:
                 )
                 await session.commit()
                 logger.warning('Письма не отправлены: истёк срок годности содержимого', count=len(expired))
+                for row in expired_rows:
+                    _journal(row.to_email, row.subject, row.email_type, STATUS_DEAD, 'истёк срок годности содержимого')
 
             items = [
                 {
@@ -312,6 +330,7 @@ class EmailRetryService:
                     'unsubscribe_url': row.unsubscribe_url,
                     'attachments': self._decode_attachments(row.attachments_json),
                     'attempts': row.attempts,
+                    'email_type': row.email_type,
                 }
                 for row in rows
                 if row.id not in set(expired)
@@ -362,6 +381,10 @@ class EmailRetryService:
                 attachments=item['attachments'],
                 unsubscribe_url=item['unsubscribe_url'],
                 queue_on_failure=False,  # повтором управляет эта очередь, не send_email
+                email_type=item.get('email_type'),
+                # Промежуточный неуспех в журнал не пишем: строка «не ушло» при
+                # живом повторе вводила бы в заблуждение. Итог пишется ниже.
+                record_in_log=False,
             )
             error_text = None if sent else 'send_email вернул False'
         except Exception as e:
@@ -382,6 +405,7 @@ class EmailRetryService:
                     )
                 )
                 await session.commit()
+                _journal(item['to_email'], item['subject'], item.get('email_type'), STATUS_SENT, None)
                 logger.info(
                     'Письмо доставлено повторной попыткой',
                     to_email=item['to_email'],
@@ -396,6 +420,7 @@ class EmailRetryService:
                     .values(status=STATUS_DEAD, attempts=attempts, last_error=error_text, **_PURGED_BODY)
                 )
                 await session.commit()
+                _journal(item['to_email'], item['subject'], item.get('email_type'), STATUS_DEAD, error_text)
                 # Единственное место, где письмо признаётся потерянным —
                 # здесь уместен error: он попадёт в админ-чат и в журнал ошибок.
                 logger.error(

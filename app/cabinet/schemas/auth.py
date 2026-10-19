@@ -219,6 +219,19 @@ class RegisterResponse(BaseModel):
     requires_verification: bool = Field(True, description='Whether email verification is required')
 
 
+class EmailConfirmRequest(BaseModel):
+    """Подтверждение почты, которую указал администратор (ссылка из письма)."""
+
+    token: str = Field(..., max_length=2048, description='Token from the confirmation link')
+
+
+class EmailConfirmResponse(BaseModel):
+    """Почта подтверждена. Токенов входа нет намеренно: ссылка в аккаунт не пускает."""
+
+    success: bool = True
+    email: str
+
+
 class EmailChangeRequest(BaseModel):
     """Request to initiate email change."""
 

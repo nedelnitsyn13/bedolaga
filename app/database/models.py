@@ -5294,6 +5294,9 @@ class EmailQueueItem(Base):
     unsubscribe_url = Column(Text, nullable=True)
     # [{filename, mimetype, content_b64}] — с ограничением по суммарному размеру
     attachments_json = Column(JSON, nullable=True)
+    # Тип письма для журнала (email_verification, broadcast, ...): повтор
+    # записывается в журнал под тем же типом, что и первая попытка.
+    email_type = Column(String(64), nullable=True)
 
     # pending -> sent | dead
     status = Column(String(16), nullable=False, default='pending', index=True)
@@ -5308,6 +5311,30 @@ class EmailQueueItem(Base):
 
     created_at = Column(AwareDateTime(), server_default=func.now(), nullable=False, index=True)
     sent_at = Column(AwareDateTime(), nullable=True)
+
+
+class EmailLogEntry(Base):
+    """Журнал писем: кому, какого типа, с какой темой и чем закончилась отправка.
+
+    Текст письма не хранится никогда: в нём коды подтверждения и ссылки входа.
+    Журнал отвечает на вопрос «ушло ли письмо и когда», а не «что в нём было».
+    Строки старше EMAIL_LOG_RETENTION_DAYS удаляются автоматически.
+    """
+
+    __tablename__ = 'email_log'
+    __table_args__ = (Index('ix_email_log_to_email_created_at', 'to_email', 'created_at'),)
+
+    id = Column(Integer, primary_key=True, index=True)
+    # Владелец адреса на момент отправки (NULL — адрес ничей: гость, тест из редактора)
+    user_id = Column(Integer, ForeignKey('users.id', ondelete='SET NULL'), nullable=True, index=True)
+    to_email = Column(String(320), nullable=False)
+    email_type = Column(String(64), nullable=False, default='other')
+    subject = Column(Text, nullable=False)
+    # sent — сервер принял письмо; queued — отложено в очередь повторов;
+    # failed — не ушло и повторов не будет
+    status = Column(String(16), nullable=False)
+    error = Column(Text, nullable=True)
+    created_at = Column(AwareDateTime(), server_default=func.now(), nullable=False, index=True)
 
 
 class ReachabilityBatch(Base):

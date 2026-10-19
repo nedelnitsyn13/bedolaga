@@ -37,6 +37,22 @@ def generate_verification_token() -> str:
     return secrets.token_hex(32)
 
 
+# Ссылки из писем «почту указал администратор» помечены префиксом: такая ссылка
+# только подтверждает адрес и в аккаунт не входит. Обычная проверка почты
+# (/email/verify) такой токен не принимает — иначе опечатка админа в адресе
+# дала бы постороннему вход в чужой аккаунт.
+ADMIN_EMAIL_TOKEN_PREFIX = 'adm_'
+
+
+def generate_admin_email_token() -> str:
+    """Токен ссылки подтверждения почты, указанной администратором."""
+    return ADMIN_EMAIL_TOKEN_PREFIX + secrets.token_hex(32)
+
+
+def is_admin_email_token(token: str | None) -> bool:
+    return bool(token) and token.startswith(ADMIN_EMAIL_TOKEN_PREFIX)
+
+
 def generate_password_reset_token() -> str:
     """
     Generate a secure random password reset token.

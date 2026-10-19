@@ -163,6 +163,9 @@ UNGATED_EMAIL_ROUTES = {
     '/email/change/verify',
     '/email/change/cancel',
     '/email/change/status',
+    # подтверждение почты, которую указал админ: в аккаунт не входит, а подтверждённый
+    # адрес нужен и для писем-уведомлений — при выключенном входе по почте тоже
+    '/email/confirm',
 }
 
 
