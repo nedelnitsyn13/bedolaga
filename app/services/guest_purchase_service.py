@@ -1243,6 +1243,7 @@ async def _send_guest_main_email(
         to_email=recipient_email,
         subject=template['subject'],
         body_html=template['body_html'],
+        email_type=notification_type.value,
     )
 
     if result:
@@ -1358,6 +1359,7 @@ async def send_guest_notification(
                 to_email=recipient_email,
                 subject=cred_template['subject'],
                 body_html=cred_template['body_html'],
+                email_type=NotificationType.GUEST_CABINET_CREDENTIALS.value,
             )
             if cred_result:
                 logger.info(
@@ -1436,6 +1438,7 @@ async def notify_gift_claim_available(
                     to_email=purchase.gift_recipient_value,
                     subject=template['subject'],
                     body_html=template['body_html'],
+                    email_type=NotificationType.GUEST_GIFT_RECEIVED.value,
                 )
         except Exception:
             logger.warning('Failed to send gift claim email to recipient', purchase_id=purchase.id, exc_info=True)
@@ -1473,6 +1476,7 @@ async def notify_gift_claim_available(
                     to_email=purchase.contact_value,
                     subject=buyer_template['subject'],
                     body_html=buyer_template['body_html'],
+                    email_type=NotificationType.GUEST_GIFT_LINK_BUYER.value,
                 )
         except Exception:
             logger.warning('Failed to send gift link to buyer', purchase_id=purchase.id, exc_info=True)

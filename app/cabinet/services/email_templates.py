@@ -90,6 +90,7 @@ class EmailNotificationTemplates:
             NotificationType.EMAIL_VERIFICATION: self._email_verification_template,
             NotificationType.PASSWORD_RESET: self._password_reset_template,
             NotificationType.EMAIL_CHANGE_CODE: self._email_change_code_template,
+            NotificationType.EMAIL_ADMIN_SET: self._email_admin_set_template,
             NotificationType.GUEST_SUBSCRIPTION_DELIVERED: self._guest_subscription_delivered_template,
             NotificationType.GUEST_ACTIVATION_REQUIRED: self._guest_activation_required_template,
             NotificationType.GUEST_GIFT_RECEIVED: self._guest_gift_received_template,
@@ -2231,6 +2232,95 @@ class EmailNotificationTemplates:
                 {code_box}
                 <p>این کد تا {expire_minutes} دقیقه معتبر است.</p>
                 <p style="color: #666;">اگر شما درخواست تغییر ایمیل نداده‌اید، این ایمیل را نادیده بگیرید.</p>
+            """,
+        }
+
+        return {
+            'subject': subjects.get(language, subjects['ru']),
+            'body_html': self._get_base_template(bodies.get(language, bodies['ru']), language),
+        }
+
+    def _email_admin_set_template(self, language: str, context: dict[str, Any]) -> dict[str, str]:
+        """Почту к аккаунту привязал администратор — просим владельца подтвердить адрес.
+
+        Текст регистрационного письма («Спасибо за регистрацию») здесь не подходит:
+        человек ничего не заполнял, адрес указала поддержка.
+        """
+        username = html.escape(context.get('username', ''))
+        confirm_url = html.escape(context.get('confirm_url', '#'))
+        expire_hours = context.get('expire_hours', 24)
+
+        subjects = {
+            'ru': 'Подтвердите email для вашего аккаунта',
+            'en': 'Confirm the email for your account',
+            'zh': '请确认您账户的邮箱',
+            'ua': 'Підтвердіть email для вашого акаунта',
+            'fa': 'ایمیل حساب خود را تایید کنید',
+        }
+
+        greeting = {
+            'ru': f'Здравствуйте{", " + username if username else ""}!',
+            'en': f'Hello{", " + username if username else ""}!',
+            'zh': f'您好{", " + username if username else ""}!',
+            'ua': f'Вітаємо{", " + username if username else ""}!',
+            'fa': f'سلام{" " + username if username else ""}!',
+        }
+
+        bodies = {
+            'ru': f"""
+                <h2>{greeting.get('ru')}</h2>
+                <p>Служба поддержки указала этот адрес для вашего аккаунта. Подтвердите, что почта ваша:</p>
+                <p style="text-align: center;">
+                    <a href="{confirm_url}" class="button">Подтвердить email</a>
+                </p>
+                <p>Или скопируйте и вставьте эту ссылку в браузер:</p>
+                <p><a href="{confirm_url}">{confirm_url}</a></p>
+                <p>Ссылка действительна в течение {expire_hours} часов.</p>
+                <p style="color: #666;">Если вы не обращались в поддержку, просто проигнорируйте это письмо.</p>
+            """,
+            'en': f"""
+                <h2>{greeting.get('en')}</h2>
+                <p>Our support team added this address to your account. Please confirm that it is yours:</p>
+                <p style="text-align: center;">
+                    <a href="{confirm_url}" class="button">Confirm Email</a>
+                </p>
+                <p>Or copy and paste this link in your browser:</p>
+                <p><a href="{confirm_url}">{confirm_url}</a></p>
+                <p>This link will expire in {expire_hours} hours.</p>
+                <p style="color: #666;">If you didn't contact support, you can safely ignore this email.</p>
+            """,
+            'zh': f"""
+                <h2>{greeting.get('zh')}</h2>
+                <p>客服已将此邮箱添加到您的账户。请确认这是您的邮箱：</p>
+                <p style="text-align: center;">
+                    <a href="{confirm_url}" class="button">确认邮箱</a>
+                </p>
+                <p>或将此链接复制到浏览器中打开：</p>
+                <p><a href="{confirm_url}">{confirm_url}</a></p>
+                <p>此链接将在 {expire_hours} 小时后过期。</p>
+                <p style="color: #666;">如果您没有联系过客服，请忽略此邮件。</p>
+            """,
+            'ua': f"""
+                <h2>{greeting.get('ua')}</h2>
+                <p>Служба підтримки вказала цю адресу для вашого акаунта. Підтвердіть, що пошта ваша:</p>
+                <p style="text-align: center;">
+                    <a href="{confirm_url}" class="button">Підтвердити email</a>
+                </p>
+                <p>Або скопіюйте та вставте це посилання в браузер:</p>
+                <p><a href="{confirm_url}">{confirm_url}</a></p>
+                <p>Посилання дійсне протягом {expire_hours} годин.</p>
+                <p style="color: #666;">Якщо ви не зверталися до підтримки, просто проігноруйте цей лист.</p>
+            """,
+            'fa': f"""
+                <h2>{greeting.get('fa')}</h2>
+                <p>پشتیبانی این آدرس را برای حساب شما ثبت کرده است. لطفاً تایید کنید که این ایمیل متعلق به شماست:</p>
+                <p style="text-align: center;">
+                    <a href="{confirm_url}" class="button">تایید ایمیل</a>
+                </p>
+                <p>یا این لینک را در مرورگر خود کپی و باز کنید:</p>
+                <p><a href="{confirm_url}">{confirm_url}</a></p>
+                <p>این لینک تا {expire_hours} ساعت معتبر است.</p>
+                <p style="color: #666;">اگر با پشتیبانی تماس نگرفته‌اید، این ایمیل را نادیده بگیرید.</p>
             """,
         }
 

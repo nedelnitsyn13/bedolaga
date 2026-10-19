@@ -380,6 +380,11 @@ async def main():
 
         await email_retry_service.start()
 
+        # Журнал писем: кому, тип, тема, результат — для карточки пользователя в админке.
+        from app.services.email_log_service import email_log_service
+
+        await email_log_service.start()
+
         from app.services.channel_subscription_service import channel_subscription_service
 
         channel_subscription_service.bot = bot
@@ -1091,6 +1096,14 @@ async def main():
             await email_retry_service.stop()
         except Exception as e:
             logger.warning('Ошибка остановки очереди повторной отправки писем', error=e)
+
+        logger.info('ℹ️ Остановка журнала писем...')
+        try:
+            from app.services.email_log_service import email_log_service
+
+            await email_log_service.stop()
+        except Exception as e:
+            logger.warning('Ошибка остановки журнала писем', error=e)
 
         logger.info('ℹ️ Остановка журнала системных ошибок...')
         try:

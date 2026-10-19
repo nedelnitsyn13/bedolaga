@@ -49,6 +49,7 @@ from .admin_tariffs import router as admin_tariffs_router
 from .admin_tickets import router as admin_tickets_router
 from .admin_traffic import router as admin_traffic_router
 from .admin_updates import router as admin_updates_router
+from .admin_user_email import router as admin_user_email_router
 from .admin_user_reminders import router as admin_user_reminders_router
 from .admin_users import router as admin_users_router
 from .admin_wheel import router as admin_wheel_router
@@ -159,6 +160,7 @@ router.include_router(admin_campaigns_router)
 router.include_router(admin_partners_router)
 router.include_router(admin_withdrawals_router)
 router.include_router(admin_users_router)
+router.include_router(admin_user_email_router)
 router.include_router(admin_bulk_actions_router)
 router.include_router(admin_payment_methods_router)
 router.include_router(admin_landings_router)

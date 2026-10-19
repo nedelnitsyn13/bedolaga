@@ -84,6 +84,7 @@ from ..auth.email_verification import (
     get_email_change_expires_at,
     get_password_reset_expires_at,
     get_verification_expires_at,
+    is_admin_email_token,
     is_token_expired,
 )
 from ..auth.jwt_handler import get_refresh_token_expires_at
@@ -104,6 +105,8 @@ from ..schemas.auth import (
     EmailChangeRequest,
     EmailChangeResponse,
     EmailChangeVerifyRequest,
+    EmailConfirmRequest,
+    EmailConfirmResponse,
     EmailLoginRequest,
     EmailMergeVerifyRequest,
     EmailRegisterRequest,
@@ -1688,6 +1691,15 @@ async def verify_email(
             detail='Too many requests',
             headers={'Retry-After': '60'},
         )
+    # Ссылка «почту указал администратор» только подтверждает адрес и в аккаунт
+    # не входит (см. /email/confirm). Здесь её не принимаем: эта ручка выдаёт
+    # токены входа, а письмо могло уйти на чужой адрес из-за опечатки админа.
+    if is_admin_email_token(request.token):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='Invalid verification token',
+        )
+
     # Find user with this token
     result = await db.execute(select(User).where(User.email_verification_token == request.token))
     user = result.scalar_one_or_none()
@@ -1732,6 +1744,61 @@ async def verify_email(
         response.user = _user_to_response(user)
 
     return response
+
+
+@router.post('/email/confirm', response_model=EmailConfirmResponse)
+async def confirm_admin_set_email(
+    request: EmailConfirmRequest,
+    raw_request: Request,
+    db: AsyncSession = Depends(get_cabinet_db),
+):
+    """Подтвердить почту, которую указал администратор.
+
+    В отличие от /email/verify токенов входа не выдаёт: адрес вводил не владелец,
+    и при опечатке письмо получил бы посторонний. Человек подтверждает адрес и
+    дальше входит обычным способом. Включённый вход по почте не обязателен —
+    подтверждённый адрес нужен и для писем-уведомлений.
+    """
+    client_ip = get_client_ip(raw_request)
+    if await RateLimitCache.is_ip_rate_limited(client_ip, 'email_confirm', limit=10, window=60, fail_closed=True):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail='Too many requests',
+            headers={'Retry-After': '60'},
+        )
+
+    if not is_admin_email_token(request.token):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='Invalid verification token',
+        )
+
+    result = await db.execute(select(User).where(User.email_verification_token == request.token))
+    user = result.scalar_one_or_none()
+    if not user or not user.email:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='Invalid verification token',
+        )
+
+    if is_token_expired(user.email_verification_expires):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='Verification token has expired',
+        )
+
+    user.email_verified = True
+    user.email_verified_at = datetime.now(UTC)
+    # Не «cabinet»: адрес задал админ, а не владелец — для сверки с ADMIN_EMAILS
+    # такой источник не доверенный.
+    user.email_verification_source = 'admin_link'
+    user.email_verification_token = None
+    user.email_verification_expires = None
+    await db.commit()
+
+    logger.info('Email set by admin confirmed by user', user_id=user.id)
+
+    return EmailConfirmResponse(success=True, email=user.email)
 
 
 @router.post('/email/resend')

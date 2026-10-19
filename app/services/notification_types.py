@@ -59,6 +59,8 @@ class NotificationType(Enum):
     EMAIL_VERIFICATION = 'email_verification'
     PASSWORD_RESET = 'password_reset'
     EMAIL_CHANGE_CODE = 'email_change_code'
+    # Почту указал администратор — ссылка только подтверждает адрес, входа не даёт
+    EMAIL_ADMIN_SET = 'email_admin_set'
 
     # Webhook subscription events
     WEBHOOK_SUB_EXPIRED = 'webhook_sub_expired'

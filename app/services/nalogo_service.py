@@ -779,6 +779,7 @@ async def _send_receipt_email(
         body_html,
         None,
         [attachment] if attachment else None,
+        email_type=NotificationType.NALOGO_RECEIPT.value,
     )
 
 

@@ -538,6 +538,22 @@ TEMPLATE_TYPES = [
         'context_vars': ['username', 'code', 'expire_minutes'],
     },
     {
+        'type': 'email_admin_set',
+        'label': {
+            'ru': 'Почта, указанная админом',
+            'en': 'Email Set by Admin',
+            'zh': '管理员设置的邮箱',
+            'ua': 'Пошта, вказана адміном',
+        },
+        'description': {
+            'ru': 'Письмо со ссылкой подтверждения, когда почту пользователю указал администратор',
+            'en': "Confirmation link sent when an administrator sets the user's email",
+            'zh': '管理员为用户设置邮箱时发送的确认链接邮件',
+            'ua': 'Лист із посиланням підтвердження, коли пошту користувачу вказав адміністратор',
+        },
+        'context_vars': ['username', 'confirm_url', 'expire_hours'],
+    },
+    {
         'type': 'partner_application_approved',
         'label': {
             'ru': 'Партнёрство одобрено',
@@ -729,6 +745,7 @@ REQUIRED_PLACEHOLDERS: dict[str, list[str]] = {
     'email_verification': ['verification_url'],
     'password_reset': ['reset_url'],
     'email_change_code': ['code'],
+    'email_admin_set': ['confirm_url'],
     'guest_cabinet_credentials': ['cabinet_email', 'cabinet_password'],
 }
 
@@ -856,6 +873,11 @@ SAMPLE_CONTEXTS: dict[str, dict[str, Any]] = {
     },
     'password_reset': {'username': 'John', 'reset_url': 'https://example.com/reset?token=abc123', 'expire_hours': 1},
     'email_change_code': {'username': 'John', 'code': '123456', 'expire_minutes': 10},
+    'email_admin_set': {
+        'username': 'John',
+        'confirm_url': 'https://example.com/confirm-email?token=abc123',
+        'expire_hours': 24,
+    },
     'partner_application_approved': {'commission_percent': 20, 'comment': 'Welcome aboard!'},
     'partner_application_rejected': {'comment': 'Not enough details provided'},
     'withdrawal_approved': {'formatted_amount': '1000.00 ₽', 'amount_rubles': 1000, 'comment': 'Processed'},
@@ -1357,6 +1379,7 @@ async def send_test_email(
             to_email=to_email,
             subject=subject,
             body_html=body_html,
+            email_type='test',
         )
     except Exception as e:
         logger.error('Ошибка отправки тестового email', e=e)

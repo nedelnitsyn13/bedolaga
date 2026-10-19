@@ -99,6 +99,7 @@ async def send_promo_offer_email(
             body_html=template['body_html'],
             body_text=template.get('body_text'),
             unsubscribe_url=context['unsubscribe_url'] or None,
+            email_type='promo_offer',
         )
     except Exception as e:
         logger.error('Ошибка отправки промо-письма', email=email, e=e)
