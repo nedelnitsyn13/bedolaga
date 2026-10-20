@@ -2381,6 +2381,9 @@
 - `app/utils/text_search.py` — Python-модуль
   Классы: нет
   Функции: `case_variants` — Регистровые варианты термина, по которым имеет смысл искать., `contains_patterns` — LIKE-шаблоны «содержит term» для всех регистровых вариантов., `contains_conditions` — ILIKE-условия «колонка содержит term» — по каждой колонке и каждому варианту., `contains_clause` — Готовое OR-условие «хотя бы одна колонка содержит term».
+- `app/utils/ticket_media.py` — Python-модуль
+  Классы: нет
+  Функции: `extract_ticket_media` — Тип, file_id и подпись вложения из сообщения Telegram; без вложения — три None., `has_ticket_media` — Есть ли у сообщения тикета вложение, которое бот умеет показать., `ticket_media_label` — Строка «📎 Вложение: …» для карточки тикета; пустая, если показывать нечего., `build_ticket_media_group` — Вложения тикета для send_media_group; фото и видео Telegram разрешает смешивать.
 - `app/utils/ticket_text.py` — Python-модуль
   Классы: нет
   Функции: `preview_text` — Короткое превью сообщения для уведомлений (полный текст — в карточке тикета)., `split_long_block` — Режет блок по границам строк/слов, не разрывая HTML-теги и сущности., `build_ticket_pages` — Собирает страницы «шапка + сообщения», не теряя ни одного символа.
@@ -3489,6 +3492,9 @@
 - `tests/cabinet/test_email_layout.py` — Python-модуль
   Классы: нет
   Функции: `test_default_layout_is_the_previous_wrapper` — Без сохранённой обёртки письма выглядят ровно как раньше., `test_default_layout_contains_every_placeholder_the_editor_offers`, `test_custom_layout_applies_to_default_templates`, `test_custom_layout_falls_back_to_ru_for_other_languages`, `test_custom_layout_applies_to_editor_fragments_but_not_full_documents`, `test_layout_without_content_slot_is_ignored` — Обёртка без {content} проглотила бы тело каждого письма — её не берём., `test_render_keeps_content_raw_and_escapes_text_values`, `test_layout_can_use_bare_unsubscribe_url_for_its_own_link_text` — Свой текст отписки вместо готового блока: {unsubscribe_url} доступен в обёртке., `test_layout_sees_recipient_vars_from_default_and_override_paths` — {username}/{email} доступны в обёртке — рендер письма отдаёт ей получателя., `test_override_fragment_keeps_unsubscribe_link` — Маркетинговый override третьего уровня раньше терял ссылку отписки в подвале., `test_cache_is_stale_until_loaded_and_fresh_after`, `test_rendered_override_refreshes_layout_cache_first` — Каждая отправка проходит через get_rendered_override — там и подтягивается обёртка., `test_refresh_survives_database_errors` — Недоступная база — это «обёртки нет», а не потерянное письмо., `test_editor_lists_layout_first_with_placeholders_intact`, `test_layout_preview_puts_sample_letter_inside_custom_layout`, `test_saving_layout_without_content_slot_is_rejected`, `test_saving_layout_refreshes_cache_and_uses_fixed_subject`
+- `tests/cabinet/test_email_link_deleted_holder.py` — Python-модуль
+  Классы: нет
+  Функции: `test_register_sends_code_when_deleted_account_holds_email` — No 500 and no release yet — a code goes to the inbox, the deleted row is untouched., `test_register_live_holder_does_not_keep_password_hash` — The live-account merge path is unchanged: nothing extra is parked in the cache., `test_register_race_on_free_email_returns_409` — Another account grabbed the address between the check and the write., `test_verify_moves_email_from_deleted_account`, `test_verify_wrong_code_leaves_deleted_account_alone`, `test_verify_refuses_when_address_came_back_to_life` — Revived while the code was in flight — that is a live account and needs a real merge., `test_verify_refuses_when_caller_already_has_verified_email`, `test_verify_without_parked_password_keeps_callers_password` — Holder was live when the code was sent and got deleted before it was entered.
 - `tests/cabinet/test_email_login_deleted_oracle.py` — Python-модуль
   Классы: нет
   Функции: `test_email_login_does_not_return_account_deleted_code` — REGRESSION: /email/login must not expose `code: account_deleted`., `test_email_login_returns_generic_401_for_deleted_users` — The DELETED branch in /email/login must raise 401 with 'Invalid email or password'., `test_email_login_status_check_runs_before_email_verification_gate` — REGRESSION: status check must come before the email-verification gate.
@@ -4244,6 +4250,9 @@
 - `tests/handlers/test_admin_tariff_server_limits.py` — Python-модуль
   Классы: нет
   Функции: `test_card_summarizes_limits_and_has_entry`, `test_screen_lists_allowed_squads_with_limits`, `test_screen_lists_all_squads_when_tariff_allows_all`, `test_companion_squad_visible_even_when_not_allowed` — Лимит компаньона независим от allowed_squads — добавлять его туда не нужно, `test_input_sets_limit_without_mutating_stored_dict`, `test_zero_removes_limit`, `test_invalid_input_keeps_state`
+- `tests/handlers/test_admin_user_autopay_frozen_callback.py` — Python-модуль
+  Классы: нет
+  Функции: `test_autopay_handlers_rerender_without_mutating_frozen_callback`
 - `tests/handlers/test_balance_quick_topup.py` — Python-модуль
   Классы: нет
   Функции: `test_answers_the_tap_before_calling_the_provider`, `test_stale_query_is_not_reported_as_topup_error` — Устаревший запрос по дороге — предупреждение декоратора, а не отчёт об ошибке., `test_provider_failure_is_reported_once_without_second_answer`, `test_unknown_method_is_reported_with_a_message`, `test_tribute_flow_owns_the_answer` — Сценарии, которым передаётся сам callback, отвечают на нажатие сами — родитель не лезет., `test_invalid_amount_alerts_immediately`
@@ -4253,6 +4262,9 @@
 - `tests/handlers/test_broadcast_custom_buttons.py` — Python-модуль
   Классы: нет
   Функции: `test_keyboard_passes_icon_custom_emoji_id`, `test_schema_roundtrips_icon_custom_emoji_id`, `test_schema_defaults_to_none_and_rejects_garbage`
+- `tests/handlers/test_broadcast_message_without_text.py` — Python-модуль
+  Классы: нет
+  Функции: `test_message_without_text_is_rejected`, `test_text_message_is_saved`
 - `tests/handlers/test_cashera_topup_flow.py` — Python-модуль
   Классы: нет
   Функции: `test_single_button_by_default`, `test_inline_methods_show_one_button_per_method`, `test_prefilled_amount_keeps_method_in_callback`, `test_quick_amounts_resolve_to_cashera_config`, `test_hidden_when_disabled`, `test_several_methods_ask_to_choose`, `test_choosing_a_method_asks_for_amount`, `test_disabled_method_is_refused`, `test_invoice_is_a_qr_photo_when_requisites_are_ready`
@@ -4318,10 +4330,13 @@
   Функции: `test_show_tariffs_list_single_tariff_skips_list_and_proceeds` — Один тариф из get_tariffs_for_user → не рисуем список, сразу _proceed с skip_selection., `test_show_tariffs_list_multiple_tariffs_shows_list` — Два и больше тарифов → список как раньше, без авто-перехода., `test_select_tariff_wrapper_parses_id_and_delegates` — select_tariff остаётся тонкой обёрткой: парсит id и зовёт _proceed без skip_selection., `test_proceed_skip_selection_uses_back_to_menu` — Схлопнутый выбор: клавиатура периодов с back_callback=back_to_menu., `test_proceed_normal_selection_uses_menu_buy_back` — Обычный выбор из списка: клавиатура периодов с back_callback=menu_buy., `test_back_target_survives_a_redraw_of_the_custom_screen` — «Назад» не должен деградировать при перерисовке конфигуратора., `test_single_owned_tariff_shows_the_list_instead_of_a_dead_button` — Если покупать нечего, пропуск превращает «Купить» в мёртвую кнопку.
 - `tests/handlers/test_start_invite_only.py` — Python-модуль
   Классы: нет
-  Функции: `test_registration_invite_payload_preserves_original_start_parameter`, `test_telegram_access_evaluation_forwards_identity_and_lock`, `test_create_user_with_registration_invite_commits_gift_atomically`, `test_invite_denial_includes_support_button_when_contact_is_configured`, `test_invite_denial_renders_without_button_when_contact_is_empty`, `test_pending_gift_drain_delegates_to_the_shared_claim_service` — Активация из FSM идёт через общий claim-сервис, а не через собственный запрос., `test_already_claimed_gift_is_reported_instead_of_ignored` — Ссылка, которую уже забрал другой человек, обязана отвечать, а не молчать.
+  Функции: `test_registration_invite_payload_preserves_original_start_parameter`, `test_telegram_access_evaluation_forwards_identity_and_lock`, `test_create_user_with_registration_invite_commits_gift_atomically`, `test_invite_denial_includes_support_button_when_contact_is_configured`, `test_invite_denial_renders_without_button_when_contact_is_empty`, `test_pending_gift_drain_delegates_to_the_shared_claim_service` — Активация из FSM идёт через общий claim-сервис, а не через собственный запрос., `test_already_claimed_gift_is_reported_instead_of_ignored` — Ссылка, которую уже забрал другой человек, обязана отвечать, а не молчать., `test_registration_denial_takes_texts_from_locales` — Отказ берёт тексты из локалей, а не из запасных значений в коде.
 - `tests/handlers/test_start_menu_media.py` — Python-модуль
   Классы: нет
   Функции: `test_video_takes_precedence_over_logo`, `test_without_video_falls_back_to_logo`, `test_removed_video_returns_to_logo` — Удаление видео в кабинете сразу возвращает прежнее поведение., `test_long_caption_goes_to_plain_text` — Подпись длиннее лимита Telegram нельзя приложить ни к видео, ни к фото., `test_video_send_failure_still_delivers_menu` — Битый file_id не должен оставлять пользователя без меню., `test_video_used_even_when_logo_mode_disabled` — Видео — самостоятельная настройка, не зависит от ENABLE_LOGO_MODE., `test_answer_path_sends_video` — /start отвечает через message.answer — видео обязано работать и там., `test_answer_path_without_video_delegates_unchanged` — Без видео поведение обязано остаться ровно прежним (патченный answer)., `test_answer_path_falls_back_when_video_broken`, `test_answer_path_long_caption_delegates_to_text`
+- `tests/handlers/test_start_retroactive_referral_window.py` — Python-модуль
+  Классы: нет
+  Функции: `test_user_created_by_miniapp_seconds_before_start_gets_referrer`, `test_user_inside_window_gets_referrer`, `test_long_registered_user_does_not_become_referral_by_clicking_link`, `test_user_just_outside_window_does_not_become_referral`, `test_user_without_created_at_does_not_become_referral`
 - `tests/handlers/test_start_subid.py` — Python-модуль
   Классы: `TestSplitStartParamSubid` (9 методов)
   Функции: нет
@@ -4370,6 +4385,9 @@
 - `tests/handlers/test_ticket_notification_escaping.py` — Python-модуль
   Классы: нет
   Функции: `test_reply_preview_is_escaped`, `test_escaping_does_not_split_entities_on_the_cut` — Обрезка идёт до экранирования, поэтому `&quot;` не разрывается., `test_plain_reply_is_unchanged`
+- `tests/handlers/test_ticket_video_attachments.py` — Python-модуль
+  Классы: нет
+  Функции: `test_extract_video_with_caption`, `test_extract_video_without_caption`, `test_extract_photo_takes_largest_size`, `test_extract_plain_text_has_no_media`, `test_ticket_media_label`, `test_has_ticket_media_requires_known_type_and_flag`, `test_media_group_mixes_photos_and_videos_in_order`, `test_input_handlers_use_shared_media_extraction`, `test_user_reply_length_check_allows_media_without_caption`, `test_admin_topic_notification_sends_video`, `test_admin_topic_notification_long_text_goes_before_video`, `test_admin_topic_notification_still_sends_photo`
 - `tests/handlers/test_ticket_view_opens_last_page.py` — Python-модуль
   Классы: нет
   Функции: `test_opens_on_the_last_page_when_no_page_requested`, `test_explicit_page_from_pagination_button_wins`
@@ -4742,6 +4760,9 @@
 - `tests/services/test_miniapp_action_log.py` — Python-модуль
   Классы: нет
   Функции: `test_every_miniapp_route_is_classified` — Каждый маршрут Mini App отнесён либо к действиям, либо к чтениям., `test_classification_has_no_stale_paths` — В списках нет путей, которых у роутера больше нет., `test_actions_are_logged_and_reads_are_not` — Покупка — действие, просмотр подписки — нет., `test_path_normalization_keeps_prefix`, `test_authorize_writes_action_for_mutating_request` — Авторизация запроса Mini App пишет действие в тот же журнал., `test_authorize_writes_screen_for_reads` — Просмотр экрана — тоже след: пишется как экран, а не как действие., `test_timeline_shows_miniapp_actions` — Записанное действие Mini App видно в «Активности» и не смешано с ботом.
+- `tests/services/test_monitoring_cycle_idle_transaction.py` — Python-модуль
+  Классы: нет
+  Функции: `test_channel_check_runs_without_open_outer_transaction`
 - `tests/services/test_monitoring_grace_race.py` — Python-модуль
   Классы: нет
   Функции: `test_grace_opened_while_monitoring_walked_its_list_is_not_imported`, `test_renewal_that_landed_while_monitoring_walked_its_list_is_not_expired` — Тот же устаревший список: подписку уже продлили — гасить её нельзя., `test_expiry_does_not_overwrite_a_renewal_committed_right_before_it` — Последнее окно: продление записано уже после перечитывания, но до гашения., `test_expiry_still_expires_a_subscription_that_is_due`, `test_grace_closed_early_between_snapshot_and_reread_is_not_imported` — Ревью 2026-09-15: снимок панели — ещё оверлей, а к перечитыванию грейс уже закрыт досрочно., `test_one_broken_subscription_does_not_stop_the_whole_pass` — Ревью: сбой на одной подписке (удалили во время прохода) прерывал гашение всех остальных.
@@ -4807,7 +4828,7 @@
   Функции: `test_signature_payload_sorts_keys_and_joins_values`, `test_valid_signature_accepted`, `test_tampered_amount_breaks_signature`, `test_wrong_key_and_empty_signature_rejected`, `test_blank_secret_fails_closed`, `test_number_text_from_json_is_preserved` — Числа не должны переформатироваться: иначе подпись отправителя не сойдётся., `test_parse_rejects_non_object_and_broken_json`, `test_amount_to_kopeks`, `test_kopeks_to_amount`, `test_amount_roundtrip_has_no_float_drift` — Через float 0.1+0.2 ломается; здесь Decimal и обратный путь обязан сходиться.
 - `tests/services/test_payer_identity.py` — Python-модуль
   Классы: нет
-  Функции: `test_telegram_user_is_identified_by_telegram_id_and_username`, `test_username_is_not_prefixed_twice`, `test_name_is_used_without_username`, `test_telegram_user_without_any_names_is_named_by_id`, `test_verified_email_is_the_contact`, `test_email_user_is_identified_by_internal_id`, `test_unverified_email_is_never_the_contact` — Адрес назначается до подтверждения, MulenPay фискализирует платёж — чек чужому ящику не нужен., `test_broken_telegram_name_does_not_reach_the_provider` — Обрезанный эмодзи (одинокий суррогат) и управляющие символы из имени не уходят в запрос., `test_whitespace_only_fields_fall_through`, `test_overlong_values_are_cut`, `test_platega_metadata_has_both_string_fields`, `test_guest_with_email_contact`, `test_guest_with_telegram_contact`, `test_guest_without_contact_is_still_filled`, `test_resolve_user_payer_reads_the_user`, `test_resolve_user_payer_without_the_user_is_still_filled`, `test_resolve_user_payer_survives_a_database_error` — Данные плательщика не имеют права сорвать создание платежа., `test_resolve_guest_payer_reads_the_purchase`, `test_resolve_guest_payer_without_the_purchase_is_still_filled`
+  Функции: `test_telegram_user_is_identified_by_telegram_id_and_username`, `test_username_is_not_prefixed_twice`, `test_name_is_used_without_username`, `test_telegram_user_without_any_names_is_named_by_id`, `test_verified_email_is_the_contact`, `test_email_user_is_identified_by_internal_id`, `test_unverified_email_is_never_the_contact` — Адрес назначается до подтверждения, MulenPay фискализирует платёж — чек чужому ящику не нужен., `test_broken_telegram_name_does_not_reach_the_provider` — Обрезанный эмодзи (одинокий суррогат) и управляющие символы из имени не уходят в запрос., `test_whitespace_only_fields_fall_through`, `test_overlong_values_are_cut`, `test_platega_metadata_has_both_string_fields`, `test_guest_with_email_contact`, `test_guest_with_telegram_contact`, `test_guest_without_contact_is_still_filled`, `test_resolve_user_payer_reads_the_user`, `test_resolve_user_payer_without_the_user_is_still_filled`, `test_resolve_user_payer_survives_a_database_error` — Данные плательщика не имеют права сорвать создание платежа., `test_resolve_guest_payer_reads_the_purchase`, `test_resolve_guest_payer_without_the_purchase_is_still_filled`, `test_platega_metadata_email_only_when_verified`, `test_platega_metadata_no_email_for_telegram_guest`
 - `tests/services/test_payment_common.py` — Python-модуль
   Классы: нет
   Функции: `anyio_backend`, `test_send_payment_success_notification_recovers_missing_greenlet`
