@@ -81,6 +81,10 @@ class TicketResponse(BaseModel):
     closed_at: datetime | None = None
     messages_count: int = 0
     last_message: TicketMessageResponse | None = None
+    # Опрос «оцените поддержку»: показывать блок оценки (тикет начат в кабинете,
+    # закрыт и оценку уже запросили) и поставленная оценка 1–5.
+    csat_available: bool = False
+    csat_rating: int | None = None
 
     class Config:
         from_attributes = True
@@ -98,6 +102,8 @@ class TicketDetailResponse(BaseModel):
     closed_at: datetime | None = None
     is_reply_blocked: bool = False
     messages: list[TicketMessageResponse] = []
+    csat_available: bool = False
+    csat_rating: int | None = None
 
     class Config:
         from_attributes = True
@@ -150,3 +156,9 @@ class TicketMessageCreateRequest(BaseModel):
         if not has_text and not has_media:
             raise ValueError('message or media is required')
         return self
+
+
+class TicketCsatRequest(BaseModel):
+    """Оценка работы поддержки по закрытому тикету."""
+
+    rating: int = Field(..., ge=1, le=5, description='Rating from 1 to 5')

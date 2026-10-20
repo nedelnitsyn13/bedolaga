@@ -402,7 +402,7 @@
   Функции: `get_user_notifications` — Get ticket notifications for current user., `get_user_unread_count` — Get unread notifications count for current user., `mark_notification_as_read` — Mark a notification as read., `mark_all_notifications_as_read` — Mark all notifications as read for current user., `mark_ticket_notifications_as_read` — Mark all notifications for a specific ticket as read., `get_admin_notifications` — Get ticket notifications for admins., `get_admin_unread_count` — Get unread notifications count for admins., `mark_admin_notification_as_read` — Mark an admin notification as read., `mark_all_admin_notifications_as_read` — Mark all admin notifications as read., `mark_admin_ticket_notifications_as_read` — Mark all admin notifications for a specific ticket as read.
 - `app/cabinet/routes/tickets.py` — Python-модуль
   Классы: нет
-  Функции: `get_tickets` — Get user's support tickets., `create_ticket` — Create a new support ticket., `get_ticket` — Get ticket with all messages., `add_ticket_message` — Add message to existing ticket.
+  Функции: `get_tickets` — Get user's support tickets., `create_ticket` — Create a new support ticket., `get_ticket` — Get ticket with all messages., `add_ticket_message` — Add message to existing ticket., `rate_ticket` — Оценить работу поддержки по закрытому тикету (один раз).
 - `app/cabinet/routes/unsubscribe.py` — Python-модуль
   Классы: нет
   Функции: `unsubscribe_page` — Ничего не меняет — только отдаёт самоотправляющуюся форму., `unsubscribe_one_click` — Единственное место, где отписка применяется.
@@ -548,7 +548,7 @@
   Классы: `PeriodPrice` (1 методов), `ServerTrafficLimit`, `ServerInfo`, `PromoGroupInfo`, `TariffListItem`, `TariffListResponse`, `TariffDetailResponse`, `ExternalSquadInfoResponse`, `TariffCreateRequest` (1 методов), `TariffUpdateRequest` (1 методов), `TariffSortOrderRequest`, `TariffToggleResponse`, `TariffTrialResponse`, `TariffStatsResponse`, `SyncSquadsResponse`
   Функции: нет
 - `app/cabinet/schemas/tickets.py` — Python-модуль
-  Классы: `TicketMediaItem` (1 методов), `TicketMessageResponse`, `TicketResponse`, `TicketDetailResponse`, `TicketListResponse`, `TicketCreateRequest` (1 методов), `TicketMessageCreateRequest` (1 методов)
+  Классы: `TicketMediaItem` (1 методов), `TicketMessageResponse`, `TicketResponse`, `TicketDetailResponse`, `TicketListResponse`, `TicketCreateRequest` (1 методов), `TicketMessageCreateRequest` (1 методов), `TicketCsatRequest`
   Функции: нет
 - `app/cabinet/schemas/traffic.py` — Python-модуль
   Классы: `TrafficNodeInfo`, `SubscriptionTrafficInfo`, `UserTrafficItem`, `TrafficUsageResponse`, `SubscriptionEnrichmentInfo`, `UserTrafficEnrichment`, `TrafficEnrichmentResponse`, `ExportCsvRequest`, `ExportCsvResponse`
@@ -589,6 +589,9 @@
 - `app/cabinet/services/email_unsubscribe.py` — Python-модуль
   Классы: нет
   Функции: `build_token` — Собирает токен отписки для конкретного адреса., `parse_token` — Достаёт (user_id, category) БЕЗ проверки подписи., `verify_token` — Проверяет подпись токена против текущего адреса пользователя., `build_unsubscribe_url` — Публичная ссылка отписки. Пустая строка = отписки в этом письме не будет., `build_unsubscribe_mailto` — mailto-вариант для клиентов без HTTP one-click. Пусто, если не настроен., `apply_unsubscribe` — Выключает маркетинговые рассылки по токену.
+- `app/cabinet/services/ticket_live_updates.py` — Python-модуль
+  Классы: нет
+  Функции: `publish_ticket_update`, `register_ticket_live_updates` — Подписаться на события тикетов (идемпотентно).
 
 #### app/cabinet/utils
 
@@ -994,7 +997,7 @@
   Функции: `show_support_info`, `register_handlers`
 - `app/handlers/tickets.py` — Python-модуль
   Классы: `TicketStates`
-  Функции: `show_ticket_priority_selection` — Начать создание тикета без выбора приоритета: сразу просим заголовок, `handle_ticket_title_input`, `handle_ticket_message_input`, `show_my_tickets`, `show_my_tickets_closed`, `view_ticket` — Показать детали тикета с пагинацией, `send_ticket_attachments`, `user_delete_message`, `reply_to_ticket` — Начать ответ на тикет, `handle_ticket_reply`, `close_ticket` — Закрыть тикет, `cancel_ticket_creation` — Отменить создание тикета, `cancel_ticket_reply` — Отменить ответ на тикет, `close_ticket_notification` — Закрыть уведомление о тикете, `build_ticket_card_keyboard` — Клавиатура карточки тикета по роли получателя ('admin' / 'moderator' / 'group')., `notify_admins_about_new_ticket` — Уведомить админов о новом тикете, `notify_admins_about_ticket_reply` — Уведомить админов об ответе пользователя на тикет, `register_handlers` — Регистрация обработчиков тикетов
+  Функции: `show_ticket_priority_selection` — Начать создание тикета без выбора приоритета: сразу просим заголовок, `handle_ticket_title_input`, `handle_ticket_message_input`, `show_my_tickets`, `show_my_tickets_closed`, `view_ticket` — Показать детали тикета с пагинацией, `send_ticket_attachments`, `user_delete_message`, `reply_to_ticket` — Начать ответ на тикет, `handle_ticket_reply`, `close_ticket` — Закрыть тикет, `rate_ticket_support` — Оценка работы поддержки по кнопке из опроса после закрытия тикета., `cancel_ticket_creation` — Отменить создание тикета, `cancel_ticket_reply` — Отменить ответ на тикет, `close_ticket_notification` — Закрыть уведомление о тикете, `build_ticket_card_keyboard` — Клавиатура карточки тикета по роли получателя ('admin' / 'moderator' / 'group')., `notify_admins_about_new_ticket` — Уведомить админов о новом тикете, `notify_admins_about_ticket_reply` — Уведомить админов об ответе пользователя на тикет, `register_handlers` — Регистрация обработчиков тикетов
 - `app/handlers/webhooks.py` — Python-модуль
   Классы: нет
   Функции: `set_webhook_bot` — Устанавливает экземпляр бота для отправки уведомлений об ошибках в webhook., `tribute_webhook`, `handle_successful_payment`, `handle_pre_checkout_query`
@@ -1861,6 +1864,9 @@
 - `app/services/tariff_switch_policy.py` — Python-модуль
   Классы: нет
   Функции: `remaining_days_for_switch` — Сколько дней остатка оплачивать при переключении тарифа., `should_reset_used_traffic` — Обнулять ли счётчик трафика при переключении тарифа.
+- `app/services/ticket_csat_service.py` — Python-модуль
+  Классы: `CsatError` (1 методов)
+  Функции: `effective_source` — Где начат тикет. У старых тикетов поля нет — судим по наличию Telegram., `stars`, `build_rating_keyboard`, `parse_callback` — ``csat_rate_<ticket>_<rating>`` → (ticket_id, rating); мусор → None., `request_csat` — Попросить оценку у автора закрытого тикета. True — запрос отправлен., `save_rating` — Сохранить оценку автора тикета. Бросает CsatError с причиной., `register_ticket_csat_listener` — Подписать опрос на закрытие тикетов (идемпотентно).
 - `app/services/traffic_monitoring_service.py` — Python-модуль
   Классы: `TrafficViolation`, `TrafficMonitoringServiceV2` (35 методов), `TrafficMonitoringSchedulerV2` (9 методов), `TrafficMonitoringService` (6 методов), `TrafficMonitoringScheduler` (9 методов)
   Функции: нет
@@ -3123,6 +3129,9 @@
   Классы: нет
   Функции: `upgrade`, `downgrade`
 - `migrations/alembic/versions/0137_create_email_log.py` — Python-модуль
+  Классы: нет
+  Функции: `upgrade`, `downgrade`
+- `migrations/alembic/versions/0138_ticket_source_and_csat.py` — Python-модуль
   Классы: нет
   Функции: `upgrade`, `downgrade`
 
@@ -4475,6 +4484,9 @@
 - `tests/migrations/test_0137_email_log.py` — Python-модуль
   Классы: нет
   Функции: `test_revision_chain`, `test_upgrade_matches_model_and_downgrade_drops`
+- `tests/migrations/test_0138_ticket_csat.py` — Python-модуль
+  Классы: нет
+  Функции: `test_revision_chain`, `test_model_has_all_new_columns`, `test_upgrade_adds_columns_and_downgrade_drops`
 
 ### tests/scripts
 
@@ -5096,6 +5108,12 @@
 - `tests/services/test_telegram_stars_rate.py` — Python-модуль
   Классы: нет
   Функции: `test_default_stars_rate_is_one_ruble_per_star` — REGRESSION: default rate must stay at 1.0 ₽/⭐., `test_integer_ruble_amounts_round_trip_losslessly` — REGRESSION: at rate=1.0, integer ruble top-ups credit back exactly., `test_rubles_to_stars_rejects_invalid_rate` — Defensive check: zero/negative rate must raise rather than divide-by-zero., `test_rubles_to_stars_clamps_to_minimum_one_star` — Even at rate=1.0, a 0 ₽ request must return ≥1 ⭐ (Telegram requires positive amount)., `test_rate_change_is_propagated_through_telegram_stars_service` — `TelegramStarsService.calculate_*` helpers must defer to settings — no hardcoded copies.
+- `tests/services/test_ticket_csat_entrypoints.py` — Python-модуль
+  Классы: нет
+  Функции: `test_bot_button_saves_rating_and_thanks`, `test_bot_button_twice_says_already_rated`, `test_cabinet_rates_own_closed_ticket`, `test_cabinet_refusals`, `test_cabinet_disabled_tickets_refuse_rating`, `test_rating_block_only_where_ticket_started`, `test_admin_reply_reaches_ticket_owner`, `test_status_change_carries_new_status`, `test_cabinet_admin_close_emits_status_changed`
+- `tests/services/test_ticket_csat_service.py` — Python-модуль
+  Классы: нет
+  Функции: `maker`, `bot`, `ws`, `test_effective_source_prefers_stored_value`, `test_effective_source_for_old_tickets_follows_telegram`, `test_parse_callback_accepts_only_valid_ratings`, `test_rating_keyboard_has_five_buttons`, `test_bot_ticket_gets_telegram_prompt_once`, `test_cabinet_ticket_is_asked_in_cabinet_only`, `test_open_ticket_is_not_asked`, `test_disabled_setting_skips_everything`, `test_owner_rates_closed_ticket_once`, `test_rating_is_refused`, `test_admins_get_the_rating`, `test_close_event_triggers_request`
 - `tests/services/test_ticket_reply_email.py` — Python-модуль
   Классы: нет
   Функции: `sent` — Перехватывает send_notification роутера., `last_message` — Подменяет чтение последнего сообщения тикета (проверка на фото)., `test_email_user_gets_ticket_reply_email`, `test_photo_reply_marked_in_context`, `test_long_reply_is_previewed`, `test_telegram_user_does_not_get_email` — Юзеру с Telegram ответ уже ушёл в бот — письмо было бы дублем., `test_disabled_toggle_blocks_email`, `test_global_notifications_switch_does_not_mute_support_replies` — ENABLE_NOTIFICATIONS не должен глушить ответ поддержки только email-юзеру., `test_user_without_verified_email_is_skipped`, `test_delivery_failure_does_not_raise`, `test_template_renders_for_supported_languages`, `test_template_escapes_html_in_preview` — Ответ поддержки вида «откройте <config>» не должен ломать вёрстку письма., `test_template_mentions_photo_when_reply_has_one`

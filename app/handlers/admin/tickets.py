@@ -232,7 +232,12 @@ async def view_admin_ticket(
         header += '📱 Username: отсутствует\n'
     header += f'📝 Заголовок: {html.escape(ticket.title)}\n'
     header += f'📊 Статус: {ticket.status_emoji} {status_text}\n'
-    header += f'📅 Создан: {format_local_datetime(ticket.created_at, "%d.%m.%Y %H:%M")}\n\n'
+    header += f'📅 Создан: {format_local_datetime(ticket.created_at, "%d.%m.%Y %H:%M")}\n'
+    if ticket.csat_rating:
+        header += f'{"⭐" * ticket.csat_rating} Оценка поддержки: {ticket.csat_rating}/5\n'
+    elif ticket.csat_requested_at:
+        header += '⭐ Оценка поддержки: ждём ответа\n'
+    header += '\n'
 
     if ticket.is_user_reply_blocked:
         if ticket.user_reply_block_permanent:

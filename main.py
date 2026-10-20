@@ -385,6 +385,11 @@ async def main():
 
         await email_log_service.start()
 
+        # Опрос «оцените поддержку» после закрытия тикета.
+        from app.services.ticket_csat_service import register_ticket_csat_listener
+
+        register_ticket_csat_listener()
+
         from app.services.channel_subscription_service import channel_subscription_service
 
         channel_subscription_service.bot = bot

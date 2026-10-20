@@ -2320,5 +2320,8 @@
   "CASHERA_RECURRING_PAY_BUTTON": "💳 تأیید",
   "CASHERA_RECURRING_CANCEL_BUTTON": "🛑 غیرفعال کردن تمدید خودکار Cashera",
   "CASHERA_RECURRING_MENU_BUTTON": "⚡ تمدید خودکار از طریق Cashera",
-  "CASHERA_RECURRING_CANCELLED": "✅ تمدید خودکار Cashera غیرفعال شد"
+  "CASHERA_RECURRING_CANCELLED": "✅ تمدید خودکار Cashera غیرفعال شد",
+  "TICKET_CSAT_PROMPT": "✅ تیکت #{ticket_id} بسته شد.\n\nلطفاً به پشتیبانی ما امتیاز دهید:",
+  "TICKET_CSAT_THANKS": "از امتیاز شما سپاسگزاریم! {stars}",
+  "TICKET_CSAT_ALREADY": "شما قبلاً به این تیکت امتیاز داده‌اید."
 }

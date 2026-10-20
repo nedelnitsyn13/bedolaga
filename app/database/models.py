@@ -23,6 +23,7 @@ from sqlalchemy import (
     Index,
     Integer,
     Numeric,
+    SmallInteger,
     String,
     Table,
     Text,
@@ -4282,6 +4283,14 @@ class Ticket(Base):
     closed_at = Column(AwareDateTime(), nullable=True)
     # SLA reminders
     last_sla_reminder_at = Column(AwareDateTime(), nullable=True)
+
+    # Где начат тикет: 'bot' | 'cabinet'. NULL — тикеты до появления поля.
+    # Опрос удовлетворённости показывается только там, где тикет начат.
+    source = Column(String(16), nullable=True)
+    # Оценка работы поддержки после закрытия (1–5). Спрашиваем один раз на тикет.
+    csat_rating = Column(SmallInteger, nullable=True)
+    csat_requested_at = Column(AwareDateTime(), nullable=True)
+    csat_rated_at = Column(AwareDateTime(), nullable=True)
 
     # Связи
     user = relationship('User', backref='tickets')

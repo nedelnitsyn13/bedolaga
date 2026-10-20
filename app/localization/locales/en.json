@@ -2320,5 +2320,8 @@
   "CASHERA_RECURRING_PAY_BUTTON": "💳 Confirm",
   "CASHERA_RECURRING_CANCEL_BUTTON": "🛑 Turn off Cashera auto-renewal",
   "CASHERA_RECURRING_MENU_BUTTON": "⚡ Auto-renewal via Cashera",
-  "CASHERA_RECURRING_CANCELLED": "✅ Cashera auto-renewal turned off"
+  "CASHERA_RECURRING_CANCELLED": "✅ Cashera auto-renewal turned off",
+  "TICKET_CSAT_PROMPT": "✅ Ticket #{ticket_id} is closed.\n\nPlease rate our support:",
+  "TICKET_CSAT_THANKS": "Thank you for your rating! {stars}",
+  "TICKET_CSAT_ALREADY": "You have already rated this ticket."
 }

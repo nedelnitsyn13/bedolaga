@@ -55,6 +55,10 @@ class AdminTicketResponse(BaseModel):
     messages_count: int = 0
     user: AdminTicketUserInfo | None = None
     last_message: TicketMessageResponse | None = None
+    # Где начат тикет ('bot' | 'cabinet'; None — старые тикеты) и оценка поддержки 1–5
+    source: str | None = None
+    csat_rating: int | None = None
+    csat_requested: bool = False
 
     class Config:
         from_attributes = True
@@ -73,6 +77,10 @@ class AdminTicketDetailResponse(BaseModel):
     is_reply_blocked: bool = False
     user: AdminTicketUserInfo | None = None
     messages: list[TicketMessageResponse] = []
+    source: str | None = None
+    csat_rating: int | None = None
+    csat_requested: bool = False
+    csat_rated_at: datetime | None = None
 
     class Config:
         from_attributes = True
@@ -127,6 +135,9 @@ class AdminStatsResponse(BaseModel):
     pending: int
     answered: int
     closed: int
+    # Оценка поддержки: средняя и сколько тикетов оценено
+    csat_average: float | None = None
+    csat_count: int = 0
 
 
 class TicketSettingsResponse(BaseModel):
@@ -230,6 +241,9 @@ def _ticket_to_admin_response(ticket: Ticket, include_messages: bool = False) ->
         messages_count=messages_count,
         user=user_info,
         last_message=last_message,
+        source=ticket.source,
+        csat_rating=ticket.csat_rating,
+        csat_requested=ticket.csat_requested_at is not None,
     )
 
 
@@ -249,12 +263,21 @@ async def get_ticket_stats(
         result = await db.execute(select(func.count()).select_from(Ticket).where(Ticket.status == status_name))
         statuses[status_name] = result.scalar() or 0
 
+    csat_row = (
+        await db.execute(
+            select(func.avg(Ticket.csat_rating), func.count(Ticket.csat_rating)).where(Ticket.csat_rating.isnot(None))
+        )
+    ).one()
+    csat_average = round(float(csat_row[0]), 2) if csat_row[0] is not None else None
+
     return AdminStatsResponse(
         total=total,
         open=statuses.get('open', 0),
         pending=statuses.get('pending', 0),
         answered=statuses.get('answered', 0),
         closed=statuses.get('closed', 0),
+        csat_average=csat_average,
+        csat_count=int(csat_row[1] or 0),
     )
 
 
@@ -415,6 +438,10 @@ async def get_ticket_detail(
         is_reply_blocked=ticket.is_reply_blocked if hasattr(ticket, 'is_reply_blocked') else False,
         user=user_info,
         messages=messages_response,
+        source=ticket.source,
+        csat_rating=ticket.csat_rating,
+        csat_requested=ticket.csat_requested_at is not None,
+        csat_rated_at=ticket.csat_rated_at,
     )
 
 
@@ -552,6 +579,7 @@ async def update_ticket_status(
             detail='Ticket not found',
         )
 
+    previous_status = ticket.status
     ticket.status = request.status
     ticket.updated_at = datetime.now(UTC)
     if request.status == 'closed':
@@ -561,6 +589,26 @@ async def update_ticket_status(
 
     await db.commit()
     await db.refresh(ticket)
+
+    # Та же шина, что у бота и Web API: живое обновление страниц кабинета,
+    # мобильный сокет поддержки и опрос «оцените поддержку» после закрытия.
+    if previous_status != ticket.status:
+        try:
+            from app.services.event_emitter import event_emitter
+
+            await event_emitter.emit(
+                'ticket.status_changed',
+                {
+                    'ticket_id': ticket.id,
+                    'user_id': ticket.user_id,
+                    'old_status': previous_status,
+                    'new_status': ticket.status,
+                    'closed_at': ticket.closed_at.isoformat() if ticket.closed_at else None,
+                },
+                db=db,
+            )
+        except Exception as error:
+            logger.warning('Failed to emit ticket.status_changed from cabinet', error=error)
 
     messages = sorted(ticket.messages or [], key=lambda m: m.created_at)
     messages_response = [_message_to_response(m) for m in messages]
@@ -580,6 +628,10 @@ async def update_ticket_status(
         is_reply_blocked=ticket.is_reply_blocked if hasattr(ticket, 'is_reply_blocked') else False,
         user=user_info,
         messages=messages_response,
+        source=ticket.source,
+        csat_rating=ticket.csat_rating,
+        csat_requested=ticket.csat_requested_at is not None,
+        csat_rated_at=ticket.csat_rated_at,
     )
 
 
@@ -635,4 +687,8 @@ async def update_ticket_priority(
         is_reply_blocked=ticket.is_reply_blocked if hasattr(ticket, 'is_reply_blocked') else False,
         user=user_info,
         messages=messages_response,
+        source=ticket.source,
+        csat_rating=ticket.csat_rating,
+        csat_requested=ticket.csat_requested_at is not None,
+        csat_rated_at=ticket.csat_rated_at,
     )
