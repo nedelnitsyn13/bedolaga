@@ -1,4 +1,5 @@
 import asyncio
+import contextlib
 import html
 import time
 
@@ -270,6 +271,7 @@ async def handle_ticket_message_input(message: types.Message, state: FSMContext,
             media_type=media_type,
             media_file_id=media_file_id,
             media_caption=media_caption,
+            source='bot',
         )
         # Включим временное подавление лишних сообщений пользователя (на случай разбиения длинного текста)
         try:
@@ -886,6 +888,34 @@ async def close_ticket(callback: types.CallbackQuery, db_user: User, db: AsyncSe
         await callback.answer(texts.t('TICKET_CLOSE_ERROR', '❌ Ошибка при закрытии тикета.'), show_alert=True)
 
 
+async def rate_ticket_support(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
+    """Оценка работы поддержки по кнопке из опроса после закрытия тикета."""
+    from app.services.ticket_csat_service import CsatError, parse_callback, save_rating, stars
+
+    texts = get_texts(db_user.language)
+    parsed = parse_callback(callback.data)
+    if parsed is None:
+        await callback.answer()
+        return
+    ticket_id, rating = parsed
+
+    try:
+        await save_rating(db, ticket_id=ticket_id, user_id=db_user.id, rating=rating)
+    except CsatError as error:
+        if error.code == 'already_rated':
+            await callback.answer(texts.t('TICKET_CSAT_ALREADY', 'Вы уже оценили это обращение.'), show_alert=True)
+        else:
+            await callback.answer(texts.t('TICKET_NOT_FOUND', 'Тикет не найден.'), show_alert=True)
+        with contextlib.suppress(TelegramBadRequest):
+            await callback.message.edit_reply_markup(reply_markup=None)
+        return
+
+    thanks = texts.t('TICKET_CSAT_THANKS', 'Спасибо за оценку! {stars}').format(stars=stars(rating))
+    await callback.answer(thanks)
+    with contextlib.suppress(TelegramBadRequest):
+        await callback.message.edit_text(thanks, reply_markup=None)
+
+
 async def cancel_ticket_creation(callback: types.CallbackQuery, state: FSMContext, db_user: User):
     """Отменить создание тикета"""
     await state.clear()
@@ -1148,6 +1178,9 @@ def register_handlers(dp: Dispatcher):
 
     # Закрытие тикетов
     dp.callback_query.register(close_ticket, F.data.regexp(r'^close_ticket_\d+$'))
+
+    # Оценка поддержки после закрытия тикета
+    dp.callback_query.register(rate_ticket_support, F.data.startswith('csat_rate_'))
 
     # Отмена операций
     dp.callback_query.register(cancel_ticket_creation, F.data == 'cancel_ticket_creation')

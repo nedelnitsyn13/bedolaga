@@ -2320,5 +2320,8 @@
   "CASHERA_RECURRING_PAY_BUTTON": "💳 确认",
   "CASHERA_RECURRING_CANCEL_BUTTON": "🛑 关闭 Cashera 自动续费",
   "CASHERA_RECURRING_MENU_BUTTON": "⚡ 通过 Cashera 自动续费",
-  "CASHERA_RECURRING_CANCELLED": "✅ 已关闭 Cashera 自动续费"
+  "CASHERA_RECURRING_CANCELLED": "✅ 已关闭 Cashera 自动续费",
+  "TICKET_CSAT_PROMPT": "✅ 工单 #{ticket_id} 已关闭。\n\n请为我们的客服评分：",
+  "TICKET_CSAT_THANKS": "感谢您的评分！{stars}",
+  "TICKET_CSAT_ALREADY": "您已经为此工单评过分了。"
 }

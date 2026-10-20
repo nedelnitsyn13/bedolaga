@@ -2320,5 +2320,8 @@
   "CASHERA_RECURRING_PAY_BUTTON": "💳 Підтвердити",
   "CASHERA_RECURRING_CANCEL_BUTTON": "🛑 Вимкнути автопродовження Cashera",
   "CASHERA_RECURRING_MENU_BUTTON": "⚡ Автопродовження через Cashera",
-  "CASHERA_RECURRING_CANCELLED": "✅ Автопродовження Cashera вимкнено"
+  "CASHERA_RECURRING_CANCELLED": "✅ Автопродовження Cashera вимкнено",
+  "TICKET_CSAT_PROMPT": "✅ Звернення #{ticket_id} закрито.\n\nОцініть, будь ласка, роботу підтримки:",
+  "TICKET_CSAT_THANKS": "Дякуємо за оцінку! {stars}",
+  "TICKET_CSAT_ALREADY": "Ви вже оцінили це звернення."
 }

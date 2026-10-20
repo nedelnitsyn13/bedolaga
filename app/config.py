@@ -1640,6 +1640,9 @@ class Settings(BaseSettings):
     # Журнал писем (кому, тип, тема, результат — без текста письма). Строки
     # старше этого срока удаляются автоматически.
     EMAIL_LOG_RETENTION_DAYS: int = 90
+    # Опрос «оцените работу поддержки» после закрытия тикета (1–5 звёзд).
+    # Показывается там, где тикет начат: в боте — сообщением с кнопками, в кабинете — в карточке тикета.
+    TICKET_CSAT_ENABLED: bool = True
 
     # Ban System Integration (BedolagaBan monitoring)
     BAN_SYSTEM_ENABLED: bool = False

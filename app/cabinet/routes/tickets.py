@@ -21,6 +21,7 @@ from app.utils.timezone import format_local_datetime
 from ..dependencies import get_cabinet_db, get_current_cabinet_user
 from ..schemas.tickets import (
     TicketCreateRequest,
+    TicketCsatRequest,
     TicketDetailResponse,
     TicketListResponse,
     TicketMediaItem,
@@ -97,7 +98,16 @@ def _message_to_response(message: TicketMessage) -> TicketMessageResponse:
     )
 
 
-def _ticket_to_response(ticket: Ticket, include_last_message: bool = True) -> TicketResponse:
+def _csat_fields(ticket: Ticket, user: User) -> dict:
+    """Блок оценки — только у тикетов, начатых в кабинете (бот спрашивает сам)."""
+    source = ticket.source or ('bot' if user.telegram_id else 'cabinet')
+    return {
+        'csat_available': source == 'cabinet' and ticket.csat_requested_at is not None,
+        'csat_rating': ticket.csat_rating,
+    }
+
+
+def _ticket_to_response(ticket: Ticket, user: User, include_last_message: bool = True) -> TicketResponse:
     """Convert Ticket to response."""
     last_message = None
     messages_count = len(ticket.messages) if ticket.messages else 0
@@ -116,6 +126,7 @@ def _ticket_to_response(ticket: Ticket, include_last_message: bool = True) -> Ti
         closed_at=ticket.closed_at,
         messages_count=messages_count,
         last_message=last_message,
+        **_csat_fields(ticket, user),
     )
 
 
@@ -152,7 +163,7 @@ async def get_tickets(
     result = await db.execute(query)
     tickets = result.scalars().all()
 
-    items = [_ticket_to_response(t) for t in tickets]
+    items = [_ticket_to_response(t, user) for t in tickets]
     pages = math.ceil(total / per_page) if total > 0 else 1
 
     return TicketListResponse(
@@ -187,6 +198,8 @@ async def create_ticket(
         title=request.title,
         status='open',
         priority='normal',
+        # Тикет начат в кабинете — опрос после закрытия покажем здесь же.
+        source='cabinet',
         created_at=datetime.now(UTC),
         updated_at=datetime.now(UTC),
     )
@@ -271,6 +284,7 @@ async def create_ticket(
         closed_at=ticket.closed_at,
         is_reply_blocked=ticket.is_reply_blocked if hasattr(ticket, 'is_reply_blocked') else False,
         messages=messages,
+        **_csat_fields(ticket, user),
     )
 
 
@@ -309,6 +323,7 @@ async def get_ticket(
         closed_at=ticket.closed_at,
         is_reply_blocked=ticket.is_reply_blocked if hasattr(ticket, 'is_reply_blocked') else False,
         messages=messages_response,
+        **_csat_fields(ticket, user),
     )
 
 
@@ -428,3 +443,33 @@ async def add_ticket_message(
         logger.error('Error creating cabinet notification for user reply', error=e)
 
     return _message_to_response(message)
+
+
+@router.post('/{ticket_id}/csat', response_model=TicketResponse)
+async def rate_ticket(
+    ticket_id: int,
+    request: TicketCsatRequest,
+    user: User = Depends(get_current_cabinet_user),
+    db: AsyncSession = Depends(get_cabinet_db),
+):
+    """Оценить работу поддержки по закрытому тикету (один раз)."""
+    from app.services.ticket_csat_service import CsatError, save_rating
+
+    _ensure_tickets_enabled()
+    try:
+        await save_rating(db, ticket_id=ticket_id, user_id=user.id, rating=request.rating)
+    except CsatError as error:
+        codes = {
+            'not_found': (status.HTTP_404_NOT_FOUND, 'Ticket not found'),
+            'not_closed': (status.HTTP_409_CONFLICT, 'Ticket is not closed'),
+            'already_rated': (status.HTTP_409_CONFLICT, 'Ticket is already rated'),
+            'invalid_rating': (status.HTTP_400_BAD_REQUEST, 'Rating must be from 1 to 5'),
+        }
+        code, detail = codes.get(error.code, (status.HTTP_400_BAD_REQUEST, error.code))
+        raise HTTPException(status_code=code, detail=detail)
+
+    result = await db.execute(
+        select(Ticket).where(Ticket.id == ticket_id, Ticket.user_id == user.id).options(selectinload(Ticket.messages))
+    )
+    ticket = result.scalar_one()
+    return _ticket_to_response(ticket, user)

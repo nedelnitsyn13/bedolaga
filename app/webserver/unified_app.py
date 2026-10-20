@@ -180,6 +180,11 @@ def create_unified_app(
 
         register_support_ticket_event_bridge()
 
+        # Страницы тикетов в кабинете обновляются сами, откуда бы ни пришло сообщение.
+        from app.cabinet.services.ticket_live_updates import register_ticket_live_updates
+
+        register_ticket_live_updates()
+
     payments_router = payments.create_payment_router(bot, payment_service)
     if payments_router:
         app.include_router(payments_router)
