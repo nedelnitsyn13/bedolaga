@@ -38,6 +38,7 @@ from app.services.remnawave_service import RemnaWaveService
 from app.services.subscription_service import SubscriptionService
 from app.services.user_cart_service import user_cart_service
 from app.states import SubscriptionStates
+from app.utils.device_client import format_device_details_line
 from app.utils.legacy_subscription import is_legacy_subscription
 from app.utils.pagination import paginate_list
 from app.utils.pricing_utils import (
@@ -951,6 +952,9 @@ async def show_devices_page(
                 'DEVICE_MANAGEMENT_LIST_ITEM',
                 '• {device}\n',
             ).format(device=html_mod.escape(device_info))
+            details = format_device_details_line(device, texts)
+            if details:
+                devices_text += f'   {html_mod.escape(details)}\n'
 
     devices_text += texts.t(
         'DEVICE_MANAGEMENT_ACTIONS',

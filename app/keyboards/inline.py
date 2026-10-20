@@ -10,6 +10,7 @@ from app.config import PERIOD_PRICES, settings
 from app.database.models import User
 from app.localization.loader import DEFAULT_LANGUAGE
 from app.localization.texts import get_texts
+from app.utils.device_client import device_button_label
 from app.utils.legacy_subscription import is_legacy_subscription as _legacy_subscription
 from app.utils.miniapp_buttons import build_miniapp_or_callback_button
 from app.utils.price_display import PriceInfo, format_price_button
@@ -3523,9 +3524,7 @@ def get_devices_management_keyboard(
         if local_name:
             device_info = local_name
         else:
-            platform = device.get('platform', 'Unknown')
-            device_model = device.get('deviceModel', 'Unknown')
-            device_info = f'{platform} - {device_model}'
+            device_info = device_button_label(device)
 
         if len(device_info) > 22:
             device_info = device_info[:19] + '...'
