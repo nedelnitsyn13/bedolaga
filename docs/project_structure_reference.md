@@ -2266,7 +2266,7 @@
   Функции: `admin_required`, `auth_required` — Простая проверка на наличие пользователя в апдейте. Middleware уже подтягивает db_user,, `error_handler`, `state_cleanup`, `typing_action`, `rate_limit`
 - `app/utils/device_client.py` — Python-модуль
   Классы: нет
-  Функции: `client_app_name` — Имя приложения по User-Agent; None — если определить нельзя., `parse_panel_datetime` — ISO-время панели (всегда UTC) → aware datetime; мусор → None., `device_details` — Поля для отображения: приложение, ОС, первое подключение, последнее обновление., `device_button_label` — Подпись устройства без пользовательского имени: «Happ · SM-A235F»., `format_device_details_line` — Строка под устройством в боте: приложение и последнее обновление подписки.
+  Функции: `client_app_name` — Имя приложения по User-Agent; None — если определить нельзя., `parse_panel_datetime` — ISO-время панели (всегда UTC) → aware datetime; мусор → None., `device_details` — Поля для отображения: приложение, ОС, первое подключение, последнее обновление., `device_button_label` — Подпись устройства без пользовательского имени: «Happ · SM-A235F»., `format_device_details_line` — Строка под устройством в боте: «Обновлено в Happ 20.10 12:07».
 - `app/utils/display_mode.py` — Python-модуль
   Классы: нет
   Функции: `normalize_display_mode`, `is_visible_in_bot`, `is_visible_in_web`, `next_display_mode`, `display_mode_label`

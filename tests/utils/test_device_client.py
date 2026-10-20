@@ -91,8 +91,10 @@ def test_button_label_prefers_app():
 def test_bot_details_line(monkeypatch):
     monkeypatch.setattr('app.utils.timezone.get_local_timezone', lambda: UTC)
     texts = get_texts('ru')
-    line = dc.format_device_details_line(
-        {'userAgent': 'Happ/2.0.5/Android', 'updatedAt': '2026-10-20T09:07:00Z'}, texts
+    line = dc.format_device_details_line
+    assert line({'userAgent': 'Happ/2.0.5/Android', 'updatedAt': '2026-10-20T09:07:00Z'}, texts) == (
+        'Обновлено в Happ 20.10 09:07'
     )
-    assert line == '📲 Happ · 🔄 обновлял подписку 20.10.2026 09:07'
-    assert dc.format_device_details_line({'platform': 'Android'}, texts) == ''
+    assert line({'userAgent': 'okhttp/4', 'updatedAt': '2026-10-20T09:07:00Z'}, texts) == 'Обновлено 20.10 09:07'
+    assert line({'userAgent': 'INCY/1.0'}, texts) == 'INCY'
+    assert line({'platform': 'Android'}, texts) == ''
