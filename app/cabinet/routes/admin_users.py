@@ -68,6 +68,7 @@ from app.services.panel_sync import (
 from app.services.panel_sync.fields import narrow_push_fields
 from app.services.permission_service import PermissionService
 from app.services.user_activity_service import UnknownActivityTypes, UserActivityResponse, collect_user_activity
+from app.utils.device_client import device_details
 from app.utils.subscription_time import local_days_until
 from app.utils.subscription_utils import coerce_panel_device_limit
 from app.utils.timezone import local_day_start, panel_datetime_to_utc
@@ -2915,6 +2916,7 @@ async def get_user_devices(
                         device_model=d.get('deviceModel') or d.get('model') or d.get('name') or '',
                         created_at=d.get('updatedAt') or d.get('lastSeen') or d.get('createdAt'),
                         local_name=aliases.get(hwid) or None,
+                        **device_details(d),
                     )
                 )
 

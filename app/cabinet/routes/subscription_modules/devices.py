@@ -38,6 +38,7 @@ from app.database.models import Subscription, TransactionType, User
 from app.services.panel_sync import remove_companion_device, reset_companion_devices, should_create_panel_account
 from app.services.subscription_service import SubscriptionService
 from app.services.user_cart_service import user_cart_service
+from app.utils.device_client import device_details
 
 from ...dependencies import get_cabinet_db, get_current_cabinet_user
 from ...schemas.subscription import DevicePurchaseRequest
@@ -967,6 +968,7 @@ async def get_devices(
                         # Локальное имя, заданное юзером. None — алиаса нет,
                         # фронт фоллбэчит на platform/device_model.
                         'local_name': aliases.get(hwid) or None,
+                        **device_details(device),
                     }
                 )
 

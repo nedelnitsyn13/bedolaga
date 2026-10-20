@@ -534,6 +534,13 @@ class DeviceInfo(BaseModel):
     # User-set local alias (per `user_device_aliases`). None when the user
     # hasn't renamed this device — clients fall back to platform/device_model.
     local_name: str | None = None
+    # Из записи HWID панели: приложение по User-Agent, первое подключение
+    # (createdAt) и последнее обновление подписки этим устройством (updatedAt).
+    os_version: str | None = None
+    user_agent: str | None = None
+    app_name: str | None = None
+    first_seen_at: str | None = None
+    last_seen_at: str | None = None
 
 
 class UserDevicesResponse(BaseModel):

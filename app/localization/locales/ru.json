@@ -1167,6 +1167,8 @@
   "DEVICE_MANAGEMENT_ACTIONS": "\n💡 <b>Действия:</b>\n• Выберите устройство для сброса\n• Или сбросьте все устройства сразу",
   "DEVICE_MANAGEMENT_CONNECTED_HEADER": "<b>Подключенные устройства:</b>\n",
   "DEVICE_MANAGEMENT_LIST_ITEM": "• {device}\n",
+  "DEVICE_APP": "📲 {app}",
+  "DEVICE_LAST_SEEN": "🔄 обновлял подписку {date}",
   "DEVICE_MANAGEMENT_OVERVIEW": "🔄 <b>Управление устройствами</b>\n\n📊 Всего подключено: {total} устройств\n📄 Страница {page} из {pages}\n\n",
   "DEVICE_NONE_CONNECTED": "ℹ️ У вас нет подключенных устройств",
   "DEVICE_PAGE_LOAD_ERROR": "❌ Ошибка загрузки страницы",

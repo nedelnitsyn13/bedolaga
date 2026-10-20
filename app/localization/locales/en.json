@@ -1038,6 +1038,8 @@
   "DEVICE_MANAGEMENT_ACTIONS": "\n💡 <b>Actions:</b>\n• Select a device to reset\n• Or reset all devices at once",
   "DEVICE_MANAGEMENT_CONNECTED_HEADER": "<b>Connected devices:</b>\n",
   "DEVICE_MANAGEMENT_LIST_ITEM": "• {device}\n",
+  "DEVICE_APP": "📲 {app}",
+  "DEVICE_LAST_SEEN": "🔄 last subscription update {date}",
   "DEVICE_MANAGEMENT_OVERVIEW": "🔄 <b>Device management</b>\n\n📊 Total connected: {total} devices\n📄 Page {page} of {pages}\n\n",
   "DEVICE_NONE_CONNECTED": "ℹ️ You have no connected devices",
   "DEVICE_PAGE_LOAD_ERROR": "❌ Failed to open the page",

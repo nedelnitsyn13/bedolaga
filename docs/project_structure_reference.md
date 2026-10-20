@@ -2264,6 +2264,9 @@
 - `app/utils/decorators.py` — Python-модуль
   Классы: нет
   Функции: `admin_required`, `auth_required` — Простая проверка на наличие пользователя в апдейте. Middleware уже подтягивает db_user,, `error_handler`, `state_cleanup`, `typing_action`, `rate_limit`
+- `app/utils/device_client.py` — Python-модуль
+  Классы: нет
+  Функции: `client_app_name` — Имя приложения по User-Agent; None — если определить нельзя., `parse_panel_datetime` — ISO-время панели (всегда UTC) → aware datetime; мусор → None., `device_details` — Поля для отображения: приложение, ОС, первое подключение, последнее обновление., `device_button_label` — Подпись устройства без пользовательского имени: «Happ · SM-A235F»., `format_device_details_line` — Строка под устройством в боте: приложение и последнее обновление подписки.
 - `app/utils/display_mode.py` — Python-модуль
   Классы: нет
   Функции: `normalize_display_mode`, `is_visible_in_bot`, `is_visible_in_web`, `next_display_mode`, `display_mode_label`
@@ -5385,6 +5388,9 @@
 - `tests/utils/test_chat_menu_button.py` — Python-модуль
   Классы: нет
   Функции: `test_disabled_does_not_touch_menu_button`, `test_enabled_sets_webapp_menu_button`, `test_falls_back_to_miniapp_custom_url`, `test_non_https_url_is_skipped`, `test_empty_text_defaults`
+- `tests/utils/test_device_client.py` — Python-модуль
+  Классы: нет
+  Функции: `test_client_app_name`, `test_unknown_app_name_is_bounded`, `test_device_details_maps_panel_fields`, `test_device_details_tolerates_old_panels`, `test_parse_panel_datetime`, `test_button_label_prefers_app`, `test_bot_details_line`
 - `tests/utils/test_display_mode.py` — Python-модуль
   Классы: нет
   Функции: `test_normalize_display_mode_known_values`, `test_normalize_display_mode_fallback_to_both`, `test_visibility_matrix`, `test_next_display_mode_cycles_through_all_modes`, `test_display_mode_label_known_for_all_modes`, `test_config_defaults_are_both`, `test_settings_registered_in_info_pages_category`

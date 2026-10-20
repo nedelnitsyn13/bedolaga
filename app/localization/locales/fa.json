@@ -1167,6 +1167,8 @@
   "DEVICE_MANAGEMENT_ACTIONS": "\n💡 <b>عملیات:</b>\n• دستگاه برای بازنشانی انتخاب کنید\n• یا همه را بازنشانی کنید",
   "DEVICE_MANAGEMENT_CONNECTED_HEADER": "<b>دستگاه‌های متصل:</b>\n",
   "DEVICE_MANAGEMENT_LIST_ITEM": "• {device}\n",
+  "DEVICE_APP": "📲 {app}",
+  "DEVICE_LAST_SEEN": "🔄 آخرین به‌روزرسانی اشتراک {date}",
   "DEVICE_MANAGEMENT_OVERVIEW": "🔄 <b>مدیریت دستگاه‌ها</b>\n\n📊 متصل: {total} دستگاه\n📄 صفحه {page} از {pages}\n",
   "DEVICE_NONE_CONNECTED": "ℹ️ دستگاه متصلی ندارید",
   "DEVICE_PAGE_LOAD_ERROR": "❌ خطا در بارگذاری صفحه",
