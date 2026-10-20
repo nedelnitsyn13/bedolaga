@@ -149,18 +149,15 @@ def device_button_label(device: dict[str, Any]) -> str:
 
 
 def format_device_details_line(device: dict[str, Any], texts: Any) -> str:
-    """Строка под устройством в боте: приложение и последнее обновление подписки."""
+    """Строка под устройством в боте: «Обновлено в Happ 20.10 12:07»."""
     from app.utils.timezone import format_local_datetime
 
     details = device_details(device)
-    parts: list[str] = []
-    if details['app_name']:
-        parts.append(texts.t('DEVICE_APP', '📲 {app}').format(app=details['app_name']))
+    app = details['app_name']
     last_seen = parse_panel_datetime(details['last_seen_at'])
-    if last_seen:
-        parts.append(
-            texts.t('DEVICE_LAST_SEEN', '🔄 обновлял подписку {date}').format(
-                date=format_local_datetime(last_seen, '%d.%m.%Y %H:%M')
-            )
-        )
-    return ' · '.join(parts)
+    if not last_seen:
+        return app or ''
+    date = format_local_datetime(last_seen, '%d.%m %H:%M')
+    if app:
+        return texts.t('DEVICE_UPDATED_IN', 'Обновлено в {app} {date}').format(app=app, date=date)
+    return texts.t('DEVICE_UPDATED', 'Обновлено {date}').format(date=date)
