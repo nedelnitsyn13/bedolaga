@@ -978,6 +978,7 @@
   "DEVICE_MANAGEMENT_LIST_ITEM": "•{device}\n",
   "DEVICE_UPDATED_IN": "{date} 在 {app} 中更新",
   "DEVICE_UPDATED": "{date} 更新",
+  "PANEL_EMAIL_LINKED": "📧 邮箱 <b>{email}</b> 已绑定到您的账户。\n\n如果 Telegram 无法使用，请用此邮箱登录个人中心 {url}：点击“忘记密码”，并通过邮件中的链接设置密码。\n\n如果这不是您的邮箱，请联系客服。",
   "DEVICE_MANAGEMENT_OVERVIEW": "🔄<b>设备管理</b>\n\n📊总共连接：{total}台设备\n📄第{page}页，共{pages}页\n\n",
   "DEVICE_NONE_CONNECTED": "ℹ️您没有已连接的设备",
   "DEVICE_PAGE_LOAD_ERROR": "❌加载页面失败",

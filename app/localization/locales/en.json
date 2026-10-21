@@ -1040,6 +1040,7 @@
   "DEVICE_MANAGEMENT_LIST_ITEM": "• {device}\n",
   "DEVICE_UPDATED_IN": "Updated in {app} {date}",
   "DEVICE_UPDATED": "Updated {date}",
+  "PANEL_EMAIL_LINKED": "📧 The email <b>{email}</b> is now linked to your account.\n\nIf Telegram is unavailable, sign in to your account at {url} with this email: tap “Forgot password” and set a password using the link in the email.\n\nIf this is not your email, please contact support.",
   "DEVICE_MANAGEMENT_OVERVIEW": "🔄 <b>Device management</b>\n\n📊 Total connected: {total} devices\n📄 Page {page} of {pages}\n\n",
   "DEVICE_NONE_CONNECTED": "ℹ️ You have no connected devices",
   "DEVICE_PAGE_LOAD_ERROR": "❌ Failed to open the page",

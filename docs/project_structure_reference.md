@@ -1666,6 +1666,9 @@
 - `app/services/pal24_service.py` — Python-модуль
   Классы: `Pal24Service` (9 методов)
   Функции: нет
+- `app/services/panel_email_import_service.py` — Python-модуль
+  Классы: `ImportedEmail`
+  Функции: `collect_panel_emails` — Telegram ID → почта из панели. Почта на нескольких Telegram ID не берётся вовсе:, `import_panel_emails` — Записать почту из панели в Telegram-аккаунты без почты. Коммитит сам., `notify_imported` — Сообщить в Telegram о привязанной почте. Возвращает число доставленных., `import_and_notify` — Перенос после синхронизации; уведомления уходят в фоне. Ошибка не роняет синхронизацию.
 - `app/services/panel_online.py` — Python-модуль
   Классы: `PanelOnlineSnapshot` (2 методов)
   Функции: `fetch_online_snapshot` — Обойти список панели по убыванию ``onlineAt``, пока отметка свежее окна., `get_online_snapshot` — Отметки подключений; ``None`` — панель не настроена или не ответила (это «не знаем», не «никого»).
@@ -4829,6 +4832,9 @@
 - `tests/services/test_panel_deletion_respects_delete_mode.py` — Python-модуль
   Классы: нет
   Функции: `test_panel_deletion_is_gated_or_explicitly_deliberate`, `test_deliberate_list_has_no_stale_entries` — Список исключений не должен пережить сами удаления.
+- `tests/services/test_panel_email_import_service.py` — Python-модуль
+  Классы: нет
+  Функции: `test_collect_drops_email_shared_by_several_telegram_ids`, `test_email_moves_to_telegram_account_as_verified`, `test_email_is_not_taken`, `test_disabled_setting_changes_nothing`, `test_owner_is_told_in_telegram_and_blocked_bot_is_not_an_error`, `test_sync_failure_of_import_is_contained`
 - `tests/services/test_panel_online.py` — Python-модуль
   Классы: нет
   Функции: `test_api_sorts_users_by_online_at_like_panel_table`, `test_collects_accounts_until_mark_is_older_than_window`, `test_never_connected_account_ends_the_list`, `test_pages_through_while_whole_page_is_online`, `test_page_limit_stops_runaway_listing`, `test_window_matches_panel_green_dot`, `test_user_is_connected_by_any_of_his_panel_keys`, `test_cached_between_calls_and_none_when_panel_fails`, `test_panel_failure_is_remembered_so_list_does_not_wait_again` — Панель лежит — список открывается сразу без отметок, а не ждёт таймаут на каждом открытии., `test_who_is_online_is_recounted_at_request_time_not_at_fetch_time` — Ответ панели живёт в кэше 20 секунд — «онлайн» за это время обязан гаснуть сам., `test_snapshot_gives_each_row_its_own_mark` — Строке списка нужна отметка, а не готовое «да/нет»: по ней кабинет сам гасит точку., `test_several_accounts_of_one_person_give_the_freshest_mark` — Мультитариф: у человека несколько аккаунтов панели — считается самый свежий.

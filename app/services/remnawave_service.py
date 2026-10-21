@@ -2003,6 +2003,10 @@ class RemnaWaveService:
                         except Exception:
                             pass
 
+            from app.services.panel_email_import_service import import_and_notify
+
+            await import_and_notify(db, panel_users)
+
             logger.info(
                 '🎯 Синхронизация завершена',
                 stats=stats['created'],
@@ -2363,6 +2367,10 @@ class RemnaWaveService:
                     '⏭️ [multi-tariff] Аккаунтов панели без Telegram ID и почты — созданы не ботом, пропускаем',
                     foreign_accounts_count=foreign_accounts_count,
                 )
+
+            from app.services.panel_email_import_service import import_and_notify
+
+            await import_and_notify(db, panel_users)
 
             logger.info(
                 '🎯 [multi-tariff] Синхронизация завершена',

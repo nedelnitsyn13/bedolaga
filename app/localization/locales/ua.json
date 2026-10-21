@@ -980,6 +980,7 @@
   "DEVICE_MANAGEMENT_LIST_ITEM": "• {device}\n",
   "DEVICE_UPDATED_IN": "Оновлено в {app} {date}",
   "DEVICE_UPDATED": "Оновлено {date}",
+  "PANEL_EMAIL_LINKED": "📧 До вашого акаунта прив’язано пошту <b>{email}</b>.\n\nЯкщо Telegram буде недоступний, увійдіть в особистий кабінет {url} за цією поштою: натисніть «Забули пароль» і задайте пароль за посиланням із листа.\n\nЯкщо пошта не ваша — напишіть у підтримку.",
   "DEVICE_MANAGEMENT_OVERVIEW": "🔄 <b>Керування пристроями</b>\n\n📊 Всього підключено: {total} пристроїв\n📄 Сторінка {page} з {pages}\n\n",
   "DEVICE_NONE_CONNECTED": "ℹ️ У вас немає підключених пристроїв",
   "DEVICE_PAGE_LOAD_ERROR": "❌ Помилка завантаження сторінки",

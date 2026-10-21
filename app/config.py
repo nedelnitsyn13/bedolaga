@@ -1643,6 +1643,8 @@ class Settings(BaseSettings):
     # Опрос «оцените работу поддержки» после закрытия тикета (1–5 звёзд).
     # Показывается там, где тикет начат: в боте — сообщением с кнопками, в кабинете — в карточке тикета.
     TICKET_CSAT_ENABLED: bool = True
+    # Почта из панели (её писал прежний бот) переносится в Telegram-аккаунты без почты при синхронизации.
+    PANEL_EMAIL_IMPORT_ENABLED: bool = True
 
     # Ban System Integration (BedolagaBan monitoring)
     BAN_SYSTEM_ENABLED: bool = False

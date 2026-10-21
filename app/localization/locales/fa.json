@@ -1169,6 +1169,7 @@
   "DEVICE_MANAGEMENT_LIST_ITEM": "• {device}\n",
   "DEVICE_UPDATED_IN": "به‌روزرسانی در {app} {date}",
   "DEVICE_UPDATED": "به‌روزرسانی {date}",
+  "PANEL_EMAIL_LINKED": "📧 ایمیل <b>{email}</b> به حساب شما متصل شد.\n\nاگر تلگرام در دسترس نبود، با این ایمیل وارد پنل {url} شوید: روی «فراموشی رمز عبور» بزنید و با لینک داخل ایمیل رمز تعیین کنید.\n\nاگر این ایمیل متعلق به شما نیست، به پشتیبانی پیام دهید.",
   "DEVICE_MANAGEMENT_OVERVIEW": "🔄 <b>مدیریت دستگاه‌ها</b>\n\n📊 متصل: {total} دستگاه\n📄 صفحه {page} از {pages}\n",
   "DEVICE_NONE_CONNECTED": "ℹ️ دستگاه متصلی ندارید",
   "DEVICE_PAGE_LOAD_ERROR": "❌ خطا در بارگذاری صفحه",

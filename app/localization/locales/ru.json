@@ -1169,6 +1169,7 @@
   "DEVICE_MANAGEMENT_LIST_ITEM": "• {device}\n",
   "DEVICE_UPDATED_IN": "Обновлено в {app} {date}",
   "DEVICE_UPDATED": "Обновлено {date}",
+  "PANEL_EMAIL_LINKED": "📧 К вашему аккаунту привязана почта <b>{email}</b>.\n\nЕсли Telegram будет недоступен, войдите в личный кабинет {url} по этой почте: нажмите «Забыли пароль» и задайте пароль по ссылке из письма.\n\nЕсли почта не ваша — напишите в поддержку.",
   "DEVICE_MANAGEMENT_OVERVIEW": "🔄 <b>Управление устройствами</b>\n\n📊 Всего подключено: {total} устройств\n📄 Страница {page} из {pages}\n\n",
   "DEVICE_NONE_CONNECTED": "ℹ️ У вас нет подключенных устройств",
   "DEVICE_PAGE_LOAD_ERROR": "❌ Ошибка загрузки страницы",
