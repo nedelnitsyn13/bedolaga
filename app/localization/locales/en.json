@@ -2325,5 +2325,14 @@
   "CASHERA_RECURRING_CANCELLED": "✅ Cashera auto-renewal turned off",
   "TICKET_CSAT_PROMPT": "✅ Ticket #{ticket_id} is closed.\n\nPlease rate our support:",
   "TICKET_CSAT_THANKS": "Thank you for your rating! {stars}",
-  "TICKET_CSAT_ALREADY": "You have already rated this ticket."
+  "TICKET_CSAT_ALREADY": "You have already rated this ticket.",
+  "LIMITED_RESET_BUTTON": "🔄 Refresh traffic — {price}",
+  "LIMITED_RESET_BUTTON_DISCOUNT": " ({percent}% off, was {base})",
+  "LIMITED_RESET_MONTHLY_NOTE": "🔄 Resets on the 1st of every month",
+  "LIMITED_RESET_UNAVAILABLE": "⚠️ Traffic refresh is not available for this subscription",
+  "LIMITED_RESET_CONFIRM_TEXT": "🔄 <b>Refresh traffic — limited server</b>\n\nUsage resets now and {gb} GB will be available again until the 1st.\n\nPrice: {price}\nBalance: {balance}",
+  "LIMITED_RESET_CONFIRM_BUTTON": "✅ Confirm — {price}",
+  "LIMITED_RESET_PANEL_UNAVAILABLE": "⚠️ The panel is unavailable right now, you were not charged. Please try later.",
+  "LIMITED_RESET_DONE": "✅ Limited server traffic refreshed!\n\nAvailable: {limit}\n💰 Charged: {price}",
+  "SUBSCRIPTION_RESTRICTED": "⚠️ Purchases are restricted for this account"
 }

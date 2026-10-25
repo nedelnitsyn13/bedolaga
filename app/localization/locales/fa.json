@@ -2325,5 +2325,14 @@
   "CASHERA_RECURRING_CANCELLED": "✅ تمدید خودکار Cashera غیرفعال شد",
   "TICKET_CSAT_PROMPT": "✅ تیکت #{ticket_id} بسته شد.\n\nلطفاً به پشتیبانی ما امتیاز دهید:",
   "TICKET_CSAT_THANKS": "از امتیاز شما سپاسگزاریم! {stars}",
-  "TICKET_CSAT_ALREADY": "شما قبلاً به این تیکت امتیاز داده‌اید."
+  "TICKET_CSAT_ALREADY": "شما قبلاً به این تیکت امتیاز داده‌اید.",
+  "LIMITED_RESET_BUTTON": "🔄 تازه‌سازی ترافیک — {price}",
+  "LIMITED_RESET_BUTTON_DISCOUNT": " (تخفیف {percent}٪، قبلاً {base})",
+  "LIMITED_RESET_MONTHLY_NOTE": "🔄 بازنشانی در روز اول هر ماه",
+  "LIMITED_RESET_UNAVAILABLE": "⚠️ تازه‌سازی ترافیک برای این اشتراک در دسترس نیست",
+  "LIMITED_RESET_CONFIRM_TEXT": "🔄 <b>تازه‌سازی ترافیک — سرور محدود</b>\n\nمصرف همین حالا صفر می‌شود و تا روز اول دوباره {gb} گیگابایت در دسترس است.\n\nقیمت: {price}\nموجودی: {balance}",
+  "LIMITED_RESET_CONFIRM_BUTTON": "✅ تأیید — {price}",
+  "LIMITED_RESET_PANEL_UNAVAILABLE": "⚠️ پنل اکنون در دسترس نیست، مبلغی کسر نشد. بعداً تلاش کنید.",
+  "LIMITED_RESET_DONE": "✅ ترافیک سرور محدود تازه شد!\n\nدر دسترس: {limit}\n💰 کسر شده: {price}",
+  "SUBSCRIPTION_RESTRICTED": "⚠️ خرید برای این حساب محدود است"
 }

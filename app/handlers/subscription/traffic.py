@@ -29,10 +29,14 @@ from app.keyboards.inline import (
 )
 from app.localization.texts import get_texts
 from app.services.limited_squad_service import (
+    LIMITED_RESET_OK,
+    LIMITED_RESET_PANEL_UNAVAILABLE,
     add_limited_traffic_purchase,
     get_effective_limited_traffic_limit_gb,
     get_limited_base_traffic_gb,
     is_limited_traffic_enabled,
+    limited_reset_quote,
+    perform_paid_limited_reset,
     process_limited_traffic,
 )
 from app.services.pricing_engine import PricingEngine
@@ -823,12 +827,17 @@ async def handle_add_traffic_limited(
     # Фиксированный хинт 30 дней — докупка продаётся только помесячно
     # (см. add_traffic_limited ниже), скидка должна совпадать с кабинетом.
     traffic_discount_percent = PricingEngine.get_addon_discount_percent(db_user, 'traffic', 30)
+    reset_price, reset_base_price, reset_discount = limited_reset_quote(db_user, tariff) if is_new_arch else (0, 0, 0)
+    reset_note = (
+        texts.t('LIMITED_RESET_MONTHLY_NOTE', '🔄 Сброс 1-го числа каждого месяца') + '\n' if is_new_arch else ''
+    )
     prompt_text = (
         '📈 <b>Докупить трафик — лимитный сервер</b>\n\n'
         # format_traffic округляет использованное до целых ГБ (0.3 -> "0 ГБ") —
         # одна десятая знака совпадает с детальной карточкой подписки.
         f'Использовано: {companion_used:.1f} ГБ\n'
-        f'Текущий лимит: {texts.format_traffic(current_limit)}\n\n'
+        f'Текущий лимит: {texts.format_traffic(current_limit)}\n'
+        f'{reset_note}\n'
         'Выберите дополнительный трафик:'
     )
 
@@ -839,10 +848,154 @@ async def handle_add_traffic_limited(
             sub_id,
             subscription.end_date,
             traffic_discount_percent,
+            reset_price_kopeks=reset_price,
+            reset_base_price_kopeks=reset_base_price,
+            reset_discount_percent=reset_discount,
         ),
         parse_mode='HTML',
     )
     await callback.answer()
+
+
+async def _limited_reset_context(callback, db_user, db, state):
+    """Подписка, тариф и цена «обновить трафик» — или ``None`` с алертом."""
+    texts = get_texts(db_user.language)
+    subscription, sub_id = await _resolve_subscription(callback, db_user, db, state)
+    if subscription is None:
+        return None
+    tariff = getattr(subscription, 'tariff', None)
+    price, base_price, discount = (
+        limited_reset_quote(db_user, tariff) if is_limited_traffic_enabled(tariff) else (0, 0, 0)
+    )
+    if base_price <= 0:
+        await callback.answer(
+            texts.t('LIMITED_RESET_UNAVAILABLE', '⚠️ Обновление трафика недоступно для этой подписки'),
+            show_alert=True,
+        )
+        return None
+    return subscription, sub_id, tariff, price, base_price, discount
+
+
+def _insufficient_funds_text(texts, price: int, balance: int) -> str:
+    return texts.t(
+        'ADDON_INSUFFICIENT_FUNDS_MESSAGE',
+        (
+            '⚠️ <b>Недостаточно средств</b>\n\n'
+            'Стоимость услуги: {required}\n'
+            'На балансе: {balance}\n'
+            'Не хватает: {missing}\n\n'
+            'Выберите способ пополнения. Сумма подставится автоматически.'
+        ),
+    ).format(
+        required=texts.format_price(price, round_kopeks=False),
+        balance=texts.format_price(balance, round_kopeks=False),
+        missing=texts.format_price(price - balance, round_kopeks=False),
+    )
+
+
+async def confirm_limited_traffic_reset(
+    callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext = None
+):
+    """Экран подтверждения «обновить трафик» (``rlt:{sub_id}``) — как второе нажатие в кабинете."""
+    texts = get_texts(db_user.language)
+    context = await _limited_reset_context(callback, db_user, db, state)
+    if context is None:
+        return
+    subscription, sub_id, tariff, price, base_price, discount = context
+
+    if price > 0 and db_user.balance_kopeks < price:
+        missing = price - db_user.balance_kopeks
+        await callback.message.edit_text(
+            _insufficient_funds_text(texts, price, db_user.balance_kopeks),
+            reply_markup=get_insufficient_balance_keyboard(db_user.language, amount_kopeks=missing),
+            parse_mode='HTML',
+        )
+        await callback.answer()
+        return
+
+    price_line = texts.format_price(price, round_kopeks=False)
+    if discount > 0 and base_price > price:
+        price_line = f'<s>{texts.format_price(base_price, round_kopeks=False)}</s> {price_line} (скидка {discount}%)'
+    text = texts.t(
+        'LIMITED_RESET_CONFIRM_TEXT',
+        (
+            '🔄 <b>Обновить трафик — лимитный сервер</b>\n\n'
+            'Расход обнулится сейчас, и снова будет доступно {gb} ГБ до 1-го числа.\n\n'
+            'Стоимость: {price}\n'
+            'На балансе: {balance}'
+        ),
+    ).format(
+        gb=get_limited_base_traffic_gb(tariff),
+        price=price_line,
+        balance=texts.format_price(db_user.balance_kopeks, round_kopeks=False),
+    )
+    keyboard = types.InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                types.InlineKeyboardButton(
+                    text=texts.t('LIMITED_RESET_CONFIRM_BUTTON', '✅ Подтвердить — {price}').format(
+                        price=texts.format_price(price, round_kopeks=False)
+                    ),
+                    callback_data=f'rltc:{sub_id}',
+                )
+            ],
+            [types.InlineKeyboardButton(text=texts.t('CANCEL', '❌ Отмена'), callback_data=f'blt:{sub_id}')],
+        ]
+    )
+    await callback.message.edit_text(text, reply_markup=keyboard, parse_mode='HTML')
+    await callback.answer()
+
+
+async def reset_limited_traffic(
+    callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext = None
+):
+    """Списывает деньги и обнуляет LIMITED-пул (``rltc:{sub_id}``) — тот же путь, что у кабинета."""
+    texts = get_texts(db_user.language)
+    if getattr(db_user, 'restriction_subscription', False):
+        await callback.answer(texts.t('SUBSCRIPTION_RESTRICTED', '⚠️ Покупки для аккаунта ограничены'), show_alert=True)
+        return
+
+    from app.database.crud.user import lock_user_for_pricing
+
+    db_user = await lock_user_for_pricing(db, db_user.id)
+    context = await _limited_reset_context(callback, db_user, db, state)
+    if context is None:
+        return
+    subscription, sub_id, tariff, price, _, _ = context
+
+    if price > 0 and db_user.balance_kopeks < price:
+        missing = price - db_user.balance_kopeks
+        await callback.message.edit_text(
+            _insufficient_funds_text(texts, price, db_user.balance_kopeks),
+            reply_markup=get_insufficient_balance_keyboard(db_user.language, amount_kopeks=missing),
+            parse_mode='HTML',
+        )
+        await callback.answer()
+        return
+
+    result = await perform_paid_limited_reset(db, db_user, subscription, tariff, price)
+    if result != LIMITED_RESET_OK:
+        message = (
+            texts.t(
+                'LIMITED_RESET_PANEL_UNAVAILABLE', '⚠️ Панель сейчас недоступна, деньги не списаны. Попробуйте позже.'
+            )
+            if result == LIMITED_RESET_PANEL_UNAVAILABLE
+            else '⚠️ Ошибка списания средств'
+        )
+        await callback.answer(message, show_alert=True)
+        return
+
+    await db.refresh(db_user)
+    await db.refresh(subscription)
+    limit_gb = await get_effective_limited_traffic_limit_gb(db, subscription, tariff)
+    success_text = texts.t(
+        'LIMITED_RESET_DONE',
+        '✅ Трафик лимитного сервера обновлён!\n\nДоступно: {limit}\n💰 Списано: {price}',
+    ).format(limit=texts.format_traffic(limit_gb), price=texts.format_price(price, round_kopeks=False))
+    await callback.message.edit_text(success_text, reply_markup=get_back_keyboard(db_user.language))
+    await callback.answer()
+
+    logger.info('✅ Пользователь обновил трафик лимитного сервера', telegram_id=db_user.telegram_id, price=price)
 
 
 async def add_traffic_limited(callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext = None):

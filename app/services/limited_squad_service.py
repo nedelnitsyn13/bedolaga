@@ -209,6 +209,83 @@ async def apply_limited_traffic_reset(
     await push_limited_traffic_usage(subscription, user, 0.0, limit_gb, is_trial=bool(subscription.is_trial))
 
 
+def limited_reset_quote(user, tariff: Tariff | None) -> tuple[int, int, int]:
+    """Цена «обновить трафик» для клиента: (к оплате, без скидки, % скидки).
+
+    Скидка — та же, что на докупку трафика (категория ``traffic``, помесячно),
+    минимум 1 ₽, как у пакетов. Один расчёт для бота и кабинета.
+    """
+    from app.services.pricing_engine import PricingEngine
+    from app.utils.pricing_utils import apply_percentage_discount
+
+    base_price = limited_reset_price_kopeks(tariff)
+    if base_price <= 0:
+        return 0, 0, 0
+    percent = PricingEngine.get_addon_discount_percent(user, 'traffic', 30) if user else 0
+    if percent <= 0:
+        return base_price, base_price, 0
+    final_price, _ = apply_percentage_discount(base_price, percent)
+    if percent < 100 and final_price > 0:
+        final_price = max(100, final_price)
+    return final_price, base_price, percent
+
+
+LIMITED_RESET_OK = 'ok'
+LIMITED_RESET_PANEL_UNAVAILABLE = 'panel_unavailable'
+LIMITED_RESET_CHARGE_FAILED = 'charge_failed'
+
+
+async def perform_paid_limited_reset(
+    db: AsyncSession, user, subscription: Subscription, tariff: Tariff | None, price_kopeks: int
+) -> str:
+    """Списать ``price_kopeks`` и обнулить LIMITED-пул — общий путь бота и кабинета.
+
+    Пользователь должен быть уже заблокирован (``lock_user_for_pricing``), а
+    баланс — проверен. Деньги берутся только после того, как панель отдала
+    сегодняшний расход: без него нельзя отсечь уже израсходованное.
+    """
+    from app.database.crud.transaction import create_transaction
+    from app.database.crud.user import subtract_user_balance
+    from app.database.models import TransactionType
+    from app.services.remnawave_service import RemnaWaveService
+
+    service = RemnaWaveService()
+    if not service.is_configured:
+        return LIMITED_RESET_PANEL_UNAVAILABLE
+
+    description = f'Обновление трафика лимитного сервера ({get_limited_base_traffic_gb(tariff)} ГБ)'
+    async with service.get_api_client() as api:
+        try:
+            baseline = await measure_limited_reset_baseline(api, subscription, tariff, user)
+        except Exception as error:
+            logger.warning('Не удалось получить расход LIMITED-пула перед обновлением', error=error)
+            baseline = None
+        if baseline is None:
+            return LIMITED_RESET_PANEL_UNAVAILABLE
+
+        if price_kopeks > 0 and not await subtract_user_balance(db, user, price_kopeks, description):
+            return LIMITED_RESET_CHARGE_FAILED
+
+        try:
+            await apply_limited_traffic_reset(api, db, subscription, tariff, user, baseline)
+        except Exception as error:
+            # Обнуление в БД уже записано; панель догонит мониторинг.
+            logger.error(
+                'Обновление LIMITED-пула не удалось применить в панели',
+                subscription_id=subscription.id,
+                error=error,
+            )
+
+    await create_transaction(
+        db=db,
+        user_id=user.id,
+        type=TransactionType.SUBSCRIPTION_PAYMENT,
+        amount_kopeks=price_kopeks,
+        description=description,
+    )
+    return LIMITED_RESET_OK
+
+
 async def get_active_limited_traffic_purchases_gb(db: AsyncSession, subscription: Subscription) -> int:
     """Housekeep + сумма активных докупок LIMITED-пула.
 

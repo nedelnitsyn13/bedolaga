@@ -2325,5 +2325,14 @@
   "CASHERA_RECURRING_CANCELLED": "✅ Автопродление Cashera отключено",
   "TICKET_CSAT_PROMPT": "✅ Обращение #{ticket_id} закрыто.\n\nОцените, пожалуйста, работу поддержки:",
   "TICKET_CSAT_THANKS": "Спасибо за оценку! {stars}",
-  "TICKET_CSAT_ALREADY": "Вы уже оценили это обращение."
+  "TICKET_CSAT_ALREADY": "Вы уже оценили это обращение.",
+  "LIMITED_RESET_BUTTON": "🔄 Обновить трафик — {price}",
+  "LIMITED_RESET_BUTTON_DISCOUNT": " (скидка {percent}%, было {base})",
+  "LIMITED_RESET_MONTHLY_NOTE": "🔄 Сброс 1-го числа каждого месяца",
+  "LIMITED_RESET_UNAVAILABLE": "⚠️ Обновление трафика недоступно для этой подписки",
+  "LIMITED_RESET_CONFIRM_TEXT": "🔄 <b>Обновить трафик — лимитный сервер</b>\n\nРасход обнулится сейчас, и снова будет доступно {gb} ГБ до 1-го числа.\n\nСтоимость: {price}\nНа балансе: {balance}",
+  "LIMITED_RESET_CONFIRM_BUTTON": "✅ Подтвердить — {price}",
+  "LIMITED_RESET_PANEL_UNAVAILABLE": "⚠️ Панель сейчас недоступна, деньги не списаны. Попробуйте позже.",
+  "LIMITED_RESET_DONE": "✅ Трафик лимитного сервера обновлён!\n\nДоступно: {limit}\n💰 Списано: {price}",
+  "SUBSCRIPTION_RESTRICTED": "⚠️ Покупки для аккаунта ограничены"
 }

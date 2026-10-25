@@ -37,15 +37,16 @@ from app.database.crud.transaction import create_transaction
 from app.database.crud.user import subtract_user_balance
 from app.database.models import TransactionType, User
 from app.services.limited_squad_service import (
+    LIMITED_RESET_CHARGE_FAILED,
+    LIMITED_RESET_PANEL_UNAVAILABLE,
     add_limited_traffic_purchase,
-    apply_limited_traffic_reset,
     get_active_limited_traffic_purchases_gb,
     get_effective_limited_traffic_limit_gb,
     get_limited_base_traffic_gb,
     is_limited_traffic_enabled,
-    limited_reset_price_kopeks,
-    measure_limited_reset_baseline,
+    limited_reset_quote,
     next_limited_reset_at,
+    perform_paid_limited_reset,
 )
 from app.services.panel_sync import should_create_panel_account
 from app.services.pricing_engine import pricing_engine
@@ -913,18 +914,6 @@ async def refresh_traffic(
 # subscription days" would overcharge for a top-up that lapses anyway.
 
 
-def _limited_reset_final_price(user: User, tariff) -> tuple[int, int, int]:
-    """Цена «обновить трафик» со скидкой на докупку трафика: (к оплате, без скидки, % скидки)."""
-    base_price = limited_reset_price_kopeks(tariff)
-    if base_price <= 0:
-        return 0, 0, 0
-    discount = _apply_addon_discount(user, 'traffic', base_price, 30)
-    final_price = discount['discounted']
-    if discount['percent'] < 100 and final_price > 0:
-        final_price = max(100, final_price)
-    return final_price, base_price, discount['percent']
-
-
 async def _limited_squad_response(
     db: AsyncSession, user: User, subscription, tariff
 ) -> LimitedCompanionTrafficResponse:
@@ -933,7 +922,7 @@ async def _limited_squad_response(
     total_limit_gb = await get_effective_limited_traffic_limit_gb(db, subscription, tariff)
     used_gb = subscription.limited_traffic_used_gb or 0.0
     used_percent = round(min(100.0, (used_gb / total_limit_gb) * 100), 1) if total_limit_gb > 0 else 0.0
-    reset_price, reset_base_price, reset_discount = _limited_reset_final_price(user, tariff)
+    reset_price, reset_base_price, reset_discount = limited_reset_quote(user, tariff)
     return LimitedCompanionTrafficResponse(
         available=True,
         used_gb=round(used_gb, 2),
@@ -1400,7 +1389,7 @@ async def reset_limited_squad_traffic(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='No subscription found')
     tariff = getattr(subscription, 'tariff', None)
 
-    final_price, base_price, _ = _limited_reset_final_price(user, tariff)
+    final_price, base_price, _ = limited_reset_quote(user, tariff)
     if base_price <= 0:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -1418,44 +1407,11 @@ async def reset_limited_squad_traffic(
             },
         )
 
-    service = RemnaWaveService()
-    if not service.is_configured:
+    result = await perform_paid_limited_reset(db, user, subscription, tariff, final_price)
+    if result == LIMITED_RESET_PANEL_UNAVAILABLE:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail='Panel is not available')
-
-    description = f'Обновление трафика лимитного сервера ({get_limited_base_traffic_gb(tariff)} ГБ)'
-    async with service.get_api_client() as api:
-        try:
-            baseline = await measure_limited_reset_baseline(api, subscription, tariff, user)
-        except Exception as error:
-            logger.warning('Не удалось получить расход LIMITED-пула перед обновлением', error=error)
-            baseline = None
-        if baseline is None:
-            raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail='Panel is not available')
-
-        if final_price > 0:
-            success = await subtract_user_balance(db, user, final_price, description)
-            if not success:
-                raise HTTPException(
-                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail='Failed to charge balance'
-                )
-
-        try:
-            await apply_limited_traffic_reset(api, db, subscription, tariff, user, baseline)
-        except Exception as error:
-            # Обнуление в БД уже записано; панель догонит мониторинг.
-            logger.error(
-                'Обновление LIMITED-пула не удалось применить в панели',
-                subscription_id=subscription.id,
-                error=error,
-            )
-
-    await create_transaction(
-        db=db,
-        user_id=user.id,
-        type=TransactionType.SUBSCRIPTION_PAYMENT,
-        amount_kopeks=final_price,
-        description=description,
-    )
+    if result == LIMITED_RESET_CHARGE_FAILED:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail='Failed to charge balance')
 
     await db.refresh(user)
     await db.refresh(subscription)

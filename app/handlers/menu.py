@@ -21,8 +21,10 @@ from app.database.models import InfoPage, PromoGroup, User
 from app.handlers.subscription.traffic import (
     add_traffic,
     add_traffic_limited,
+    confirm_limited_traffic_reset,
     handle_add_traffic,
     handle_add_traffic_limited,
+    reset_limited_traffic,
 )
 from app.keyboards.inline import (
     get_info_menu_keyboard,
@@ -1765,5 +1767,9 @@ def register_handlers(dp: Dispatcher):
     dp.callback_query.register(handle_add_traffic_limited, F.data.startswith('blt:'))
 
     dp.callback_query.register(add_traffic_limited, F.data.startswith('alt:'))
+
+    dp.callback_query.register(confirm_limited_traffic_reset, F.data.startswith('rlt:'))
+
+    dp.callback_query.register(reset_limited_traffic, F.data.startswith('rltc:'))
 
     dp.callback_query.register(handle_activate_button, F.data == 'activate_button')
