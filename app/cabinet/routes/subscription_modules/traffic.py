@@ -913,16 +913,16 @@ async def refresh_traffic(
 # subscription days" would overcharge for a top-up that lapses anyway.
 
 
-def _limited_reset_final_price(user: User, tariff) -> tuple[int, int]:
-    """Цена «обновить трафик» со скидкой на докупку трафика: (к оплате, без скидки)."""
+def _limited_reset_final_price(user: User, tariff) -> tuple[int, int, int]:
+    """Цена «обновить трафик» со скидкой на докупку трафика: (к оплате, без скидки, % скидки)."""
     base_price = limited_reset_price_kopeks(tariff)
     if base_price <= 0:
-        return 0, 0
+        return 0, 0, 0
     discount = _apply_addon_discount(user, 'traffic', base_price, 30)
     final_price = discount['discounted']
     if discount['percent'] < 100 and final_price > 0:
         final_price = max(100, final_price)
-    return final_price, base_price
+    return final_price, base_price, discount['percent']
 
 
 async def _limited_squad_response(
@@ -933,7 +933,7 @@ async def _limited_squad_response(
     total_limit_gb = await get_effective_limited_traffic_limit_gb(db, subscription, tariff)
     used_gb = subscription.limited_traffic_used_gb or 0.0
     used_percent = round(min(100.0, (used_gb / total_limit_gb) * 100), 1) if total_limit_gb > 0 else 0.0
-    reset_price, _ = _limited_reset_final_price(user, tariff)
+    reset_price, reset_base_price, reset_discount = _limited_reset_final_price(user, tariff)
     return LimitedCompanionTrafficResponse(
         available=True,
         used_gb=round(used_gb, 2),
@@ -943,6 +943,8 @@ async def _limited_squad_response(
         used_percent=used_percent,
         next_reset_at=next_limited_reset_at(datetime.now(UTC)),
         reset_price_kopeks=reset_price,
+        reset_base_price_kopeks=reset_base_price,
+        reset_discount_percent=reset_discount,
     )
 
 
@@ -1398,7 +1400,7 @@ async def reset_limited_squad_traffic(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='No subscription found')
     tariff = getattr(subscription, 'tariff', None)
 
-    final_price, base_price = _limited_reset_final_price(user, tariff)
+    final_price, base_price, _ = _limited_reset_final_price(user, tariff)
     if base_price <= 0:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

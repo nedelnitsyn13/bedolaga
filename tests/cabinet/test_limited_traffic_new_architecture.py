@@ -253,6 +253,8 @@ async def test_get_limited_traffic_reports_reset_price_and_date(monkeypatch) -> 
         response = await get_limited_companion_traffic(user=user, db=db, subscription_id=None)
 
         assert response.reset_price_kopeks == 15000
+        assert response.reset_base_price_kopeks == 15000
+        assert response.reset_discount_percent == 0
         assert response.next_reset_at is not None
         assert response.next_reset_at.day == 1
 
