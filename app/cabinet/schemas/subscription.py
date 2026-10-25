@@ -140,6 +140,10 @@ class LimitedCompanionTrafficResponse(BaseModel):
     purchased_gb: int = 0
     total_limit_gb: int = 0
     used_percent: float = 0.0
+    # Следующий автоматический сброс пула — 1-е число следующего месяца.
+    next_reset_at: datetime | None = None
+    # Цена «обновить трафик сейчас» (со скидкой); 0 — кнопки нет.
+    reset_price_kopeks: int = 0
 
 
 class TrafficPurchaseRequest(BaseModel):

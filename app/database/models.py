@@ -2744,6 +2744,12 @@ class Subscription(Base):
     # неотличимым от «вообще никогда не касалась новой архитектуры»).
     limited_traffic_used_gb = Column(Float, default=0.0, server_default='0')
     limited_squad_active = Column(Boolean, default=False, server_default='false', nullable=False)
+    # Платное «обновить трафик сейчас»: с этого момента LIMITED-пул считается
+    # заново. Панель отдаёт расход только по датам, поэтому расход за день
+    # обновления до самого обновления запоминается и вычитается (offset).
+    # Действует до следующего 1-го числа — дальше обычный ежемесячный сброс.
+    limited_traffic_reset_at = Column(AwareDateTime(), nullable=True)
+    limited_traffic_reset_offset_bytes = Column(BigInteger, default=0, server_default='0', nullable=False)
 
     # Тариф (для режима продаж "Тарифы")
     tariff_id = Column(Integer, ForeignKey('tariffs.id', ondelete='RESTRICT'), nullable=True, index=True)
