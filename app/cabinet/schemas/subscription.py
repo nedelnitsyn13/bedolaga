@@ -144,6 +144,8 @@ class LimitedCompanionTrafficResponse(BaseModel):
     next_reset_at: datetime | None = None
     # Цена «обновить трафик сейчас» (со скидкой); 0 — кнопки нет.
     reset_price_kopeks: int = 0
+    reset_base_price_kopeks: int = 0
+    reset_discount_percent: int = 0
 
 
 class TrafficPurchaseRequest(BaseModel):

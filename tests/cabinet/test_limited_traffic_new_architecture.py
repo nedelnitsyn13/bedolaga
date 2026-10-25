@@ -224,7 +224,7 @@ class _FakeRemnaWave:
 
 
 def _patch_reset(monkeypatch, *, baseline):
-    from app.cabinet.routes.subscription_modules import traffic
+    from app.services import limited_squad_service, remnawave_service
 
     applied: list[int] = []
 
@@ -236,9 +236,9 @@ def _patch_reset(monkeypatch, *, baseline):
         await db.commit()
         applied.append(baseline_bytes)
 
-    monkeypatch.setattr(traffic, 'RemnaWaveService', _FakeRemnaWave)
-    monkeypatch.setattr(traffic, 'measure_limited_reset_baseline', _measure)
-    monkeypatch.setattr(traffic, 'apply_limited_traffic_reset', _apply)
+    monkeypatch.setattr(remnawave_service, 'RemnaWaveService', _FakeRemnaWave)
+    monkeypatch.setattr(limited_squad_service, 'measure_limited_reset_baseline', _measure)
+    monkeypatch.setattr(limited_squad_service, 'apply_limited_traffic_reset', _apply)
     return applied
 
 
@@ -253,6 +253,8 @@ async def test_get_limited_traffic_reports_reset_price_and_date(monkeypatch) -> 
         response = await get_limited_companion_traffic(user=user, db=db, subscription_id=None)
 
         assert response.reset_price_kopeks == 15000
+        assert response.reset_base_price_kopeks == 15000
+        assert response.reset_discount_percent == 0
         assert response.next_reset_at is not None
         assert response.next_reset_at.day == 1
 

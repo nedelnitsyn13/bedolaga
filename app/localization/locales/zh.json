@@ -2325,5 +2325,14 @@
   "CASHERA_RECURRING_CANCELLED": "✅ 已关闭 Cashera 自动续费",
   "TICKET_CSAT_PROMPT": "✅ 工单 #{ticket_id} 已关闭。\n\n请为我们的客服评分：",
   "TICKET_CSAT_THANKS": "感谢您的评分！{stars}",
-  "TICKET_CSAT_ALREADY": "您已经为此工单评过分了。"
+  "TICKET_CSAT_ALREADY": "您已经为此工单评过分了。",
+  "LIMITED_RESET_BUTTON": "🔄 刷新流量 — {price}",
+  "LIMITED_RESET_BUTTON_DISCOUNT": "（优惠 {percent}%，原价 {base}）",
+  "LIMITED_RESET_MONTHLY_NOTE": "🔄 每月1日重置",
+  "LIMITED_RESET_UNAVAILABLE": "⚠️ 此订阅不支持刷新流量",
+  "LIMITED_RESET_CONFIRM_TEXT": "🔄 <b>刷新流量 — 限量服务器</b>\n\n用量将立即清零，在1日之前可再次使用 {gb} GB。\n\n价格：{price}\n余额：{balance}",
+  "LIMITED_RESET_CONFIRM_BUTTON": "✅ 确认 — {price}",
+  "LIMITED_RESET_PANEL_UNAVAILABLE": "⚠️ 面板暂时不可用，未扣款。请稍后再试。",
+  "LIMITED_RESET_DONE": "✅ 限量服务器流量已刷新！\n\n可用：{limit}\n💰 扣款：{price}",
+  "SUBSCRIPTION_RESTRICTED": "⚠️ 此账户的购买受限"
 }

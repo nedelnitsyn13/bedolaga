@@ -2872,8 +2872,14 @@ def get_add_traffic_limited_keyboard(
     sub_id: int,
     subscription_end_date: datetime = None,
     discount_percent: int = 0,
+    reset_price_kopeks: int = 0,
+    reset_base_price_kopeks: int = 0,
+    reset_discount_percent: int = 0,
 ) -> InlineKeyboardMarkup:
     """Пакеты докупки трафика для компаньон-аккаунта лимитного сервера.
+
+    ``reset_price_kopeks`` > 0 — сверху кнопка «Обновить трафик» (обнулить
+    LIMITED-пул до 1-го числа), как в кабинете.
 
     Отдельная клавиатура, а не переиспользование ``get_add_traffic_keyboard``:
     та кодирует callback_data как ``add_traffic_{gb}`` без sub_id (резолвится
@@ -2900,20 +2906,30 @@ def get_add_traffic_limited_keyboard(
     packages = settings.get_traffic_topup_packages()
     enabled_packages = [pkg for pkg in packages if pkg['enabled'] and pkg['price'] > 0 and pkg['gb'] > 0]
 
+    buttons = []
+    if reset_price_kopeks > 0:
+        reset_text = texts.t('LIMITED_RESET_BUTTON', '🔄 Обновить трафик — {price}').format(
+            price=settings.format_price(reset_price_kopeks, round_kopeks=False)
+        )
+        if reset_discount_percent > 0 and reset_base_price_kopeks > reset_price_kopeks:
+            reset_text += texts.t('LIMITED_RESET_BUTTON_DISCOUNT', ' (скидка {percent}%, было {base})').format(
+                percent=reset_discount_percent,
+                base=settings.format_price(reset_base_price_kopeks, round_kopeks=False),
+            )
+        buttons.append([InlineKeyboardButton(text=reset_text, callback_data=f'rlt:{sub_id}')])
+
     if not enabled_packages:
-        return InlineKeyboardMarkup(
-            inline_keyboard=[
-                [
-                    InlineKeyboardButton(
-                        text=texts.t('NO_TRAFFIC_PACKAGES', '❌ Нет доступных пакетов'),
-                        callback_data='no_traffic_packages',
-                    )
-                ],
-                [InlineKeyboardButton(text=texts.BACK, callback_data=back_cb)],
+        buttons.append(
+            [
+                InlineKeyboardButton(
+                    text=texts.t('NO_TRAFFIC_PACKAGES', '❌ Нет доступных пакетов'),
+                    callback_data='no_traffic_packages',
+                )
             ]
         )
+        buttons.append([InlineKeyboardButton(text=texts.BACK, callback_data=back_cb)])
+        return InlineKeyboardMarkup(inline_keyboard=buttons)
 
-    buttons = []
     for package in enabled_packages:
         gb = package['gb']
         price_per_month = package['price']
