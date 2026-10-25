@@ -10,6 +10,7 @@ GET /subscription/limited-traffic-packages
 POST /subscription/limited-traffic
 POST /subscription/limited-traffic/save-cart
 POST /subscription/limited-traffic/refresh
+POST /subscription/limited-traffic/reset
 """
 
 from __future__ import annotations
@@ -37,10 +38,14 @@ from app.database.crud.user import subtract_user_balance
 from app.database.models import TransactionType, User
 from app.services.limited_squad_service import (
     add_limited_traffic_purchase,
+    apply_limited_traffic_reset,
     get_active_limited_traffic_purchases_gb,
     get_effective_limited_traffic_limit_gb,
     get_limited_base_traffic_gb,
     is_limited_traffic_enabled,
+    limited_reset_price_kopeks,
+    measure_limited_reset_baseline,
+    next_limited_reset_at,
 )
 from app.services.panel_sync import should_create_panel_account
 from app.services.pricing_engine import pricing_engine
@@ -903,8 +908,42 @@ async def refresh_traffic(
 # Pricing is always flat per month (period_hint_days=30), never prorated to
 # the subscription's remaining days like the main traffic endpoints above:
 # the companion account resets its usage every 30 days
-# (TrafficLimitStrategy.MONTH), so charging "for all remaining subscription
-# days" would overcharge for a top-up that lapses at the next reset anyway.
+# (TrafficLimitStrategy.MONTH), and the LIMITED squad pool resets on the 1st
+# of every month (limited_usage_window), so charging "for all remaining
+# subscription days" would overcharge for a top-up that lapses anyway.
+
+
+def _limited_reset_final_price(user: User, tariff) -> tuple[int, int]:
+    """Цена «обновить трафик» со скидкой на докупку трафика: (к оплате, без скидки)."""
+    base_price = limited_reset_price_kopeks(tariff)
+    if base_price <= 0:
+        return 0, 0
+    discount = _apply_addon_discount(user, 'traffic', base_price, 30)
+    final_price = discount['discounted']
+    if discount['percent'] < 100 and final_price > 0:
+        final_price = max(100, final_price)
+    return final_price, base_price
+
+
+async def _limited_squad_response(
+    db: AsyncSession, user: User, subscription, tariff
+) -> LimitedCompanionTrafficResponse:
+    base_gb = get_limited_base_traffic_gb(tariff)
+    purchased_gb = await get_active_limited_traffic_purchases_gb(db, subscription)
+    total_limit_gb = await get_effective_limited_traffic_limit_gb(db, subscription, tariff)
+    used_gb = subscription.limited_traffic_used_gb or 0.0
+    used_percent = round(min(100.0, (used_gb / total_limit_gb) * 100), 1) if total_limit_gb > 0 else 0.0
+    reset_price, _ = _limited_reset_final_price(user, tariff)
+    return LimitedCompanionTrafficResponse(
+        available=True,
+        used_gb=round(used_gb, 2),
+        base_limit_gb=base_gb,
+        purchased_gb=purchased_gb,
+        total_limit_gb=total_limit_gb,
+        used_percent=used_percent,
+        next_reset_at=next_limited_reset_at(datetime.now(UTC)),
+        reset_price_kopeks=reset_price,
+    )
 
 
 @router.get('/limited-traffic', response_model=LimitedCompanionTrafficResponse)
@@ -921,19 +960,7 @@ async def get_limited_companion_traffic(
     tariff = getattr(subscription, 'tariff', None)
     if is_limited_traffic_enabled(tariff):
         # Новая архитектура: LIMITED squad на основном аккаунте, без companion.
-        base_gb = get_limited_base_traffic_gb(tariff)
-        purchased_gb = await get_active_limited_traffic_purchases_gb(db, subscription)
-        total_limit_gb = await get_effective_limited_traffic_limit_gb(db, subscription, tariff)
-        used_gb = subscription.limited_traffic_used_gb or 0.0
-        used_percent = round(min(100.0, (used_gb / total_limit_gb) * 100), 1) if total_limit_gb > 0 else 0.0
-        return LimitedCompanionTrafficResponse(
-            available=True,
-            used_gb=round(used_gb, 2),
-            base_limit_gb=base_gb,
-            purchased_gb=purchased_gb,
-            total_limit_gb=total_limit_gb,
-            used_percent=used_percent,
-        )
+        return await _limited_squad_response(db, user, subscription, tariff)
 
     if not settings.is_limited_companion_enabled() or not subscription.limited_companion_remnawave_id:
         return LimitedCompanionTrafficResponse(available=False)
@@ -1305,19 +1332,7 @@ async def refresh_limited_companion_traffic(
                     error=error,
                 )
 
-        base_gb = get_limited_base_traffic_gb(tariff)
-        purchased_gb = await get_active_limited_traffic_purchases_gb(db, subscription)
-        total_limit_gb = await get_effective_limited_traffic_limit_gb(db, subscription, tariff)
-        used_gb = subscription.limited_traffic_used_gb or 0.0
-        used_percent = round(min(100.0, (used_gb / total_limit_gb) * 100), 1) if total_limit_gb > 0 else 0.0
-        return LimitedCompanionTrafficResponse(
-            available=True,
-            used_gb=round(used_gb, 2),
-            base_limit_gb=base_gb,
-            purchased_gb=purchased_gb,
-            total_limit_gb=total_limit_gb,
-            used_percent=used_percent,
-        )
+        return await _limited_squad_response(db, user, subscription, tariff)
 
     remnawave_service = RemnaWaveService()
     traffic_stats = await remnawave_service.get_user_traffic_stats_by_panel_id(
@@ -1344,3 +1359,108 @@ async def refresh_limited_companion_traffic(
         total_limit_gb=total_limit_gb,
         used_percent=used_percent,
     )
+
+
+@router.post('/limited-traffic/reset')
+async def reset_limited_squad_traffic(
+    user: User = Depends(get_current_cabinet_user),
+    db: AsyncSession = Depends(get_cabinet_db),
+    subscription_id: int | None = QueryParam(None, description='Subscription ID for multi-tariff'),
+):
+    """Платно обнулить LIMITED-пул сейчас, не дожидаясь 1-го числа.
+
+    Цена — ``LIMITED_TRAFFIC_GB_PRICE_KOPEKS`` × лимит пула тарифа (со скидкой
+    на докупку трафика). Деньги списываются только после того, как панель
+    отдала сегодняшний расход: без него нельзя отсечь уже израсходованное.
+    """
+    if getattr(user, 'restriction_subscription', False):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail='Subscription purchases are restricted for this account',
+        )
+
+    subscription = await resolve_subscription(db, user, subscription_id)
+    if not subscription:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='No subscription found')
+
+    tariff = getattr(subscription, 'tariff', None)
+    if not is_limited_traffic_enabled(tariff):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='Limited traffic reset is not available for this subscription',
+        )
+
+    from app.database.crud.user import lock_user_for_pricing
+
+    user = await lock_user_for_pricing(db, user.id)
+    subscription = await resolve_subscription(db, user, subscription_id)
+    if not subscription:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='No subscription found')
+    tariff = getattr(subscription, 'tariff', None)
+
+    final_price, base_price = _limited_reset_final_price(user, tariff)
+    if base_price <= 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='Limited traffic reset is not available for this subscription',
+        )
+
+    if final_price > 0 and user.balance_kopeks < final_price:
+        missing = final_price - user.balance_kopeks
+        raise HTTPException(
+            status_code=status.HTTP_402_PAYMENT_REQUIRED,
+            detail={
+                'code': 'insufficient_funds',
+                'message': f'Недостаточно средств. Не хватает {settings.format_price(missing, round_kopeks=False)}',
+                'missing_amount': missing,
+            },
+        )
+
+    service = RemnaWaveService()
+    if not service.is_configured:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail='Panel is not available')
+
+    description = f'Обновление трафика лимитного сервера ({get_limited_base_traffic_gb(tariff)} ГБ)'
+    async with service.get_api_client() as api:
+        try:
+            baseline = await measure_limited_reset_baseline(api, subscription, tariff, user)
+        except Exception as error:
+            logger.warning('Не удалось получить расход LIMITED-пула перед обновлением', error=error)
+            baseline = None
+        if baseline is None:
+            raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail='Panel is not available')
+
+        if final_price > 0:
+            success = await subtract_user_balance(db, user, final_price, description)
+            if not success:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail='Failed to charge balance'
+                )
+
+        try:
+            await apply_limited_traffic_reset(api, db, subscription, tariff, user, baseline)
+        except Exception as error:
+            # Обнуление в БД уже записано; панель догонит мониторинг.
+            logger.error(
+                'Обновление LIMITED-пула не удалось применить в панели',
+                subscription_id=subscription.id,
+                error=error,
+            )
+
+    await create_transaction(
+        db=db,
+        user_id=user.id,
+        type=TransactionType.SUBSCRIPTION_PAYMENT,
+        amount_kopeks=final_price,
+        description=description,
+    )
+
+    await db.refresh(user)
+    await db.refresh(subscription)
+    traffic = await _limited_squad_response(db, user, subscription, tariff)
+    return {
+        'success': True,
+        'amount_paid_kopeks': final_price,
+        'new_balance_kopeks': user.balance_kopeks,
+        'traffic': traffic.model_dump(mode='json'),
+    }

@@ -205,3 +205,133 @@ async def test_purchase_saves_cart_on_insufficient_balance(monkeypatch) -> None:
             )
         assert exc_info.value.status_code == 402
         assert exc_info.value.detail['code'] == 'insufficient_funds'
+
+
+# ── «Обновить трафик сейчас» ──
+
+
+class _FakeRemnaWave:
+    is_configured = True
+
+    def get_api_client(self):
+        from contextlib import asynccontextmanager
+
+        @asynccontextmanager
+        async def _client():
+            yield object()
+
+        return _client()
+
+
+def _patch_reset(monkeypatch, *, baseline):
+    from app.cabinet.routes.subscription_modules import traffic
+
+    applied: list[int] = []
+
+    async def _measure(api, subscription, tariff, user):
+        return baseline
+
+    async def _apply(api, db, subscription, tariff, user, baseline_bytes):
+        subscription.limited_traffic_used_gb = 0.0
+        await db.commit()
+        applied.append(baseline_bytes)
+
+    monkeypatch.setattr(traffic, 'RemnaWaveService', _FakeRemnaWave)
+    monkeypatch.setattr(traffic, 'measure_limited_reset_baseline', _measure)
+    monkeypatch.setattr(traffic, 'apply_limited_traffic_reset', _apply)
+    return applied
+
+
+async def test_get_limited_traffic_reports_reset_price_and_date(monkeypatch) -> None:
+    monkeypatch.setattr(settings, 'LIMITED_TRAFFIC_GB_PRICE_KOPEKS', 300)
+
+    async with memory_session(monkeypatch, TABLES) as db:
+        user = await _create_user(db, telegram_id=7410)
+        tariff = await _create_tariff(db, base_gb=50)
+        await _create_subscription(db, user, tariff, used_gb=12.0)
+
+        response = await get_limited_companion_traffic(user=user, db=db, subscription_id=None)
+
+        assert response.reset_price_kopeks == 15000
+        assert response.next_reset_at is not None
+        assert response.next_reset_at.day == 1
+
+
+async def test_reset_charges_the_balance_and_zeroes_usage(monkeypatch) -> None:
+    from app.cabinet.routes.subscription_modules.traffic import reset_limited_squad_traffic
+
+    monkeypatch.setattr(settings, 'LIMITED_TRAFFIC_GB_PRICE_KOPEKS', 300)
+    applied = _patch_reset(monkeypatch, baseline=2 * 1024**3)
+
+    async with memory_session(monkeypatch, TABLES) as db:
+        user = await _create_user(db, telegram_id=7411, balance_kopeks=20000)
+        tariff = await _create_tariff(db, base_gb=50)
+        await _create_subscription(db, user, tariff, used_gb=50.0)
+
+        response = await reset_limited_squad_traffic(user=user, db=db, subscription_id=None)
+
+        assert response['amount_paid_kopeks'] == 15000
+        assert response['new_balance_kopeks'] == 5000
+        assert response['traffic']['used_gb'] == 0.0
+        assert applied == [2 * 1024**3]
+
+
+async def test_reset_does_not_charge_when_the_panel_is_down(monkeypatch) -> None:
+    from fastapi import HTTPException
+
+    from app.cabinet.routes.subscription_modules.traffic import reset_limited_squad_traffic
+
+    monkeypatch.setattr(settings, 'LIMITED_TRAFFIC_GB_PRICE_KOPEKS', 300)
+    applied = _patch_reset(monkeypatch, baseline=None)
+
+    async with memory_session(monkeypatch, TABLES) as db:
+        user = await _create_user(db, telegram_id=7412, balance_kopeks=20000)
+        tariff = await _create_tariff(db, base_gb=50)
+        await _create_subscription(db, user, tariff, used_gb=50.0)
+
+        with pytest.raises(HTTPException) as exc_info:
+            await reset_limited_squad_traffic(user=user, db=db, subscription_id=None)
+
+        assert exc_info.value.status_code == 503
+        await db.refresh(user)
+        assert user.balance_kopeks == 20000
+        assert applied == []
+
+
+async def test_reset_reports_the_missing_amount(monkeypatch) -> None:
+    from fastapi import HTTPException
+
+    from app.cabinet.routes.subscription_modules.traffic import reset_limited_squad_traffic
+
+    monkeypatch.setattr(settings, 'LIMITED_TRAFFIC_GB_PRICE_KOPEKS', 300)
+    _patch_reset(monkeypatch, baseline=0)
+
+    async with memory_session(monkeypatch, TABLES) as db:
+        user = await _create_user(db, telegram_id=7413, balance_kopeks=5000)
+        tariff = await _create_tariff(db, base_gb=50)
+        await _create_subscription(db, user, tariff, used_gb=50.0)
+
+        with pytest.raises(HTTPException) as exc_info:
+            await reset_limited_squad_traffic(user=user, db=db, subscription_id=None)
+
+        assert exc_info.value.status_code == 402
+        assert exc_info.value.detail['missing_amount'] == 10000
+
+
+async def test_reset_is_unavailable_without_a_price(monkeypatch) -> None:
+    from fastapi import HTTPException
+
+    from app.cabinet.routes.subscription_modules.traffic import reset_limited_squad_traffic
+
+    monkeypatch.setattr(settings, 'LIMITED_TRAFFIC_GB_PRICE_KOPEKS', 0)
+    monkeypatch.setattr(type(settings), 'get_traffic_topup_packages', lambda self: [])
+
+    async with memory_session(monkeypatch, TABLES) as db:
+        user = await _create_user(db, telegram_id=7414, balance_kopeks=50000)
+        tariff = await _create_tariff(db, base_gb=50)
+        await _create_subscription(db, user, tariff)
+
+        with pytest.raises(HTTPException) as exc_info:
+            await reset_limited_squad_traffic(user=user, db=db, subscription_id=None)
+
+        assert exc_info.value.status_code == 400

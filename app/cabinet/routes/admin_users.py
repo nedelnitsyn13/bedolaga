@@ -1310,6 +1310,7 @@ async def update_user_subscription(
     - **sync_limited_companion**: Re-sync the limited-companion account from the panel
     - **add_limited_squad_traffic**: Grant extra LIMITED squad traffic (30 days, new architecture)
     - **remove_limited_squad_traffic**: Take back purchased LIMITED squad traffic (new architecture)
+    - **reset_limited_squad_traffic**: Reset LIMITED squad usage to zero now, free of charge (new architecture)
     - **toggle_autopay**: Enable/disable autopay
     - **cancel**: Cancel subscription (set status to expired)
     - **activate**: Activate subscription
@@ -1964,6 +1965,43 @@ async def update_user_subscription(
         return UpdateSubscriptionResponse(
             success=True,
             message=f'Removed {removed_gb} GB LIMITED squad traffic',
+            subscription=await _build_subscription_info_async(db, subscription),
+        )
+
+    if request.action == 'reset_limited_squad_traffic':
+        from app.services.limited_squad_service import (
+            apply_limited_traffic_reset,
+            is_limited_traffic_enabled,
+            measure_limited_reset_baseline,
+        )
+        from app.services.remnawave_service import RemnaWaveService
+
+        squad_tariff = await get_tariff_by_id(db, subscription.tariff_id) if subscription.tariff_id else None
+        if not is_limited_traffic_enabled(squad_tariff):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail='Tariff has no LIMITED squad enabled',
+            )
+
+        service = RemnaWaveService()
+        if not service.is_configured:
+            raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail='Panel is not configured')
+        async with service.get_api_client() as api:
+            baseline = await measure_limited_reset_baseline(api, subscription, squad_tariff, user)
+            if baseline is None:
+                raise HTTPException(
+                    status_code=status.HTTP_502_BAD_GATEWAY,
+                    detail='Could not read LIMITED squad usage from panel — retry later',
+                )
+            await apply_limited_traffic_reset(api, db, subscription, squad_tariff, user, baseline)
+
+        await db.refresh(subscription)
+
+        logger.info('Admin reset LIMITED squad traffic for user', admin_id=admin.id, user_id=user_id)
+
+        return UpdateSubscriptionResponse(
+            success=True,
+            message='LIMITED squad traffic reset',
             subscription=await _build_subscription_info_async(db, subscription),
         )
 

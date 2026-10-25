@@ -16,17 +16,17 @@
 спросить у панели «сколько этот юзер прогнал через эти ноды с даты X по
 сейчас».
 
-Design-решение, требующее подтверждения: usage считается НАКОПИТЕЛЬНО с
-``subscription.start_date`` без периодического сброса — так же, как ведут
-себя докупки LIMITED-пула в примерах ТЗ (лимит растёт докупками, а не
-обнуляется по календарю). Если нужен periodic reset (по аналогии с
-MONTH-сбросом компаньона) — это отдельное решение, здесь сознательно не
-реализовано.
+Сброс: usage считается с 1-го числа текущего месяца (UTC) — или с начала
+подписки, если она началась позже. Раньше счёт шёл с ``start_date`` без
+сброса, и лимит тарифа (например, 50 ГБ) фактически давался на весь срок
+подписки, а не на месяц. Клиент может заплатить за «обновить трафик сейчас»
+(``apply_limited_traffic_reset``): с этого момента и до следующего 1-го числа
+пул считается заново.
 """
 
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 
 import aiohttp
 import structlog
@@ -107,6 +107,106 @@ def resolve_main_panel_user_id(subscription: Subscription, user) -> int | None:
     if settings.is_multi_tariff_enabled():
         return subscription.remnawave_id
     return user.remnawave_id if user else None
+
+
+def _as_utc(value: datetime) -> datetime:
+    return value if value.tzinfo else value.replace(tzinfo=UTC)
+
+
+def month_start(now: datetime) -> date:
+    """1-е число текущего месяца (UTC): с него LIMITED-пул считается заново."""
+    now = _as_utc(now).astimezone(UTC)
+    return date(now.year, now.month, 1)
+
+
+def next_limited_reset_at(now: datetime) -> datetime:
+    """Момент следующего ежемесячного сброса — 1-е число следующего месяца, 00:00 UTC."""
+    start = month_start(now)
+    year, month = (start.year + 1, 1) if start.month == 12 else (start.year, start.month + 1)
+    return datetime(year, month, 1, tzinfo=UTC)
+
+
+def limited_usage_window(subscription: Subscription, now: datetime) -> tuple[date, int]:
+    """С какой даты считать usage LIMITED-пула и сколько байт из неё вычесть.
+
+    Окно начинается с позднейшего из: 1-го числа месяца, даты начала
+    подписки, даты платного обновления в этом месяце. Обновление внутри дня
+    приходит с ``offset``: панель отдаёт расход за целые даты, и трафик того
+    же дня до обновления клиент уже израсходовал.
+    """
+    started = subscription.start_date or subscription.created_at
+    start = month_start(now)
+    if started is not None:
+        start = max(start, _as_utc(started).astimezone(UTC).date())
+
+    reset_at = getattr(subscription, 'limited_traffic_reset_at', None)
+    if reset_at is not None:
+        reset_day = _as_utc(reset_at).astimezone(UTC).date()
+        if reset_day >= start:
+            return reset_day, int(getattr(subscription, 'limited_traffic_reset_offset_bytes', 0) or 0)
+    return start, 0
+
+
+def limited_reset_price_kopeks(tariff: Tariff | None) -> int:
+    """Цена «обновить трафик сейчас»: цена 1 ГБ × лимит LIMITED-пула тарифа.
+
+    Цена 1 ГБ — ``LIMITED_TRAFFIC_GB_PRICE_KOPEKS``, а если она не задана,
+    берётся из пакетов докупки трафика: пакет ровно на размер пула стоит как
+    есть, иначе цена 1 ГБ считается по самому маленькому пакету. 0 —
+    обновлять нечего или нельзя: цены нет, механика выключена или пул
+    безлимитный.
+    """
+    base_gb = get_limited_base_traffic_gb(tariff)
+    if base_gb <= 0:
+        return 0
+
+    price_per_gb = int(settings.LIMITED_TRAFFIC_GB_PRICE_KOPEKS or 0)
+    if price_per_gb > 0:
+        return price_per_gb * base_gb
+
+    packages = [
+        pkg
+        for pkg in settings.get_traffic_topup_packages()
+        if pkg.get('enabled', True) and pkg['gb'] > 0 and pkg['price'] > 0
+    ]
+    if not packages:
+        return 0
+    exact = next((pkg for pkg in packages if pkg['gb'] == base_gb), None)
+    if exact:
+        return exact['price']
+    smallest = min(packages, key=lambda pkg: pkg['gb'])
+    return round(smallest['price'] / smallest['gb'] * base_gb)
+
+
+async def measure_limited_reset_baseline(api, subscription: Subscription, tariff: Tariff | None, user) -> int | None:
+    """Сколько байт LIMITED-пула клиент израсходовал сегодня — до обновления.
+
+    ``None`` — панель не ответила или у подписки нет аккаунта/нод: обновлять
+    (и брать деньги) в таком состоянии нельзя, базу не установить.
+    """
+    squad_uuids = get_limited_squad_uuids(tariff)
+    panel_user_id = resolve_main_panel_user_id(subscription, user)
+    if not squad_uuids or not panel_user_id:
+        return None
+    node_uuids = await resolve_limited_node_uuids(api, squad_uuids)
+    if not node_uuids:
+        return None
+    today = datetime.now(UTC).strftime('%Y-%m-%d')
+    return await fetch_limited_used_bytes(api, panel_user_id, node_uuids, today, today)
+
+
+async def apply_limited_traffic_reset(
+    api, db: AsyncSession, subscription: Subscription, tariff: Tariff | None, user, baseline_bytes: int
+) -> None:
+    """Обнулить LIMITED-пул с этого момента и вернуть доступ, если он был снят."""
+    subscription.limited_traffic_reset_at = datetime.now(UTC)
+    subscription.limited_traffic_reset_offset_bytes = max(0, int(baseline_bytes))
+    subscription.limited_traffic_used_gb = 0.0
+    await db.flush((subscription,))
+    await db.commit()
+    await sync_limited_squad_state(api, db, subscription, tariff, user)
+    limit_gb = await get_effective_limited_traffic_limit_gb(db, subscription, tariff)
+    await push_limited_traffic_usage(subscription, user, 0.0, limit_gb, is_trial=bool(subscription.is_trial))
 
 
 async def get_active_limited_traffic_purchases_gb(db: AsyncSession, subscription: Subscription) -> int:
@@ -292,18 +392,18 @@ async def refresh_limited_traffic_usage(
     if not node_uuids:
         return None
 
-    start_date = subscription.start_date or subscription.created_at
     now = datetime.now(UTC)
+    window_start, offset_bytes = limited_usage_window(subscription, now)
     used_bytes = await fetch_limited_used_bytes(
         api,
         panel_user_id,
         node_uuids,
-        start_date.strftime('%Y-%m-%d'),
+        window_start.strftime('%Y-%m-%d'),
         now.strftime('%Y-%m-%d'),
     )
     if used_bytes is None:
         return None
-    used_gb = used_bytes / GB_IN_BYTES
+    used_gb = max(0, used_bytes - offset_bytes) / GB_IN_BYTES
 
     subscription.limited_traffic_used_gb = used_gb
     await db.flush((subscription,))
