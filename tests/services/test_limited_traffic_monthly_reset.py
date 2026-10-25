@@ -89,9 +89,35 @@ def test_reset_price_is_gb_price_times_pool_size(monkeypatch) -> None:
     assert limited_reset_price_kopeks(tariff) == 15000
 
 
+def _packages(monkeypatch, packages: list[dict]) -> None:
+    monkeypatch.setattr(type(settings), 'get_traffic_topup_packages', lambda self: packages)
+
+
+def test_reset_price_falls_back_to_the_matching_topup_package(monkeypatch) -> None:
+    monkeypatch.setattr(settings, 'LIMITED_TRAFFIC_GB_PRICE_KOPEKS', 0)
+    _packages(monkeypatch, [{'gb': 10, 'price': 5000, 'enabled': True}, {'gb': 50, 'price': 20000, 'enabled': True}])
+    tariff = SimpleNamespace(limited_traffic_enabled=True, limited_base_traffic_gb=50, limited_squad_uuids=['s'])
+    assert limited_reset_price_kopeks(tariff) == 20000
+
+
+def test_reset_price_uses_the_smallest_package_rate_without_a_match(monkeypatch) -> None:
+    monkeypatch.setattr(settings, 'LIMITED_TRAFFIC_GB_PRICE_KOPEKS', 0)
+    _packages(
+        monkeypatch,
+        [
+            {'gb': 10, 'price': 5000, 'enabled': True},
+            {'gb': 5, 'price': 4000, 'enabled': False},
+            {'gb': 100, 'price': 30000, 'enabled': True},
+        ],
+    )
+    tariff = SimpleNamespace(limited_traffic_enabled=True, limited_base_traffic_gb=30, limited_squad_uuids=['s'])
+    assert limited_reset_price_kopeks(tariff) == 15000
+
+
 def test_reset_price_is_zero_without_a_price_or_a_pool(monkeypatch) -> None:
     tariff = SimpleNamespace(limited_traffic_enabled=True, limited_base_traffic_gb=50, limited_squad_uuids=['s'])
     monkeypatch.setattr(settings, 'LIMITED_TRAFFIC_GB_PRICE_KOPEKS', 0)
+    _packages(monkeypatch, [])
     assert limited_reset_price_kopeks(tariff) == 0
 
     monkeypatch.setattr(settings, 'LIMITED_TRAFFIC_GB_PRICE_KOPEKS', 300)

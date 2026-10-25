@@ -275,7 +275,8 @@ class Settings(BaseSettings):
     # см. app/services/limited_squad_service.py и limited_squad_monitoring_service.py.
     LIMITED_SQUAD_CHECK_INTERVAL_MINUTES: int = 10
     # Цена 1 ГБ лимитного трафика в копейках для кнопки «Обновить трафик»:
-    # цена обновления = эта цена × лимит LIMITED-пула тарифа. 0 — кнопки нет.
+    # цена обновления = эта цена × лимит LIMITED-пула тарифа. 0 — цена берётся
+    # из пакетов докупки трафика (TRAFFIC_TOPUP_PACKAGES_CONFIG).
     LIMITED_TRAFFIC_GB_PRICE_KOPEKS: int = 0
     # Публичный URL и общий секрет эндпоинта регистрации subscription-merger
     # (внутренний адрес панели, например http://remnawave-nginx:8081 или

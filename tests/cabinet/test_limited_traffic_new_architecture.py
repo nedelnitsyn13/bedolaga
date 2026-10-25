@@ -324,6 +324,7 @@ async def test_reset_is_unavailable_without_a_price(monkeypatch) -> None:
     from app.cabinet.routes.subscription_modules.traffic import reset_limited_squad_traffic
 
     monkeypatch.setattr(settings, 'LIMITED_TRAFFIC_GB_PRICE_KOPEKS', 0)
+    monkeypatch.setattr(type(settings), 'get_traffic_topup_packages', lambda self: [])
 
     async with memory_session(monkeypatch, TABLES) as db:
         user = await _create_user(db, telegram_id=7414, balance_kopeks=50000)

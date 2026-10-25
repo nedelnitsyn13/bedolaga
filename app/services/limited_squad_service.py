@@ -150,14 +150,32 @@ def limited_usage_window(subscription: Subscription, now: datetime) -> tuple[dat
 def limited_reset_price_kopeks(tariff: Tariff | None) -> int:
     """Цена «обновить трафик сейчас»: цена 1 ГБ × лимит LIMITED-пула тарифа.
 
-    0 — обновлять нечего или нельзя: цена не задана, механика выключена или
-    пул безлимитный.
+    Цена 1 ГБ — ``LIMITED_TRAFFIC_GB_PRICE_KOPEKS``, а если она не задана,
+    берётся из пакетов докупки трафика: пакет ровно на размер пула стоит как
+    есть, иначе цена 1 ГБ считается по самому маленькому пакету. 0 —
+    обновлять нечего или нельзя: цены нет, механика выключена или пул
+    безлимитный.
     """
-    price_per_gb = int(settings.LIMITED_TRAFFIC_GB_PRICE_KOPEKS or 0)
     base_gb = get_limited_base_traffic_gb(tariff)
-    if price_per_gb <= 0 or base_gb <= 0:
+    if base_gb <= 0:
         return 0
-    return price_per_gb * base_gb
+
+    price_per_gb = int(settings.LIMITED_TRAFFIC_GB_PRICE_KOPEKS or 0)
+    if price_per_gb > 0:
+        return price_per_gb * base_gb
+
+    packages = [
+        pkg
+        for pkg in settings.get_traffic_topup_packages()
+        if pkg.get('enabled', True) and pkg['gb'] > 0 and pkg['price'] > 0
+    ]
+    if not packages:
+        return 0
+    exact = next((pkg for pkg in packages if pkg['gb'] == base_gb), None)
+    if exact:
+        return exact['price']
+    smallest = min(packages, key=lambda pkg: pkg['gb'])
+    return round(smallest['price'] / smallest['gb'] * base_gb)
 
 
 async def measure_limited_reset_baseline(api, subscription: Subscription, tariff: Tariff | None, user) -> int | None:
