@@ -30,6 +30,7 @@ TABLES = [
     Base.metadata.tables['subscriptions'],
     Base.metadata.tables['promo_groups'],
     Base.metadata.tables['tariff_promo_groups'],
+    Base.metadata.tables['user_promo_groups'],
 ]
 
 
