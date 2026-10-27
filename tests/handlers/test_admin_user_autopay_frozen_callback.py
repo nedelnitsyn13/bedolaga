@@ -1,62 +1,54 @@
-"""Админка → автоплатёж: после сохранения экран перерисовывается без мутации frozen CallbackQuery."""
+"""Сохранение автоплатежа перерисовывает карточку без изменения frozen callback."""
 
-from datetime import UTC, datetime
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock
 
 import pytest
-from aiogram.types import CallbackQuery, Chat, Message, User as TgUser
+from aiogram import Bot
+from aiogram.types import CallbackQuery, User
 
-import app.handlers.admin.users as mod
-
-
-def _unwrap(fn):
-    while hasattr(fn, '__wrapped__'):
-        fn = fn.__wrapped__
-    return fn
+from app.config import settings
+from app.database.crud import subscription as crud
+from app.handlers.admin import users
 
 
-def _real_callback(data: str) -> CallbackQuery:
-    tg_user = TgUser(id=1, is_bot=False, first_name='Admin')
-    message = Message(
-        message_id=1,
-        date=datetime.now(UTC),
-        chat=Chat(id=1, type='private'),
-        from_user=tg_user,
-        text='Автоплатёж',
-    )
-    return CallbackQuery(
-        id='query_1',
-        from_user=tg_user,
-        chat_instance='chat_instance',
-        data=data,
-        message=message,
-    ).as_(MagicMock())
-
-
+@pytest.mark.parametrize('multi', [False, True])
 @pytest.mark.parametrize(
-    ('handler_name', 'data'),
+    ('handler_name', 'data', 'expected_options'),
     [
-        ('toggle_admin_user_autopay', 'admin_user_autopay_toggle_11'),
-        ('set_admin_user_autopay_days', 'admin_user_autopay_days_set_11_3'),
-        ('set_admin_user_autopay_period', 'admin_user_autopay_period_set_11_0'),
+        ('toggle_admin_user_autopay', 'admin_user_autopay_toggle_42_s7', {}),
+        ('set_admin_user_autopay_days', 'admin_user_autopay_days_42_s7_3', {'days_before': 3}),
+        ('set_admin_user_autopay_period', 'admin_user_autopay_period_42_s7_30', {'period_days': 30}),
+        ('set_admin_user_autopay_period', 'admin_user_autopay_period_42_s7_0', {'period_days': None}),
     ],
 )
-async def test_autopay_handlers_rerender_without_mutating_frozen_callback(handler_name, data, monkeypatch) -> None:
-    subscription = SimpleNamespace(id=8, autopay_enabled=True)
-    monkeypatch.setattr(mod, '_load_admin_subscription', AsyncMock(return_value=subscription))
-    show = AsyncMock()
-    monkeypatch.setattr(mod, 'show_admin_user_autopay', show)
-    callback = _real_callback(data)
-    update = AsyncMock()
-
-    with (
-        patch('app.database.crud.subscription.update_subscription_autopay', update),
-        patch.object(CallbackQuery, 'answer', AsyncMock()),
-    ):
-        await _unwrap(getattr(mod, handler_name))(callback, SimpleNamespace(language='ru', id=1), MagicMock())
-
-    update.assert_awaited_once()
-    assert callback.data == data
-    show.assert_awaited_once()
-    assert show.await_args.args[0].data == 'admin_user_autopay_11'
+async def test_autopay_rerenders_without_mutation(monkeypatch, multi, handler_name, data, expected_options):
+    bot = Bot('123456:test-token')
+    callback = CallbackQuery(
+        id='test', from_user=User(id=1, is_bot=False, first_name='Admin'), chat_instance='test', data=data
+    ).as_(bot)
+    subscription = SimpleNamespace(autopay_enabled=True)
+    admin, db = object(), AsyncMock()
+    save, render = AsyncMock(), AsyncMock()
+    monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', multi)
+    monkeypatch.setattr(CallbackQuery, 'answer', AsyncMock())
+    monkeypatch.setattr(users, '_load_admin_subscription', AsyncMock(return_value=subscription))
+    monkeypatch.setattr(users, '_admin_autopay_available_periods', lambda _: [30])
+    monkeypatch.setattr(users, 'show_admin_user_autopay', render)
+    monkeypatch.setattr(crud, 'update_subscription_autopay', save)
+    handler = getattr(users, handler_name)
+    while hasattr(handler, '__wrapped__'):
+        handler = handler.__wrapped__
+    try:
+        await handler(callback, admin, db)
+        save.assert_awaited_once()
+        assert save.await_args.args == (db, subscription, handler_name != 'toggle_admin_user_autopay')
+        assert save.await_args.kwargs == expected_options
+        render.assert_awaited_once()
+        copied = render.await_args.args[0]
+        assert copied is not callback
+        assert copied.bot is bot
+        assert copied.data == 'admin_user_autopay_42' + ('_s7' if multi else '')
+        assert callback.data == data
+    finally:
+        await bot.session.close()

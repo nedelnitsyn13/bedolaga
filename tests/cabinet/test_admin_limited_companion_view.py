@@ -40,6 +40,7 @@ def _subscription(**overrides) -> SimpleNamespace:
     base = dict(
         id=42,
         user_id=7,
+        remnawave_id=None,
         status='active',
         is_trial=False,
         start_date=None,
