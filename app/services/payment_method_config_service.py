@@ -20,6 +20,9 @@ logger = structlog.get_logger(__name__)
 # with the cabinet. Bot and cabinet run in the same process, so refresh is immediate.
 _display_name_overrides: dict[str, str] = {}
 _display_sort_orders: dict[str, int] = {}
+# method_id -> (is_enabled, sub_options) — чтобы бот не показывал кнопку, которую
+# общая checkout-политика затем отклонит («Способ оплаты недоступен»).
+_display_availability: dict[str, tuple[bool, dict | None]] = {}
 
 
 def _config_method_id(method_id: str) -> str:
@@ -28,13 +31,23 @@ def _config_method_id(method_id: str) -> str:
 
 async def refresh_display_name_overrides(db: AsyncSession) -> None:
     """Reload names and saved order for synchronous Telegram keyboards."""
-    global _display_name_overrides, _display_sort_orders
+    global _display_name_overrides, _display_sort_orders, _display_availability
     result = await db.execute(
-        select(PaymentMethodConfig.method_id, PaymentMethodConfig.display_name, PaymentMethodConfig.sort_order)
+        select(
+            PaymentMethodConfig.method_id,
+            PaymentMethodConfig.display_name,
+            PaymentMethodConfig.sort_order,
+            PaymentMethodConfig.is_enabled,
+            PaymentMethodConfig.sub_options,
+        )
     )
     rows = result.all()
-    _display_name_overrides = {method_id: name for method_id, name, _ in rows if name and name.strip()}
-    _display_sort_orders = {method_id: order for method_id, _, order in rows}
+    _display_name_overrides = {method_id: name for method_id, name, *_ in rows if name and name.strip()}
+    _display_sort_orders = {method_id: order for method_id, _, order, *_ in rows}
+    _display_availability = {
+        method_id: (bool(enabled), sub_options if isinstance(sub_options, dict) else None)
+        for method_id, _, _, enabled, sub_options in rows
+    }
     logger.debug('Кэш имён платёжных методов обновлён', count=len(_display_name_overrides))
 
 
@@ -45,6 +58,22 @@ def get_display_name_override(method_id: str) -> str | None:
 
 def get_display_sort_order(method_id: str) -> int | None:
     return _display_sort_orders.get(_config_method_id(method_id))
+
+
+def is_display_option_enabled(method_id: str, option: str | None = None) -> bool:
+    """Не выключен ли метод (и его подвариант) в «Способах оплаты» кабинета.
+
+    Пока кэш не прогрет или записи нет — True: решает .env, как раньше.
+    """
+    state = _display_availability.get(_config_method_id(method_id))
+    if state is None:
+        return True
+    enabled, sub_options = state
+    if not enabled:
+        return False
+    if option is None or not sub_options:
+        return True
+    return bool(sub_options.get(option, True))
 
 
 # ============ Default method definitions ============
@@ -450,7 +479,6 @@ async def ensure_payment_method_configs(db: AsyncSession) -> None:
 
         for idx, method_id in enumerate(DEFAULT_METHOD_ORDER):
             method_def = defaults.get(method_id, {})
-            is_configured = method_def.get('is_configured', False)
             sub_options = None
             available = method_def.get('available_sub_options')
             if available:
@@ -460,7 +488,11 @@ async def ensure_payment_method_configs(db: AsyncSession) -> None:
             config = PaymentMethodConfig(
                 method_id=method_id,
                 sort_order=idx,
-                is_enabled=is_configured,
+                # Выключатель админа включён по умолчанию: настроен ли провайдер,
+                # проверяется отдельно по .env (get_enabled_methods_for_user).
+                # Раньше сюда писалось is_configured, и провайдер, настроенный
+                # в .env позже, оставался выключенным в БД навсегда.
+                is_enabled=True,
                 display_name=None,
                 sub_options=sub_options,
                 min_amount_kopeks=None,
@@ -490,7 +522,6 @@ async def ensure_payment_method_configs(db: AsyncSession) -> None:
 
         for idx, method_id in enumerate(missing_methods, start=max_order + 1):
             method_def = defaults.get(method_id, {})
-            is_configured = method_def.get('is_configured', False)
             sub_options = None
             available = method_def.get('available_sub_options')
             if available:
@@ -499,7 +530,11 @@ async def ensure_payment_method_configs(db: AsyncSession) -> None:
             config = PaymentMethodConfig(
                 method_id=method_id,
                 sort_order=idx,
-                is_enabled=is_configured,
+                # Выключатель админа включён по умолчанию: настроен ли провайдер,
+                # проверяется отдельно по .env (get_enabled_methods_for_user).
+                # Раньше сюда писалось is_configured, и провайдер, настроенный
+                # в .env позже, оставался выключенным в БД навсегда.
+                is_enabled=True,
                 display_name=None,
                 sub_options=sub_options,
                 min_amount_kopeks=None,

@@ -1717,6 +1717,13 @@ def _apply_payment_method_order(keyboard: list[list[InlineKeyboardButton]]) -> N
         keyboard[index] = row
 
 
+def _cispay_option_shown(option: str | None) -> bool:
+    """CisPay-оплату проверяет и запись «Способов оплаты» в БД — кнопка должна с ней совпадать."""
+    from app.services.payment_method_config_service import is_display_option_enabled
+
+    return is_display_option_enabled('cispay', option)
+
+
 def get_payment_methods_keyboard(amount_kopeks: int, language: str = DEFAULT_LANGUAGE) -> InlineKeyboardMarkup:
     texts = get_texts(language)
     keyboard = []
@@ -2253,7 +2260,7 @@ def get_payment_methods_keyboard(amount_kopeks: int, language: str = DEFAULT_LAN
         )
         has_direct_payment_methods = True
 
-    if settings.is_cispay_crypto_enabled():
+    if settings.is_cispay_crypto_enabled() and _cispay_option_shown('crypto'):
         keyboard.append(
             [
                 InlineKeyboardButton(
@@ -2264,7 +2271,7 @@ def get_payment_methods_keyboard(amount_kopeks: int, language: str = DEFAULT_LAN
         )
         has_direct_payment_methods = True
 
-    if settings.is_cispay_card_enabled():
+    if settings.is_cispay_card_enabled() and _cispay_option_shown('card'):
         cispay_card_name = settings.get_cispay_card_display_name()
         keyboard.append(
             [
@@ -2276,7 +2283,7 @@ def get_payment_methods_keyboard(amount_kopeks: int, language: str = DEFAULT_LAN
         )
         has_direct_payment_methods = True
 
-    if settings.is_cispay_sbp_enabled():
+    if settings.is_cispay_sbp_enabled() and _cispay_option_shown('sbp'):
         cispay_sbp_name = settings.get_cispay_sbp_display_name()
         keyboard.append(
             [
@@ -2288,7 +2295,12 @@ def get_payment_methods_keyboard(amount_kopeks: int, language: str = DEFAULT_LAN
         )
         has_direct_payment_methods = True
 
-    if settings.is_cispay_enabled() and not settings.is_cispay_card_enabled() and not settings.is_cispay_sbp_enabled():
+    if (
+        settings.is_cispay_enabled()
+        and not settings.is_cispay_card_enabled()
+        and not settings.is_cispay_sbp_enabled()
+        and _cispay_option_shown(None)
+    ):
         cispay_name = settings.get_cispay_display_name()
         keyboard.append(
             [

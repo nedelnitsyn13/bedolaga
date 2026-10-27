@@ -1697,7 +1697,7 @@
 - `app/services/payment/`
 - `app/services/payment_method_config_service.py` — Python-модуль
   Классы: нет
-  Функции: `refresh_display_name_overrides` — Reload names and saved order for synchronous Telegram keyboards., `get_display_name_override` — Sync read of a cabinet-set display name for a method, or None if not set., `get_display_sort_order`, `normalize_quick_amounts`, `get_effective_quick_amounts`, `ensure_payment_method_configs` — Initialize payment method configs if they don't exist yet., `get_all_configs` — Get supported payment method configs ordered by sort_order., `get_config_by_method_id` — Get a single config by method_id, ignoring retired backup entries., `update_config` — Update a payment method config., `update_sort_order` — Batch update sort order for all methods., `get_all_promo_groups` — Get all promo groups for the filter selector., `get_enabled_methods_for_user` — Get payment methods available for a specific user., `get_anore_checkout_policy` — Effective policy shared by checkout prompts and creation entry points., `get_cispay_checkout_policy` — Shared effective checkout policy; generic checkout selects an explicit fiat method.
+  Функции: `refresh_display_name_overrides` — Reload names and saved order for synchronous Telegram keyboards., `get_display_name_override` — Sync read of a cabinet-set display name for a method, or None if not set., `get_display_sort_order`, `is_display_option_enabled` — Не выключен ли метод (и его подвариант) в «Способах оплаты» кабинета., `normalize_quick_amounts`, `get_effective_quick_amounts`, `ensure_payment_method_configs` — Initialize payment method configs if they don't exist yet., `get_all_configs` — Get supported payment method configs ordered by sort_order., `get_config_by_method_id` — Get a single config by method_id, ignoring retired backup entries., `update_config` — Update a payment method config., `update_sort_order` — Batch update sort order for all methods., `get_all_promo_groups` — Get all promo groups for the filter selector., `get_enabled_methods_for_user` — Get payment methods available for a specific user., `get_anore_checkout_policy` — Effective policy shared by checkout prompts and creation entry points., `get_cispay_checkout_policy` — Shared effective checkout policy; generic checkout selects an explicit fiat method.
 - `app/services/payment_search_service.py` — Python-модуль
   Классы: `StatusFilter`, `PeriodPreset`, `SearchParams` (2 методов), `SearchStats`
   Функции: `search_payments` — Search payments across all (or filtered) providers., `search_payments_stats` — Compute aggregated statistics for the given search filters.
@@ -3190,6 +3190,9 @@
   Классы: нет
   Функции: `upgrade`, `downgrade`
 - `migrations/alembic/versions/0144_cispay_sandbox_and_polling.py` — Python-модуль
+  Классы: нет
+  Функции: `upgrade`, `downgrade`
+- `migrations/alembic/versions/0145_enable_configured_cispay_method.py` — Python-модуль
   Классы: нет
   Функции: `upgrade`, `downgrade`
 
@@ -4857,6 +4860,9 @@
 - `tests/migrations/test_0139_limited_traffic_reset.py` — Python-модуль
   Классы: нет
   Функции: `test_revision_chain`, `test_model_has_all_new_columns`
+- `tests/migrations/test_0145_enable_configured_cispay_method.py` — Python-модуль
+  Классы: нет
+  Функции: `test_revision_chain`, `test_configured_cispay_row_is_enabled_and_others_untouched`, `test_unconfigured_cispay_row_is_left_alone`
 
 ### tests/scripts
 
@@ -5854,6 +5860,9 @@
 - `tests/utils/test_chat_menu_button.py` — Python-модуль
   Классы: нет
   Функции: `test_disabled_does_not_touch_menu_button`, `test_enabled_sets_webapp_menu_button`, `test_falls_back_to_miniapp_custom_url`, `test_non_https_url_is_skipped`, `test_empty_text_defaults`
+- `tests/utils/test_cispay_buttons_follow_method_config.py` — Python-модуль
+  Классы: нет
+  Функции: `cispay_env`, `test_all_buttons_without_a_saved_record`, `test_disabled_record_hides_every_cispay_button`, `test_disabled_sub_option_hides_only_that_button`, `test_is_display_option_enabled_defaults`
 - `tests/utils/test_device_client.py` — Python-модуль
   Классы: нет
   Функции: `test_client_app_name`, `test_unknown_app_name_is_bounded`, `test_device_details_maps_panel_fields`, `test_device_details_tolerates_old_panels`, `test_parse_panel_datetime`, `test_button_label_prefers_app`, `test_bot_details_line`
