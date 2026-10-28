@@ -758,3 +758,27 @@ async def test_email_first_falls_back_to_telegram_when_smtp_is_off(monkeypatch):
     )
 
     assert bot.send_message.await_count == 1
+
+
+async def test_receipts_to_users_can_be_switched_off(monkeypatch):
+    """Выключено — клиенту ни в Telegram, ни на почту; копия в админ-топике остаётся."""
+    monkeypatch.setattr(settings, 'ADMIN_NOTIFICATIONS_CHAT_ID', '-100500', raising=False)
+    monkeypatch.setattr(settings, 'ADMIN_NOTIFICATIONS_NALOG_TOPIC_ID', 77, raising=False)
+    monkeypatch.setattr(settings, 'NALOGO_SEND_RECEIPTS_TO_USERS', False, raising=False)
+    _patch_user_lookup(monkeypatch, SimpleNamespace(first_name='Вася', last_name=None, username=None, email='v@e.com'))
+    send_mock = _patch_email(monkeypatch)
+    bot = _bot()
+
+    await send_nalogo_receipt_notifications(
+        bot=bot,
+        nalogo_service=_nalogo(),
+        receipt_uuid='uuid-1',
+        amount_kopeks=10000,
+        telegram_user_id=111,
+        user_email='buyer@example.com',
+    )
+
+    send_mock.assert_not_called()
+    chat_ids = [call.kwargs['chat_id'] for call in bot.send_message.await_args_list]
+    assert 111 not in chat_ids
+    assert chat_ids == [-100500]

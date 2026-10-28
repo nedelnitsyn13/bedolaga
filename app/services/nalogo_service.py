@@ -1110,7 +1110,9 @@ async def send_nalogo_receipt_notifications(
                 )
         return email_delivered
 
-    if settings.NALOGO_RECEIPT_EMAIL_FIRST:
+    if not settings.NALOGO_SEND_RECEIPTS_TO_USERS:
+        logger.info('Отправка чеков клиентам выключена (NALOGO_SEND_RECEIPTS_TO_USERS)', receipt_uuid=receipt_uuid)
+    elif settings.NALOGO_RECEIPT_EMAIL_FIRST:
         if not await _deliver_to_email():
             await _deliver_to_telegram()
     elif not await _deliver_to_telegram():
