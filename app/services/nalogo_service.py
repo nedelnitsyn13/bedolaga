@@ -1007,69 +1007,76 @@ async def send_nalogo_receipt_notifications(
         return False
 
     # --- Отправка пользователю ---
-    tg_delivered = False
-    if telegram_user_id:
-        try:
-            file_delivered = await _deliver(
-                telegram_user_id,
-                (
-                    '🧾 <b>Чек по вашему платежу сформирован</b>\n\n'
-                    f'💰 Сумма: {amount_text}\n\n'
-                    'Чек зарегистрирован в ФНС через сервис «Мой налог».'
-                ),
-            )
-            # Ссылка вместо файла — для клиента под VPN это не доставка:
-            # lknpd.nalog.ru у него не открывается (см. _download_receipt_file).
-            # Если файл чека у нас есть, а Telegram его отверг, ниже отработает
-            # email-фоллбек и довезёт чек вложением.
-            tg_delivered = file_delivered or receipt_file is None
-            logger.info(
-                'Чек NaloGO отправлен пользователю',
-                telegram_user_id=telegram_user_id,
-                receipt_uuid=receipt_uuid,
-                as_file=file_delivered,
-            )
-        except Exception as error:
-            from aiogram.exceptions import (
-                TelegramForbiddenError,
-                TelegramNetworkError,
-                TelegramNotFound,
-                TelegramRetryAfter,
-                TelegramServerError,
-            )
-
-            # Штатные для рассылки исходы, а не сбои кода: бот заблокирован,
-            # чат не найден (пользователь не нажимал Start), флуд-контроль 429,
-            # сеть/5xx. Трейсбек тут только зашумляет алерты — чек в любом
-            # случае не доставлен, и ниже отработает email-фоллбек.
-            if isinstance(
-                error,
-                (
-                    TelegramNetworkError,
-                    TelegramServerError,
+    async def _deliver_to_telegram() -> bool:
+        """Чек в Telegram; True — дошёл файлом (или файла не было и ушла ссылка)."""
+        tg_delivered = False
+        if telegram_user_id:
+            try:
+                file_delivered = await _deliver(
+                    telegram_user_id,
+                    (
+                        '🧾 <b>Чек по вашему платежу сформирован</b>\n\n'
+                        f'💰 Сумма: {amount_text}\n\n'
+                        'Чек зарегистрирован в ФНС через сервис «Мой налог».'
+                    ),
+                )
+                # Ссылка вместо файла — для клиента под VPN это не доставка:
+                # lknpd.nalog.ru у него не открывается (см. _download_receipt_file).
+                # Если файл чека у нас есть, а Telegram его отверг, ниже отработает
+                # email-фоллбек и довезёт чек вложением.
+                tg_delivered = file_delivered or receipt_file is None
+                logger.info(
+                    'Чек NaloGO отправлен пользователю',
+                    telegram_user_id=telegram_user_id,
+                    receipt_uuid=receipt_uuid,
+                    as_file=file_delivered,
+                )
+            except Exception as error:
+                from aiogram.exceptions import (
                     TelegramForbiddenError,
+                    TelegramNetworkError,
                     TelegramNotFound,
                     TelegramRetryAfter,
-                ),
-            ):
-                logger.warning(
-                    'Не доставлен чек NaloGO пользователю (транзиент)',
-                    telegram_user_id=telegram_user_id,
-                    error=str(error)[:200],
-                    error_type=type(error).__name__,
-                )
-            else:
-                logger.error(
-                    'Ошибка отправки чека NaloGO пользователю',
-                    telegram_user_id=telegram_user_id,
-                    error=error,
-                    exc_info=True,
+                    TelegramServerError,
                 )
 
-    # --- Email-фоллбек: чек не ушёл в Telegram (нет аккаунта или бот
-    # заблокирован) — пытаемся доставить на почту. По 422-ФЗ чек обязан
-    # дойти до покупателя хотя бы одним каналом. ---
-    if not tg_delivered:
+                # Штатные для рассылки исходы, а не сбои кода: бот заблокирован,
+                # чат не найден (пользователь не нажимал Start), флуд-контроль 429,
+                # сеть/5xx. Трейсбек тут только зашумляет алерты — чек в любом
+                # случае не доставлен, и ниже отработает email-фоллбек.
+                if isinstance(
+                    error,
+                    (
+                        TelegramNetworkError,
+                        TelegramServerError,
+                        TelegramForbiddenError,
+                        TelegramNotFound,
+                        TelegramRetryAfter,
+                    ),
+                ):
+                    logger.warning(
+                        'Не доставлен чек NaloGO пользователю (транзиент)',
+                        telegram_user_id=telegram_user_id,
+                        error=str(error)[:200],
+                        error_type=type(error).__name__,
+                    )
+                else:
+                    logger.error(
+                        'Ошибка отправки чека NaloGO пользователю',
+                        telegram_user_id=telegram_user_id,
+                        error=error,
+                        exc_info=True,
+                    )
+
+        return tg_delivered
+
+    # Email-фоллбек: чек не ушёл в Telegram (нет аккаунта или бот заблокирован) —
+    # доставляем на почту. По 422-ФЗ чек обязан дойти до покупателя хотя бы одним
+    # каналом. NALOGO_RECEIPT_EMAIL_FIRST меняет каналы местами: сначала почта,
+    # Telegram — только если почты нет или письмо не ушло.
+    async def _deliver_to_email() -> bool:
+        """Чек на почту вложением; True — письмо ушло."""
+        email_delivered = False
         recipient_email = (user_email or '').strip()
         recipient_language = 'ru'
         if not recipient_email and telegram_user_id:
@@ -1093,6 +1100,7 @@ async def send_nalogo_receipt_notifications(
                 if await _send_receipt_email(
                     recipient_email, amount_text, receipt_url, email_attachment, language=recipient_language
                 ):
+                    email_delivered = True
                     logger.info('Чек NaloGO отправлен на почту', receipt_uuid=receipt_uuid)
             except Exception as email_error:
                 logger.error(
@@ -1100,6 +1108,15 @@ async def send_nalogo_receipt_notifications(
                     receipt_uuid=receipt_uuid,
                     error=email_error,
                 )
+        return email_delivered
+
+    if not settings.NALOGO_SEND_RECEIPTS_TO_USERS:
+        logger.info('Отправка чеков клиентам выключена (NALOGO_SEND_RECEIPTS_TO_USERS)', receipt_uuid=receipt_uuid)
+    elif settings.NALOGO_RECEIPT_EMAIL_FIRST:
+        if not await _deliver_to_email():
+            await _deliver_to_telegram()
+    elif not await _deliver_to_telegram():
+        await _deliver_to_email()
 
     # --- Дублирование в админский топик чеков ---
     chat_id = settings.get_admin_notifications_chat_id()
