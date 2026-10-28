@@ -202,24 +202,30 @@ class IncomeAPI:
         Raises:
             DomainException: For API errors
         """
-        from datetime import timedelta
+        from datetime import UTC, datetime, time, timedelta
+        from urllib.parse import urlencode
 
         if from_date is None:
             from_date = date.today() - timedelta(days=30)
         if to_date is None:
             to_date = date.today()
 
-        # API использует GET с query параметрами
-        params = {
-            'from': from_date.isoformat(),
-            'to': to_date.isoformat(),
-            'limit': str(limit),
-            'offset': str(offset),
-            'sortBy': 'OPERATION_TIME',
-            'sortOrder': 'DESC',
-        }
+        def _rfc3339(value: date) -> str:
+            # Формат как у веб-кабинета и рабочих клиентов (shoman4eg/moy-nalog):
+            # RFC3339 с миллисекундами и смещением; sortBy — operation_time:desc.
+            moment = value if isinstance(value, datetime) else datetime.combine(value, time.min, tzinfo=UTC)
+            if moment.tzinfo is None:
+                moment = moment.replace(tzinfo=UTC)
+            return moment.isoformat(timespec='milliseconds')
 
-        # Формируем query string
-        query = '&'.join(f'{k}={v}' for k, v in params.items())
+        query = urlencode(
+            {
+                'from': _rfc3339(from_date),
+                'to': _rfc3339(to_date),
+                'offset': offset,
+                'limit': max(1, min(int(limit), 100)),
+                'sortBy': 'operation_time:desc',
+            }
+        )
         response = await self.http.get(f'/incomes?{query}')
         return response.json()  # type: ignore[no-any-return]

@@ -122,6 +122,31 @@ class NalogoQueueService:
         except Exception as error:
             logger.error('Ошибка отправки уведомления о чеках', error=error)
 
+    @staticmethod
+    async def _link_receipt_to_transaction(payment_id: str | None, receipt_uuid: str) -> None:
+        """Записать чек в транзакцию платежа, как это делает прямой путь YooKassa.
+
+        Без этого чек, созданный из очереди, у транзакции не отмечен: скрипт
+        nalogo_backfill_receipts считал такую оплату «без чека».
+        """
+        if not payment_id:
+            return
+        try:
+            from sqlalchemy import update
+
+            from app.database.database import AsyncSessionLocal
+            from app.database.models import Transaction
+
+            async with AsyncSessionLocal() as session:
+                await session.execute(
+                    update(Transaction)
+                    .where(Transaction.external_id == payment_id, Transaction.receipt_uuid.is_(None))
+                    .values(receipt_uuid=receipt_uuid, receipt_created_at=datetime.now(UTC))
+                )
+                await session.commit()
+        except Exception as error:
+            logger.warning('Не удалось привязать чек из очереди к транзакции', payment_id=payment_id, error=error)
+
     async def _send_receipt_to_user(
         self,
         telegram_user_id: int | None,
@@ -253,6 +278,8 @@ class NalogoQueueService:
                 if receipt_uuid:
                     processed += 1
                     total_processed_amount += amount
+
+                    await self._link_receipt_to_transaction(payment_id, receipt_uuid)
 
                     # Удаляем метку "в очереди" (чек создан успешно)
                     if payment_id:

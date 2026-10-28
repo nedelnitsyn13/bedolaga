@@ -1652,7 +1652,7 @@
   Классы: `MulenPayService` (10 методов)
   Функции: нет
 - `app/services/nalogo_queue_service.py` — Python-модуль
-  Классы: `NalogoQueueService` (15 методов)
+  Классы: `NalogoQueueService` (16 методов)
   Функции: нет
 - `app/services/nalogo_service.py` — Python-модуль
   Классы: `NaloGoService` (23 методов)
@@ -5257,6 +5257,9 @@
 - `tests/services/test_nalogo_auth_timeout.py` — Python-модуль
   Классы: нет
   Функции: `tax_server`, `authenticate`, `test_auth_respects_short_client_timeout`, `test_auth_success_keeps_token_storage_contract`, `test_service_auth_accepts_response_after_ten_seconds`
+- `tests/services/test_nalogo_income_list_and_queue_link.py` — Python-модуль
+  Классы: нет
+  Функции: `test_income_list_uses_rfc3339_and_operation_time_sort`, `test_queue_receipt_is_written_to_the_payment_transaction`
 - `tests/services/test_nalogo_pending_verification.py` — Python-модуль
   Классы: нет
   Функции: `test_pending_verification_entry_keeps_user_email` — Почта покупателя обязана лечь в очередь — иначе при пересылке её нет., `test_retry_delivers_receipt_to_the_buyer` — Чек, созданный ручной пересылкой, доставляется покупателю., `test_retry_recovers_amount_from_legacy_entry` — Старые записи очереди без amount_kopeks — сумма берётся из amount., `test_retry_keeps_receipt_when_delivery_fails` — Доставка упала — чек в ФНС уже создан, из очереди он всё равно уходит., `test_retry_without_bot_still_creates_receipt` — Без bot чек всё равно создаётся — старое поведение не ломаем.
