@@ -736,6 +736,8 @@ class Settings(BaseSettings):
     NALOGO_PROXY_URL: str | None = None  # SOCKS proxy for nalog.ru; falls back to PROXY_URL if not set
     # Имя файла чека (без расширения) во вложении письма и в Telegram; {uuid} — id чека
     NALOGO_RECEIPT_FILENAME: str = 'receipt_{uuid}'
+    # Чек клиенту сначала на почту, Telegram — только если почты нет или письмо не ушло
+    NALOGO_RECEIPT_EMAIL_FIRST: bool = False
     # Типы писем, которые не отправлять (через запятую). Управляется переключателем
     # в редакторе email-шаблонов; см. app/cabinet/services/email_type_switch.py
     EMAIL_DISABLED_TYPES: str = ''

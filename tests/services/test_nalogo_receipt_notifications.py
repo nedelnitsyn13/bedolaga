@@ -697,3 +697,64 @@ async def test_receipt_filename_comes_from_setting(monkeypatch):
     assert await send('../{uuid}:x') == 'uuid-1_x.jpg'
     assert await send('{nope}') == 'receipt_uuid-1.jpg'
     assert await send('') == 'receipt_uuid-1.jpg'
+
+
+# ── NALOGO_RECEIPT_EMAIL_FIRST: сначала почта, Telegram — запасной канал ──
+
+
+async def test_email_first_sends_only_email_when_user_has_one(monkeypatch):
+    monkeypatch.setattr(settings, 'ADMIN_NOTIFICATIONS_CHAT_ID', None, raising=False)
+    monkeypatch.setattr(settings, 'NALOGO_RECEIPT_EMAIL_FIRST', True, raising=False)
+    _patch_user_lookup(monkeypatch, SimpleNamespace(email='vasya@example.com', language='ru'))
+    send_mock = _patch_email(monkeypatch)
+    bot = _bot()
+
+    await send_nalogo_receipt_notifications(
+        bot=bot,
+        nalogo_service=_nalogo(),
+        receipt_uuid='uuid-1',
+        amount_kopeks=10000,
+        telegram_user_id=111,
+    )
+
+    send_mock.assert_called_once()
+    assert send_mock.call_args.args[0] == 'vasya@example.com'
+    bot.send_message.assert_not_awaited()
+    bot.send_photo.assert_not_awaited()
+
+
+async def test_email_first_falls_back_to_telegram_without_email(monkeypatch):
+    monkeypatch.setattr(settings, 'ADMIN_NOTIFICATIONS_CHAT_ID', None, raising=False)
+    monkeypatch.setattr(settings, 'NALOGO_RECEIPT_EMAIL_FIRST', True, raising=False)
+    _patch_user_lookup(monkeypatch, SimpleNamespace(email=None, language='ru'))
+    send_mock = _patch_email(monkeypatch)
+    bot = _bot()
+
+    await send_nalogo_receipt_notifications(
+        bot=bot,
+        nalogo_service=_nalogo(),
+        receipt_uuid='uuid-1',
+        amount_kopeks=10000,
+        telegram_user_id=111,
+    )
+
+    send_mock.assert_not_called()
+    assert bot.send_message.await_count == 1
+
+
+async def test_email_first_falls_back_to_telegram_when_smtp_is_off(monkeypatch):
+    monkeypatch.setattr(settings, 'ADMIN_NOTIFICATIONS_CHAT_ID', None, raising=False)
+    monkeypatch.setattr(settings, 'NALOGO_RECEIPT_EMAIL_FIRST', True, raising=False)
+    _patch_email(monkeypatch, configured=False)
+    bot = _bot()
+
+    await send_nalogo_receipt_notifications(
+        bot=bot,
+        nalogo_service=_nalogo(),
+        receipt_uuid='uuid-1',
+        amount_kopeks=10000,
+        telegram_user_id=111,
+        user_email='buyer@example.com',
+    )
+
+    assert bot.send_message.await_count == 1
