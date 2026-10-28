@@ -86,7 +86,7 @@ def find_existing_income(
         uuid = income.get('approvedReceiptUuid') or income.get('receiptUuid')
         if not uuid or uuid in taken:
             continue
-        if income.get('cancellationInfo'):
+        if income.get('cancelled') or income.get('cancellationInfo'):
             continue
         if abs(float(income.get('totalAmount', income.get('amount', 0)) or 0) - amount_rub) > 0.01:
             continue
@@ -104,7 +104,10 @@ def find_existing_income(
 
 async def _incomes_for_day(nalogo, cache: dict[date, list[dict] | None], day: date) -> list[dict] | None:
     if day not in cache:
-        cache[day] = await nalogo.get_incomes(from_date=day, to_date=day + timedelta(days=1), limit=100)
+        # С запасом в сутки по краям: оплата в 23:59 UTC могла попасть в чек следующего дня.
+        cache[day] = await nalogo.get_incomes(
+            from_date=day - timedelta(days=1), to_date=day + timedelta(days=2), limit=100
+        )
     return cache[day]
 
 
