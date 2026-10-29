@@ -1,11 +1,12 @@
 """Admin routes for managing users in cabinet."""
 
+import asyncio
 import math
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy import Integer, delete as sa_delete, func, literal, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -123,6 +124,8 @@ from ..schemas.users import (
     UpdateUserStatusResponse,
     UserAvailableTariffItem,
     UserAvailableTariffsResponse,
+    UserAvatarsRequest,
+    UserAvatarsResponse,
     UserByRemnawaveResponse,
     UserDetailResponse,
     UserDevicesResponse,
@@ -683,6 +686,59 @@ async def list_users(
         total=total,
         offset=offset,
         limit=limit,
+    )
+
+
+# Bot API терпит ~30 запросов в секунду; без кеша порция в 50 человек
+# разойдётся за пару секунд, не упираясь в лимит.
+_AVATAR_FETCH_CONCURRENCY = 8
+
+
+@router.post('/avatars', response_model=UserAvatarsResponse)
+async def get_users_avatars(
+    request: Request,
+    payload: UserAvatarsRequest,
+    admin: User = Depends(require_permission('users:read')),
+    db: AsyncSession = Depends(get_cabinet_db),
+) -> UserAvatarsResponse:
+    """Фото профиля Telegram для списка пользователей — одной пачкой на порцию ленты.
+
+    Список грузится сразу, кружки с буквой подменяются фото, когда этот запрос
+    вернётся: спрашивать Telegram внутри самого списка значило бы держать его
+    до ответа на каждого. Фото берёт тот же сервис, что и шапка кабинета, с тем
+    же часовым кешем; ссылки подписаны прокси медиа.
+    """
+    user_ids = list(dict.fromkeys(payload.user_ids))
+    if not user_ids:
+        return UserAvatarsResponse(avatars={})
+
+    rows = await db.execute(
+        select(User.id, User.telegram_id).where(User.id.in_(user_ids), User.telegram_id.is_not(None))
+    )
+    telegram_ids = {user_id: telegram_id for user_id, telegram_id in rows.all() if telegram_id > 0}
+    if not telegram_ids:
+        return UserAvatarsResponse(avatars={})
+
+    from app.bot_factory import create_bot
+    from app.services.user_avatar_service import get_avatar_file_id
+
+    from .media import _build_media_url
+
+    semaphore = asyncio.Semaphore(_AVATAR_FETCH_CONCURRENCY)
+
+    async def fetch(bot, telegram_id: int) -> str | None:
+        async with semaphore:
+            return await get_avatar_file_id(bot, telegram_id)
+
+    async with create_bot() as bot:
+        file_ids = await asyncio.gather(*(fetch(bot, telegram_id) for telegram_id in telegram_ids.values()))
+
+    return UserAvatarsResponse(
+        avatars={
+            user_id: _build_media_url(request, file_id)
+            for user_id, file_id in zip(telegram_ids, file_ids, strict=True)
+            if file_id
+        }
     )
 
 

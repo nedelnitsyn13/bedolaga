@@ -195,6 +195,18 @@ class UsersListResponse(BaseModel):
     limit: int = 50
 
 
+class UserAvatarsRequest(BaseModel):
+    """Пользователи, чьи фото Telegram нужны списку: одна порция ленты, не больше страницы."""
+
+    user_ids: list[int] = Field(max_length=200)
+
+
+class UserAvatarsResponse(BaseModel):
+    """id пользователя → подписанная ссылка на фото через прокси медиа; нет фото — нет ключа."""
+
+    avatars: dict[int, str]
+
+
 class UserByRemnawaveResponse(BaseModel):
     """Subscription-level owner resolved from an exact Remnawave user id."""
 
