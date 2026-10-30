@@ -1001,6 +1001,7 @@ def _users_list_conditions(
     purchase_count: int | None = None,
     traffic_used_percent_min: int | None = None,
     connected: 'ConnectedAccounts | None' = None,
+    never_connected_trial: frozenset[int] | None = None,
     in_grace: bool | None = None,
 ) -> list:
     """Условия WHERE списка пользователей админки — одни для списка и для счётчика.
@@ -1178,6 +1179,12 @@ def _users_list_conditions(
             keys.append(User.telegram_id.in_(connected.telegram_ids))
         conditions.append(or_(*keys) if keys else false())
 
+    if never_connected_trial is not None:
+        # Триал, чей аккаунт в панели ни разу не подключался (см. app/services/connect_reminder_service.py).
+        from app.services.connect_reminder_service import never_connected_trial_condition
+
+        conditions.append(never_connected_trial_condition(never_connected_trial, now))
+
     return conditions
 
 
@@ -1200,6 +1207,7 @@ async def get_users_list(
     purchase_count: int | None = None,
     traffic_used_percent_min: int | None = None,
     connected: 'ConnectedAccounts | None' = None,
+    never_connected_trial: frozenset[int] | None = None,
     in_grace: bool | None = None,
     order_by_balance: bool = False,
     order_by_traffic: bool = False,
@@ -1240,6 +1248,7 @@ async def get_users_list(
             purchase_count=purchase_count,
             traffic_used_percent_min=traffic_used_percent_min,
             connected=connected,
+            never_connected_trial=never_connected_trial,
             in_grace=in_grace,
         )
     )
@@ -1378,6 +1387,7 @@ async def get_users_count(
     purchase_count: int | None = None,
     traffic_used_percent_min: int | None = None,
     connected: 'ConnectedAccounts | None' = None,
+    never_connected_trial: frozenset[int] | None = None,
     in_grace: bool | None = None,
 ) -> int:
     query = select(func.count(User.id)).where(
@@ -1397,6 +1407,7 @@ async def get_users_count(
             purchase_count=purchase_count,
             traffic_used_percent_min=traffic_used_percent_min,
             connected=connected,
+            never_connected_trial=never_connected_trial,
             in_grace=in_grace,
         )
     )
