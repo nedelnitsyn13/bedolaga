@@ -6,7 +6,7 @@ from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request, status
 from sqlalchemy import Integer, delete as sa_delete, func, literal, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -80,6 +80,11 @@ from ..schemas.users import (
     AdminUserGiftsResponse,
     AssignReferrerRequest,
     AssignReferrerResponse,
+    ConnectReminderAudience,
+    ConnectReminderBulkResponse,
+    ConnectReminderInfo,
+    ConnectReminderRequest,
+    ConnectReminderResponse,
     DeleteDeviceResponse,
     DeleteUserRequest,
     DeleteUserResponse,
@@ -546,6 +551,7 @@ async def list_users(
     traffic_used_percent_min: int | None = Query(None, ge=1, le=100),
     online: bool | None = Query(None),
     in_grace: bool | None = Query(None),
+    never_connected: bool | None = Query(None),
     sort_by: SortByEnum = Query(SortByEnum.CREATED_AT),
     sort_order: SortOrderEnum | None = Query(None),
     admin: User = Depends(require_permission('users:read')),
@@ -607,6 +613,18 @@ async def list_users(
     connected = snapshot.connected_now() if snapshot is not None else None
     online_filter = connected if online else None
 
+    # «Триал без подключения» — тоже только по панели: без её ответа не угадываем.
+    never_connected_filter = None
+    if never_connected:
+        from app.services.connect_reminder_service import get_never_connected_panel_ids
+
+        never_connected_filter = await get_never_connected_panel_ids()
+        if never_connected_filter is None:
+            raise HTTPException(
+                status_code=503,
+                detail='Панель не ответила — не удалось узнать, кто ни разу не подключался. Попробуйте ещё раз.',
+            )
+
     users = await get_users_list(
         db=db,
         offset=offset,
@@ -626,6 +644,7 @@ async def list_users(
         purchase_count=purchase_count,
         traffic_used_percent_min=traffic_used_percent_min,
         connected=online_filter,
+        never_connected_trial=never_connected_filter,
         in_grace=in_grace,
         order_by_balance=order_by_balance,
         order_by_traffic=order_by_traffic,
@@ -654,6 +673,7 @@ async def list_users(
         purchase_count=purchase_count,
         traffic_used_percent_min=traffic_used_percent_min,
         connected=online_filter,
+        never_connected_trial=never_connected_filter,
         in_grace=in_grace,
     )
 
@@ -740,6 +760,122 @@ async def get_users_avatars(
             if file_id
         }
     )
+
+
+# === Напоминание «подключитесь» (триал без подключения) ===
+# Статичные пути — до '/{user_id}', иначе их перехватит карточка пользователя.
+
+
+@router.get('/remind-connect/audience', response_model=ConnectReminderAudience)
+async def connect_reminder_audience(
+    admin: User = Depends(require_permission('users:send_message')),
+    db: AsyncSession = Depends(get_cabinet_db),
+) -> ConnectReminderAudience:
+    """Сколько человек получит массовое напоминание — для подтверждения перед отправкой."""
+    from app.services import connect_reminder_service as reminders
+
+    panel_ids = await reminders.get_never_connected_panel_ids()
+    if panel_ids is None:
+        raise HTTPException(status_code=503, detail='Панель не ответила — не удалось узнать, кто не подключался.')
+    audience, skipped = await reminders.bulk_audience(db, panel_ids)
+    return ConnectReminderAudience(
+        count=len(audience),
+        skipped_recent=skipped,
+        cooldown_hours=int(reminders.REMIND_COOLDOWN.total_seconds() // 3600),
+    )
+
+
+@router.post('/remind-connect/bulk', response_model=ConnectReminderBulkResponse)
+async def connect_reminder_bulk(
+    background_tasks: BackgroundTasks,
+    admin: User = Depends(require_permission('users:send_message')),
+    db: AsyncSession = Depends(get_cabinet_db),
+) -> ConnectReminderBulkResponse:
+    """Напомнить всем триальщикам без подключения; кому писали за сутки — пропускаем.
+
+    Аудиторию считает сервер, а не присылает кабинет: в ленте загружена лишь
+    первая порция, а отправлять надо всем подходящим. Отправка идёт фоном.
+    """
+    from app.services import connect_reminder_service as reminders
+
+    if not settings.BOT_TOKEN:
+        raise HTTPException(status_code=503, detail='Bot token is not configured')
+    panel_ids = await reminders.get_never_connected_panel_ids()
+    if panel_ids is None:
+        raise HTTPException(status_code=503, detail='Панель не ответила — не удалось узнать, кто не подключался.')
+    audience, _ = await reminders.bulk_audience(db, panel_ids)
+    if audience:
+        background_tasks.add_task(reminders.send_bulk, [user.id for user in audience], admin.id)
+    logger.info('Массовое напоминание о подключении запущено', admin_id=admin.id, queued=len(audience))
+    return ConnectReminderBulkResponse(queued=len(audience))
+
+
+@router.get('/{user_id}/remind-connect', response_model=ConnectReminderInfo)
+async def connect_reminder_info(
+    user_id: int,
+    admin: User = Depends(require_permission('users:read')),
+    db: AsyncSession = Depends(get_cabinet_db),
+) -> ConnectReminderInfo:
+    """Можно ли напомнить человеку подключиться, готовый текст и когда напоминали."""
+    from app.services import connect_reminder_service as reminders
+
+    user = await get_user_by_id(db, user_id)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='User not found')
+    cooldown_hours = int(reminders.REMIND_COOLDOWN.total_seconds() // 3600)
+    last = (await reminders.last_reminded_at(db, [user.id])).get(user.id)
+    if not user.telegram_id:
+        return ConnectReminderInfo(
+            eligible=False, reason='no_telegram', last_sent_at=last, cooldown_hours=cooldown_hours
+        )
+
+    panel_ids = await reminders.get_never_connected_panel_ids()
+    if panel_ids is None:
+        reason = 'panel_unavailable'
+    elif not reminders.is_never_connected_trial(user, panel_ids, datetime.now(UTC)):
+        reason = 'not_eligible'
+    else:
+        reason = None
+    return ConnectReminderInfo(
+        eligible=reason is None,
+        reason=reason,
+        text=reminders.default_text(user) if reason is None else '',
+        last_sent_at=last,
+        cooldown_hours=cooldown_hours,
+    )
+
+
+@router.post('/{user_id}/remind-connect', response_model=ConnectReminderResponse)
+async def connect_reminder_send(
+    user_id: int,
+    payload: ConnectReminderRequest,
+    admin: User = Depends(require_permission('users:send_message')),
+    db: AsyncSession = Depends(get_cabinet_db),
+) -> ConnectReminderResponse:
+    """Отправить напоминание с кнопкой «Подключиться» в Telegram.
+
+    Подходит ли человек, решает оператор: кнопку кабинет показывает по
+    GET-ручке, а здесь проверяем лишь, что писать есть куда.
+    """
+    from app.bot_factory import create_bot
+    from app.services import connect_reminder_service as reminders
+
+    user = await get_user_by_id(db, user_id)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='User not found')
+    if not user.telegram_id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail={'code': 'no_telegram_id'})
+    if not settings.BOT_TOKEN:
+        raise HTTPException(status_code=503, detail={'code': 'bot_not_configured'})
+    text = payload.text.strip()
+    if not text:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail={'code': 'empty_message'})
+
+    async with create_bot() as bot:
+        result = await reminders.send_reminder(bot, db, admin_id=admin.id, user=user, text=text)
+    await db.commit()
+    logger.info('Напоминание о подключении', admin_id=admin.id, user_id=user.id, result=result)
+    return ConnectReminderResponse(result=result)
 
 
 @router.get('/stats', response_model=UsersStatsResponse)

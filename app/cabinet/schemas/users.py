@@ -2,7 +2,7 @@
 
 from datetime import datetime
 from enum import StrEnum
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, EmailStr, Field
 
@@ -453,6 +453,39 @@ class SendUserMessageResponse(BaseModel):
 
     success: bool
     message: str
+
+
+class ConnectReminderInfo(BaseModel):
+    """Карточка: можно ли напомнить подключиться, готовый текст и когда напоминали."""
+
+    eligible: bool
+    # no_telegram — писать некуда; not_eligible — нет живого триала без подключения;
+    # panel_unavailable — панель не ответила, подключался ли человек.
+    reason: Literal['no_telegram', 'not_eligible', 'panel_unavailable'] | None = None
+    text: str = ''
+    last_sent_at: datetime | None = None
+    cooldown_hours: int
+
+
+class ConnectReminderRequest(BaseModel):
+    # 4096 — лимит Telegram на текст сообщения
+    text: str = Field(..., min_length=1, max_length=4096, description='Текст напоминания (HTML)')
+
+
+class ConnectReminderResponse(BaseModel):
+    result: Literal['sent', 'forbidden', 'failed']
+
+
+class ConnectReminderAudience(BaseModel):
+    """Сколько получат массовое напоминание и скольких пропустим — им писали недавно."""
+
+    count: int
+    skipped_recent: int
+    cooldown_hours: int
+
+
+class ConnectReminderBulkResponse(BaseModel):
+    queued: int
 
 
 class UpdateRestrictionsRequest(BaseModel):
