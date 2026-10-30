@@ -839,7 +839,7 @@ async def connect_reminder_info(
     return ConnectReminderInfo(
         eligible=reason is None,
         reason=reason,
-        text=reminders.default_text(user) if reason is None else '',
+        text=reminders.default_text(user, await reminders.get_template(db)) if reason is None else '',
         last_sent_at=last,
         cooldown_hours=cooldown_hours,
     )
@@ -872,7 +872,9 @@ async def connect_reminder_send(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail={'code': 'empty_message'})
 
     async with create_bot() as bot:
-        result = await reminders.send_reminder(bot, db, admin_id=admin.id, user=user, text=text)
+        result = await reminders.send_reminder(
+            bot, db, admin_id=admin.id, user=user, text=text, template=await reminders.get_template(db)
+        )
     await db.commit()
     logger.info('Напоминание о подключении', admin_id=admin.id, user_id=user.id, result=result)
     return ConnectReminderResponse(result=result)

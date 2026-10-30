@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.crud.user_reminder import CHANNELS_CABINET, get_or_create_state, get_reminder, list_active_reminders
 from app.database.models import Subscription, UserReminderState
-from app.services.user_reminders.conditions import matches, parse_conditions
+from app.services.user_reminders.conditions import matches, needs_panel, parse_conditions
 from app.services.user_reminders.texts import render_card, validate_texts
 
 
@@ -33,6 +33,8 @@ async def active_cards_for_user(db: AsyncSession, user, *, lang: str | None, now
         ).scalars()
     )
     subscriptions = list((await db.execute(select(Subscription).where(Subscription.user_id == user.id))).scalars())
+    panel_ids: frozenset[int] | None = None
+    panel_asked = False
     cards: list[dict] = []
     for reminder in reminders:
         if reminder.id in dismissed:
@@ -47,7 +49,12 @@ async def active_cards_for_user(db: AsyncSession, user, *, lang: str | None, now
         except ValueError as error:
             logger.warning('Напоминание с битыми текстами пропущено', reminder_id=reminder.id, error=str(error))
             continue
-        if matches(user, subscriptions, conditions, now=now):
+        if needs_panel(conditions) and not panel_asked:
+            from app.services.connect_reminder_service import get_never_connected_panel_ids
+
+            panel_ids = await get_never_connected_panel_ids()
+            panel_asked = True
+        if matches(user, subscriptions, conditions, now=now, never_connected_ids=panel_ids):
             cards.append(render_card(reminder, lang))
     return cards
 

@@ -31,8 +31,9 @@ from sqlalchemy.orm import selectinload
 
 from app.database.crud.rbac import AuditLogCRUD
 from app.database.crud.subscription_segments import LIVE_STATUSES, segment_condition
-from app.database.models import AdminAuditLog, Subscription, User, UserStatus
+from app.database.models import AdminAuditLog, Subscription, User, UserReminder, UserStatus
 from app.localization.texts import get_texts
+from app.services.user_reminders.texts import pick_text, render_bot_message, validate_texts
 from app.utils.miniapp_buttons import build_miniapp_or_callback_button
 
 
@@ -129,8 +130,32 @@ def is_never_connected_trial(user: User, panel_ids: frozenset[int], now: datetim
 # --- Текст и кнопка -------------------------------------------------------------------
 
 
-def default_text(user: User) -> str:
-    """Тот же текст, что у автонапоминания панели, на языке человека."""
+BUILTIN_KEY = 'trial_not_connected'
+
+
+async def get_template(db: AsyncSession) -> UserReminder | None:
+    """Встроенное напоминание «Триал без подключения» — его текст правят в разделе «Напоминания».
+
+    Ручная отправка из карточки и «Напомнить всем» берут текст и подпись кнопки
+    оттуда же, чтобы настраивать его в одном месте. Нет записи или тексты битые —
+    стандартный текст из переводов.
+    """
+    reminder = (
+        await db.execute(select(UserReminder).where(UserReminder.builtin_key == BUILTIN_KEY))
+    ).scalar_one_or_none()
+    if reminder is None:
+        return None
+    try:
+        validate_texts(reminder.texts)
+    except ValueError:
+        return None
+    return reminder
+
+
+def default_text(user: User, template: UserReminder | None = None) -> str:
+    """Текст напоминания на языке человека: из шаблона в «Напоминаниях», иначе из переводов."""
+    if template is not None:
+        return render_bot_message(template, user.language)[0]
     message = get_texts(user.language).get('WEBHOOK_USER_NOT_CONNECTED') or ''
     try:
         return message.format(tariff_label='', hours='')
@@ -138,8 +163,11 @@ def default_text(user: User) -> str:
         return message
 
 
-def connect_keyboard(user: User) -> InlineKeyboardMarkup:
-    button_text = get_texts(user.language).get('CONNECT_BUTTON', 'Connect')
+def connect_keyboard(user: User, template: UserReminder | None = None) -> InlineKeyboardMarkup:
+    """Кнопка «Подключиться»: подпись из шаблона, если она там задана, ведёт всегда к подключению."""
+    button_text = (pick_text(template.texts, user.language)['button'] if template is not None else None) or (
+        get_texts(user.language).get('CONNECT_BUTTON', 'Connect')
+    )
     return InlineKeyboardMarkup(
         inline_keyboard=[[build_miniapp_or_callback_button(text=button_text, callback_data='subscription_connect')]]
     )
@@ -168,11 +196,18 @@ async def last_reminded_at(db: AsyncSession, user_ids: list[int]) -> dict[int, d
 
 
 async def send_reminder(
-    bot: Bot, db: AsyncSession, *, admin_id: int, user: User, text: str, bulk: bool = False
+    bot: Bot,
+    db: AsyncSession,
+    *,
+    admin_id: int,
+    user: User,
+    text: str,
+    bulk: bool = False,
+    template: UserReminder | None = None,
 ) -> SendResult:
     """Отправить напоминание и записать результат в журнал. Не бросает на ошибках Telegram."""
     try:
-        await bot.send_message(user.telegram_id, text, parse_mode='HTML', reply_markup=connect_keyboard(user))
+        await bot.send_message(user.telegram_id, text, parse_mode='HTML', reply_markup=connect_keyboard(user, template))
         result: SendResult = 'sent'
     except TelegramForbiddenError:
         result = 'forbidden'
@@ -233,8 +268,11 @@ async def send_bulk(user_ids: list[int], admin_id: int) -> dict[str, int]:
     counters = {'sent': 0, 'forbidden': 0, 'failed': 0}
     async with AsyncSessionLocal() as db, create_bot() as bot:
         users = (await db.execute(select(User).where(User.id.in_(user_ids)).order_by(User.id))).scalars().all()
+        template = await get_template(db)
         for user in users:
-            result = await send_reminder(bot, db, admin_id=admin_id, user=user, text=default_text(user), bulk=True)
+            result = await send_reminder(
+                bot, db, admin_id=admin_id, user=user, text=default_text(user, template), bulk=True, template=template
+            )
             counters[result] += 1
             await db.commit()
             await asyncio.sleep(_BULK_DELAY_SECONDS)
