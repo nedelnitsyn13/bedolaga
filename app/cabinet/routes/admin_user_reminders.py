@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.bot_factory import create_bot
 from app.database.crud.user_reminder import count_audience, get_reminder, list_reminders, reminder_stats
 from app.database.models import User, UserReminder
-from app.services.user_reminders.conditions import ReminderConditions, parse_conditions
+from app.services.user_reminders.conditions import ReminderConditions, needs_panel, parse_conditions
 from app.services.user_reminders.texts import render_bot_message, validate_texts
 
 from ..dependencies import get_cabinet_db, require_permission
@@ -35,16 +35,29 @@ async def _audience(
 ) -> AudienceResponse:
     now = datetime.now(UTC)
     exclude_promo_opt_out = category == 'marketing'
+    panel_ids: frozenset[int] | None = None
+    if needs_panel(conditions):
+        from app.services.connect_reminder_service import get_never_connected_panel_ids
+
+        panel_ids = await get_never_connected_panel_ids()
+        if panel_ids is None:
+            # Панель не ответила — честное «не знаем», а не ноль.
+            return AudienceResponse(bot=None, cabinet=None)
     return AudienceResponse(
         bot=(
             await count_audience(
-                db, conditions, now=now, telegram_only=True, exclude_promo_opt_out=exclude_promo_opt_out
+                db,
+                conditions,
+                now=now,
+                telegram_only=True,
+                exclude_promo_opt_out=exclude_promo_opt_out,
+                never_connected_ids=panel_ids,
             )
             if channels in ('bot', 'both')
             else None
         ),
         cabinet=(
-            await count_audience(db, conditions, now=now, telegram_only=False)
+            await count_audience(db, conditions, now=now, telegram_only=False, never_connected_ids=panel_ids)
             if channels in ('cabinet', 'both')
             else None
         ),

@@ -93,8 +93,9 @@ async def count_audience(
     now: datetime,
     telegram_only: bool,
     exclude_promo_opt_out: bool = False,
+    never_connected_ids: frozenset[int] | None = None,
 ) -> int:
-    clauses = condition_clauses(conditions, now=now)
+    clauses = condition_clauses(conditions, now=now, never_connected_ids=never_connected_ids)
     if telegram_only:
         clauses.append(User.telegram_id.is_not(None))
     if exclude_promo_opt_out:

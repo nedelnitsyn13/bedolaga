@@ -173,6 +173,7 @@ async def test_card_info_offers_text_only_when_eligible(monkeypatch) -> None:
     db = MagicMock()
     monkeypatch.setattr(reminders, 'get_never_connected_panel_ids', AsyncMock(return_value=NEVER))
     monkeypatch.setattr(reminders, 'last_reminded_at', AsyncMock(return_value={}))
+    monkeypatch.setattr(reminders, 'get_template', AsyncMock(return_value=None))
     with patch('app.cabinet.routes.admin_users.get_user_by_id', AsyncMock(return_value=user)):
         info = await connect_reminder_info(user_id=1, admin=SimpleNamespace(id=9), db=db)
     assert info.eligible and info.reason is None and 'подключились' in info.text
@@ -205,6 +206,7 @@ async def test_send_attaches_connect_button_and_logs_result(monkeypatch) -> None
     bot.send_message = AsyncMock()
     audit = AsyncMock()
     monkeypatch.setattr(reminders.AuditLogCRUD, 'create', audit)
+    monkeypatch.setattr(reminders, 'get_template', AsyncMock(return_value=None))
     monkeypatch.setattr('app.cabinet.routes.admin_users.settings.BOT_TOKEN', '123:abc')
     db = MagicMock()
     db.commit = AsyncMock()

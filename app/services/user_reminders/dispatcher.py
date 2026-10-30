@@ -24,7 +24,7 @@ from app.config import settings
 from app.database.crud.user_reminder import CHANNELS_BOT, list_active_reminders, record_bot_attempt
 from app.database.models import User, UserReminderState
 from app.services.notification_types import NotificationType
-from app.services.user_reminders.conditions import condition_clauses, parse_conditions
+from app.services.user_reminders.conditions import condition_clauses, needs_panel, parse_conditions
 from app.services.user_reminders.texts import render_bot_message, validate_texts
 from app.utils.notification_prefs import is_promo_offers_enabled
 from app.utils.timezone import get_local_timezone
@@ -80,7 +80,14 @@ def bot_delivery(delivery_service) -> Deliver:
 
 
 def _candidates_query(
-    reminder, conditions, *, now: datetime, exclude: set[int], limit: int, after_id: int | None = None
+    reminder,
+    conditions,
+    *,
+    now: datetime,
+    exclude: set[int],
+    limit: int,
+    after_id: int | None = None,
+    never_connected_ids: frozenset[int] | None = None,
 ):
     repeat_cutoff = now - timedelta(days=reminder.repeat_every_days)
     blocked_by_own_state = exists().where(
@@ -91,7 +98,11 @@ def _candidates_query(
             and_(UserReminderState.last_sent_at.is_not(None), UserReminderState.last_sent_at > repeat_cutoff),
         ),
     )
-    clauses = [*condition_clauses(conditions, now=now), User.telegram_id.is_not(None), ~blocked_by_own_state]
+    clauses = [
+        *condition_clauses(conditions, now=now, never_connected_ids=never_connected_ids),
+        User.telegram_id.is_not(None),
+        ~blocked_by_own_state,
+    ]
     if settings.USER_REMINDERS_DAILY_LIMIT_ENABLED:
         clauses.append(
             ~exists().where(
@@ -120,6 +131,9 @@ async def run_reminder_pass(
     budget = max(1, int(settings.USER_REMINDERS_MAX_PER_PASS))
     touched: set[int] = set()
     sent = failed = skipped = attempts = 0
+    # Панель спрашиваем один раз на проход и только если какое-то напоминание этого требует.
+    panel_ids: frozenset[int] | None = None
+    panel_asked = False
 
     for reminder in await list_active_reminders(db, CHANNELS_BOT):
         if budget <= 0:
@@ -136,6 +150,16 @@ async def run_reminder_pass(
             # KeyError вылетал бы на каждом кандидате этого напоминания.
             logger.warning('Напоминание с битыми текстами пропущено', reminder_id=reminder.id, error=str(error))
             continue
+        if needs_panel(conditions):
+            if not panel_asked:
+                from app.services.connect_reminder_service import get_never_connected_panel_ids
+
+                panel_ids = await get_never_connected_panel_ids()
+                panel_asked = True
+            if panel_ids is None:
+                # Не знаем, кто подключался, — лучше промолчать, чем написать подключившимся.
+                logger.warning('Напоминание пропущено: панель не ответила', reminder_id=reminder.id)
+                continue
 
         # Порциями по курсору, пока не кончится бюджет или кандидаты: отписанные от
         # промо бюджет не тратят, и одна порция размером в бюджет могла целиком из
@@ -152,7 +176,13 @@ async def run_reminder_pass(
                         (
                             await db.execute(
                                 _candidates_query(
-                                    reminder, conditions, now=now, exclude=touched, limit=budget, after_id=after_id
+                                    reminder,
+                                    conditions,
+                                    now=now,
+                                    exclude=touched,
+                                    limit=budget,
+                                    after_id=after_id,
+                                    never_connected_ids=panel_ids,
                                 )
                             )
                         ).scalars()

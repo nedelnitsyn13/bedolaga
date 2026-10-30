@@ -3,6 +3,12 @@
 Бот отбирает кандидатов одним SQL-запросом (``condition_clauses``), кабинет проверяет
 одного человека (``matches``). Правила одни; расхождение ловит тест с общим набором
 сценариев (tests/services/user_reminders/test_conditions.py).
+
+Условие «ни разу не подключался» знает только панель (``firstConnectedAt``), в базе
+бота его нет. Поэтому оба входа принимают множество неподключавшихся аккаунтов панели
+(``never_connected_ids``) — его добывает вызывающий, один раз на проход. ``None`` —
+панель не ответила: такое условие тогда не выполняется ни для кого, напоминание
+молчит, а не пишет подключившимся.
 """
 
 from __future__ import annotations
@@ -12,7 +18,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
-from sqlalchemy import ColumnElement, String, and_, case, exists, func, literal, not_, or_
+from sqlalchemy import ColumnElement, String, and_, case, exists, false, func, literal, not_, or_
 
 from app.database.auth_methods import OAUTH_PROVIDER_COLUMNS, compute_auth_methods
 from app.database.constants import ALIVE_SUBSCRIPTION_STATUSES
@@ -53,10 +59,17 @@ class ReminderConditions(BaseModel):
     subscription: SubscriptionCondition | None = None
     registered_days_min: int | None = Field(None, ge=0, le=3650)
     inactive_days_min: int | None = Field(None, ge=0, le=3650)
+    # Живая подписка, чей аккаунт в панели ни разу не подключался к VPN.
+    never_connected: bool | None = None
 
 
 def parse_conditions(raw: dict | None) -> ReminderConditions:
     return ReminderConditions.model_validate(raw or {})
+
+
+def needs_panel(conditions: ReminderConditions) -> bool:
+    """Нужно ли спрашивать панель, чтобы проверить эти условия."""
+    return bool(conditions.never_connected)
 
 
 # --- SQL -------------------------------------------------------------------------------
@@ -113,7 +126,24 @@ def _subscription_sql(condition: SubscriptionCondition, now: datetime) -> Column
     return and_(no_alive, not_(_had_sub()))  # none
 
 
-def condition_clauses(conditions: ReminderConditions, *, now: datetime) -> list[ColumnElement[bool]]:
+def _never_connected_sql(panel_ids: frozenset[int] | None, now: datetime) -> ColumnElement[bool]:
+    # Аккаунт подписки в панели — Subscription.remnawave_id; у старых одиночных его нет,
+    # тогда — User.remnawave_id. Telegram ID не годится: им совпадает и другой,
+    # подключавшийся аккаунт того же человека.
+    if not panel_ids:
+        return false()
+    return exists().where(
+        _alive_sub(now),
+        or_(
+            Subscription.remnawave_id.in_(panel_ids),
+            and_(Subscription.remnawave_id.is_(None), User.remnawave_id.in_(panel_ids)),
+        ),
+    )
+
+
+def condition_clauses(
+    conditions: ReminderConditions, *, now: datetime, never_connected_ids: frozenset[int] | None = None
+) -> list[ColumnElement[bool]]:
     clauses: list[ColumnElement[bool]] = [or_(User.status.is_(None), User.status.not_in(_EXCLUDED_STATUSES))]
     if conditions.auth:
         clauses.append(_auth_sql(conditions.auth))
@@ -130,6 +160,8 @@ def condition_clauses(conditions: ReminderConditions, *, now: datetime) -> list[
                 or_(User.cabinet_last_login.is_(None), User.cabinet_last_login <= cutoff),
             )
         )
+    if conditions.never_connected:
+        clauses.append(_never_connected_sql(never_connected_ids, now))
     return clauses
 
 
@@ -178,7 +210,26 @@ def _subscription_matches(user, subscriptions: Sequence, condition: Subscription
     return not alive and not had  # none
 
 
-def matches(user, subscriptions: Sequence, conditions: ReminderConditions, *, now: datetime) -> bool:
+def _never_connected_matches(user, subscriptions: Sequence, panel_ids: frozenset[int] | None, now: datetime) -> bool:
+    if not panel_ids:
+        return False
+    for subscription in subscriptions:
+        if not _is_alive(subscription, now):
+            continue
+        panel_id = subscription.remnawave_id if subscription.remnawave_id is not None else user.remnawave_id
+        if panel_id in panel_ids:
+            return True
+    return False
+
+
+def matches(
+    user,
+    subscriptions: Sequence,
+    conditions: ReminderConditions,
+    *,
+    now: datetime,
+    never_connected_ids: frozenset[int] | None = None,
+) -> bool:
     if user.status in _EXCLUDED_STATUSES:
         return False
     if conditions.auth and not _auth_matches(user, conditions.auth):
@@ -194,4 +245,6 @@ def matches(user, subscriptions: Sequence, conditions: ReminderConditions, *, no
         seen = [moment for moment in (_aware(user.last_activity), _aware(user.cabinet_last_login)) if moment]
         if seen and max(seen) > cutoff:
             return False
+    if conditions.never_connected and not _never_connected_matches(user, subscriptions, never_connected_ids, now):
+        return False
     return True
