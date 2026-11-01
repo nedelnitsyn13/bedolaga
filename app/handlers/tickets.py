@@ -299,7 +299,11 @@ async def handle_ticket_message_input(message: types.Message, state: FSMContext,
         try:
             from app.services.support_hours import eta_line, support_status
 
-            creation_text += '\n' + eta_line(texts, await support_status(db), db_user.language)
+            # Savepoint: упавший запрос статистики иначе оставил бы транзакцию PostgreSQL
+            # «aborted», и уведомление админов о тикете ниже упало бы следом.
+            async with db.begin_nested():
+                current_status = await support_status(db)
+            creation_text += '\n' + eta_line(texts, current_status, db_user.language)
         except Exception as eta_error:
             logger.warning('Не удалось оценить время ответа на тикет', error=str(eta_error))
 
