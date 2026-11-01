@@ -20,6 +20,7 @@ from app.utils.timezone import format_local_datetime
 
 from ..dependencies import get_cabinet_db, get_current_cabinet_user
 from ..schemas.tickets import (
+    SupportStatusResponse,
     TicketCreateRequest,
     TicketCsatRequest,
     TicketDetailResponse,
@@ -127,6 +128,40 @@ def _ticket_to_response(ticket: Ticket, user: User, include_last_message: bool =
         messages_count=messages_count,
         last_message=last_message,
         **_csat_fields(ticket, user),
+    )
+
+
+async def _expected_reply_at(db: AsyncSession, ticket: Ticket) -> datetime | None:
+    """Тикет ждёт ответа поддержки — когда примерно ответят; иначе None."""
+    if ticket.status != 'open':
+        return None
+    from app.services.support_hours import expected_reply_at
+
+    try:
+        return await expected_reply_at(db, ticket.updated_at or ticket.created_at)
+    except Exception as error:
+        # Оценка — подсказка, а не повод ронять экран тикета.
+        logger.warning('Не удалось оценить время ответа', ticket_id=ticket.id, error=str(error))
+        return None
+
+
+@router.get('/support-status', response_model=SupportStatusResponse)
+async def get_support_status(
+    user: User = Depends(get_current_cabinet_user),
+    db: AsyncSession = Depends(get_cabinet_db),
+) -> SupportStatusResponse:
+    """Часы работы поддержки и примерное время ответа: тикет можно оставить всегда."""
+    from app.services.support_hours import support_status
+
+    current = await support_status(db)
+    return SupportStatusResponse(
+        hours_enabled=current.hours.enabled,
+        open_now=current.open_now,
+        start_hour=current.hours.start,
+        end_hour=current.hours.end,
+        timezone=getattr(current.hours.tz, 'key', 'UTC'),
+        reply_minutes=current.reply_minutes,
+        opens_at=current.opens_at,
     )
 
 
@@ -284,6 +319,7 @@ async def create_ticket(
         closed_at=ticket.closed_at,
         is_reply_blocked=ticket.is_reply_blocked if hasattr(ticket, 'is_reply_blocked') else False,
         messages=messages,
+        expected_reply_at=await _expected_reply_at(db, ticket),
         **_csat_fields(ticket, user),
     )
 
@@ -323,6 +359,7 @@ async def get_ticket(
         closed_at=ticket.closed_at,
         is_reply_blocked=ticket.is_reply_blocked if hasattr(ticket, 'is_reply_blocked') else False,
         messages=messages_response,
+        expected_reply_at=await _expected_reply_at(db, ticket),
         **_csat_fields(ticket, user),
     )
 

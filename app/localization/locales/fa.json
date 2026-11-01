@@ -2348,5 +2348,11 @@
   "TOPUP_RETRY_TOO_LOW": "❌ حداقل مبلغ شارژ: {minimum} روبل.\n\nبرای ادامه، مبلغ جدید شارژ را بین {minimum} روبل و {maximum} روبل در یک پیام برای ربات ارسال کنید.",
   "TOPUP_RETRY_TOO_HIGH": "❌ حداکثر مبلغ شارژ: {maximum} روبل.\n\nبرای ادامه، مبلغ جدید شارژ را بین {minimum} روبل و {maximum} روبل در یک پیام برای ربات ارسال کنید.",
   "TOPUP_RETRY_EXAMPLE": "برای مثال، ارسال کنید: {amount}",
-  "TOPUP_RETRY_NO_RANGE": "❌ این روش مبلغ مجازی برای ورود دستی ندارد (حداقل {minimum} روبل، حداکثر {maximum} روبل). روش پرداخت دیگری انتخاب کنید."
+  "TOPUP_RETRY_NO_RANGE": "❌ این روش مبلغ مجازی برای ورود دستی ندارد (حداقل {minimum} روبل، حداکثر {maximum} روبل). روش پرداخت دیگری انتخاب کنید.",
+  "SUPPORT_HOURS_LINE": "🕙 ساعات کاری پشتیبانی: {start} تا {end} ({tz})",
+  "SUPPORT_CLOSED_NOW": "الان آنلاین نیستیم — می‌توانید تیکت ثبت کنید، بعد از {start} پاسخ می‌دهیم.",
+  "TICKET_ETA_OPEN": "⏱ حدود {eta} دیگر پاسخ می‌دهیم.",
+  "TICKET_ETA_CLOSED": "⏱ پشتیبانی الان فعال نیست. بعد از {start} ({tz}) پاسخ می‌دهیم، معمولاً ظرف {eta}.",
+  "SUPPORT_ETA_MINUTES": "~{minutes} دقیقه",
+  "SUPPORT_ETA_HOURS": "~{hours} ساعت"
 }

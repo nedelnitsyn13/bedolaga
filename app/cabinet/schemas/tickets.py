@@ -104,9 +104,23 @@ class TicketDetailResponse(BaseModel):
     messages: list[TicketMessageResponse] = []
     csat_available: bool = False
     csat_rating: int | None = None
+    # Ждёт ответа поддержки — когда примерно ответят (по статистике и часам работы).
+    expected_reply_at: datetime | None = None
 
     class Config:
         from_attributes = True
+
+
+class SupportStatusResponse(BaseModel):
+    """Часы работы поддержки и типичное время ответа — для экрана поддержки и формы тикета."""
+
+    hours_enabled: bool
+    open_now: bool
+    start_hour: int
+    end_hour: int
+    timezone: str  # IANA, например Europe/Moscow
+    reply_minutes: int  # типичное время ответа в рабочих минутах, уже округлено
+    opens_at: datetime | None = None  # когда откроемся, если сейчас закрыто
 
 
 class TicketListResponse(BaseModel):

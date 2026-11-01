@@ -2348,5 +2348,11 @@
   "TOPUP_RETRY_TOO_LOW": "❌ 最低充值金额：{minimum} 卢布。\n\n如需继续，请向机器人发送一条消息，输入 {minimum} 至 {maximum} 卢布之间的充值金额。",
   "TOPUP_RETRY_TOO_HIGH": "❌ 最高充值金额：{maximum} 卢布。\n\n如需继续，请向机器人发送一条消息，输入 {minimum} 至 {maximum} 卢布之间的充值金额。",
   "TOPUP_RETRY_EXAMPLE": "例如，发送：{amount}",
-  "TOPUP_RETRY_NO_RANGE": "❌ 此方式没有可手动输入的有效金额（最低 {minimum} 卢布，最高 {maximum} 卢布）。请选择其他支付方式。"
+  "TOPUP_RETRY_NO_RANGE": "❌ 此方式没有可手动输入的有效金额（最低 {minimum} 卢布，最高 {maximum} 卢布）。请选择其他支付方式。",
+  "SUPPORT_HOURS_LINE": "🕙 客服工作时间：{start}–{end}（{tz}）",
+  "SUPPORT_CLOSED_NOW": "我们现在不在线——您仍可提交工单，我们将在 {start} 之后回复。",
+  "TICKET_ETA_OPEN": "⏱ 我们将在约 {eta} 内回复。",
+  "TICKET_ETA_CLOSED": "⏱ 客服目前不在线。我们将在 {start}（{tz}）之后回复，通常在 {eta} 内。",
+  "SUPPORT_ETA_MINUTES": "约 {minutes} 分钟",
+  "SUPPORT_ETA_HOURS": "约 {hours} 小时"
 }

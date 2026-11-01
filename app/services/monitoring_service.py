@@ -3229,6 +3229,15 @@ class MonitoringService:
                 sla_minutes = max(1, int(getattr(settings, 'SUPPORT_TICKET_SLA_MINUTES', 60)))
             cooldown_minutes = max(1, int(getattr(settings, 'SUPPORT_TICKET_SLA_REMINDER_COOLDOWN_MINUTES', 30)))
             now = datetime.now(UTC)
+
+            # Часы работы поддержки: ночью не будим админов, а SLA меряем рабочими
+            # минутами — тикет, пришедший в 3 ночи, не «просрочен» к открытию.
+            from app.services.support_hours import current_hours, is_open, working_minutes_between
+
+            hours = current_hours()
+            if not is_open(hours, now):
+                return
+            # Рабочих минут не больше, чем обычных: выборка по обычным — надмножество.
             stale_before = now - timedelta(minutes=sla_minutes)
             cooldown_before = now - timedelta(minutes=cooldown_minutes)
 
@@ -3245,7 +3254,11 @@ class MonitoringService:
                     )
                 )
             )
-            tickets = result.scalars().all()
+            tickets = [
+                ticket
+                for ticket in result.scalars().all()
+                if working_minutes_between(hours, ticket.updated_at, now) >= sla_minutes
+            ]
             if not tickets:
                 return
 
@@ -3256,7 +3269,7 @@ class MonitoringService:
 
             for ticket in tickets:
                 try:
-                    waited_minutes = max(0, int((now - ticket.updated_at).total_seconds() // 60))
+                    waited_minutes = max(0, int(working_minutes_between(hours, ticket.updated_at, now)))
                     title = (ticket.title or '').strip()
                     if len(title) > 60:
                         title = title[:57] + '...'

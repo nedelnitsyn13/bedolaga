@@ -2348,5 +2348,11 @@
   "TOPUP_RETRY_TOO_LOW": "❌ Minimum top-up amount: {minimum} RUB.\n\nTo continue, send the bot a new top-up amount between {minimum} RUB and {maximum} RUB.",
   "TOPUP_RETRY_TOO_HIGH": "❌ Maximum top-up amount: {maximum} RUB.\n\nTo continue, send the bot a new top-up amount between {minimum} RUB and {maximum} RUB.",
   "TOPUP_RETRY_EXAMPLE": "For example, send: {amount}",
-  "TOPUP_RETRY_NO_RANGE": "❌ This method has no valid amount for manual input (minimum {minimum} RUB, maximum {maximum} RUB). Choose another payment method."
+  "TOPUP_RETRY_NO_RANGE": "❌ This method has no valid amount for manual input (minimum {minimum} RUB, maximum {maximum} RUB). Choose another payment method.",
+  "SUPPORT_HOURS_LINE": "🕙 Support hours: {start}–{end} ({tz})",
+  "SUPPORT_CLOSED_NOW": "We're offline right now — you can still open a ticket, we'll reply after {start}.",
+  "TICKET_ETA_OPEN": "⏱ We'll reply in about {eta}.",
+  "TICKET_ETA_CLOSED": "⏱ Support is offline right now. We'll reply after {start} ({tz}), usually within {eta}.",
+  "SUPPORT_ETA_MINUTES": "~{minutes} min",
+  "SUPPORT_ETA_HOURS": "~{hours} h"
 }
