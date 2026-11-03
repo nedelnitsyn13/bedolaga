@@ -235,6 +235,8 @@ class Settings(BaseSettings):
 
     REMNAWAVE_API_URL: str | None = None
     REMNAWAVE_API_KEY: str | None = None
+    # Calendar of the panel process, independent of the bot UI timezone.
+    REMNAWAVE_TRAFFIC_RESET_TIMEZONE: str = 'UTC'
     REMNAWAVE_SECRET_KEY: str | None = None
 
     # HTTP-таймауты запросов к панели RemnaWave (секунды). Self-hosted панели
@@ -1130,6 +1132,7 @@ class Settings(BaseSettings):
     DONUT_SBP_QR_DISPLAY_NAME: str = 'СБП QR (Donut)'
 
     # cisPay (H2H merchant API, api.cispay.app)
+    CISPAY_RECURRENT_ENABLED: bool = False
     CISPAY_ENABLED: bool = False
     CISPAY_SHOP_ID: str | None = None  # X-Shop-ID — UUID магазина
     CISPAY_API_KEY: str | None = None  # X-Api-Key — секретный ключ (cis_sec_...)
@@ -4683,7 +4686,7 @@ class Settings(BaseSettings):
 
     model_config = {'env_file': '.env', 'env_file_encoding': 'utf-8', 'extra': 'ignore'}
 
-    @field_validator('TIMEZONE')
+    @field_validator('TIMEZONE', 'REMNAWAVE_TRAFFIC_RESET_TIMEZONE')
     @classmethod
     def validate_timezone(cls, value: str) -> str:
         try:
