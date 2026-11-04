@@ -21,13 +21,18 @@ from app.states import AdminStates
 from app.utils.decorators import admin_required, error_handler
 
 
-def format_limited_squad_summary(tariff: Tariff) -> str:
+def format_limited_squad_summary(tariff: Tariff, language: str = 'ru') -> str:
     """Строка для карточки тарифа."""
+    texts = get_texts(language)
     if not getattr(tariff, 'limited_traffic_enabled', False):
-        return 'выключен'
+        return texts.t('ADMIN_TARIFF_LIMITED_SQUAD_OFF', 'выключен')
     squads = getattr(tariff, 'limited_squad_uuids', None) or []
     base_gb = getattr(tariff, 'limited_base_traffic_gb', 0) or 0
-    return f'{len(squads)} серв., база {base_gb} ГБ' if squads else f'нет серверов, база {base_gb} ГБ'
+    if squads:
+        return texts.t('ADMIN_TARIFF_LIMITED_SQUAD_SUMMARY', '{count} серв., база {gb} ГБ').format(
+            count=len(squads), gb=base_gb
+        )
+    return texts.t('ADMIN_TARIFF_LIMITED_SQUAD_NO_SERVERS', 'нет серверов, база {gb} ГБ').format(gb=base_gb)
 
 
 def render_limited_squad_screen(tariff: Tariff) -> str:

@@ -31,6 +31,8 @@ TABLES = [
     Base.metadata.tables['promo_groups'],
     Base.metadata.tables['tariff_promo_groups'],
     Base.metadata.tables['user_promo_groups'],
+    # Смена тарифа (с 5.2.0) переносит докупленный трафик и сверяет учёт трафика.
+    Base.metadata.tables['traffic_purchases'],
 ]
 
 

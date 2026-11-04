@@ -17,6 +17,7 @@ from app.external.remnawave_api import RemnaWaveAPIError, is_user_not_found_erro
 from app.services.remnawave_service import RemnaWaveService
 from app.states import RegistrationStates
 from app.utils.check_reg_process import is_registration_process
+from app.utils.support_access import is_support_handler
 from app.utils.validators import sanitize_telegram_name
 
 
@@ -87,6 +88,14 @@ class AuthMiddleware(BaseMiddleware):
         async with AsyncSessionLocal() as db:
             try:
                 db_user = await get_user_by_telegram_id(db, user.id)
+
+                if is_support_handler(event, data, payment_only=True):
+                    # Read-only help is available to unknown/deleted/blocked payers.
+                    # Do not register or reactivate the account, or touch subscriptions.
+                    data['db'] = db
+                    data['db_user'] = db_user
+                    data['is_admin'] = False
+                    return await handler(event, data)
 
                 if not db_user:
                     state: FSMContext = data.get('state')
