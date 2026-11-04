@@ -80,7 +80,7 @@ def is_display_option_enabled(method_id: str, option: str | None = None) -> bool
 
 
 # Mapping: method_id -> (default_display_name_func, is_configured_func, default_min, default_max, has_sub_options)
-def _get_method_defaults() -> dict:
+def _get_method_defaults(*, include_disabled_sub_options: bool = False) -> dict:
     """Get default configuration for each payment method based on env vars."""
     return {
         'telegram_stars': {
@@ -299,8 +299,17 @@ def _get_method_defaults() -> dict:
                     'id': method,
                     'name': {'card': 'Карта', 'sbp': 'СБП', 'crypto': 'Криптовалюта'}[method],
                     **({'min_amount_kopeks': 5000} if method == 'card' else {}),
+                    **(
+                        {'is_provider_enabled': method in settings.get_cispay_methods()}
+                        if include_disabled_sub_options
+                        else {}
+                    ),
                 }
-                for method in settings.get_cispay_methods()
+                # Admins need the full catalogue to discover disabled methods.
+                # Customer lists and checkout still use enabled methods only.
+                for method in (
+                    ('card', 'sbp', 'crypto') if include_disabled_sub_options else settings.get_cispay_methods()
+                )
             ],
         },
         'paritypay': {
