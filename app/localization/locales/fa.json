@@ -2349,6 +2349,12 @@
   "TOPUP_RETRY_TOO_HIGH": "❌ حداکثر مبلغ شارژ: {maximum} روبل.\n\nبرای ادامه، مبلغ جدید شارژ را بین {minimum} روبل و {maximum} روبل در یک پیام برای ربات ارسال کنید.",
   "TOPUP_RETRY_EXAMPLE": "برای مثال، ارسال کنید: {amount}",
   "TOPUP_RETRY_NO_RANGE": "❌ این روش مبلغ مجازی برای ورود دستی ندارد (حداقل {minimum} روبل، حداکثر {maximum} روبل). روش پرداخت دیگری انتخاب کنید.",
+  "SUPPORT_HOURS_LINE": "🕙 ساعات کاری پشتیبانی: {start} تا {end} ({tz})",
+  "SUPPORT_CLOSED_NOW": "الان آنلاین نیستیم — می‌توانید تیکت ثبت کنید، بعد از {start} پاسخ می‌دهیم.",
+  "TICKET_ETA_OPEN": "⏱ حدود {eta} دیگر پاسخ می‌دهیم.",
+  "TICKET_ETA_CLOSED": "⏱ پشتیبانی الان فعال نیست. بعد از {start} ({tz}) پاسخ می‌دهیم، معمولاً ظرف {eta}.",
+  "SUPPORT_ETA_MINUTES": "~{minutes} دقیقه",
+  "SUPPORT_ETA_HOURS": "~{hours} ساعت",
   "TARIFF_PURCHASE_DEVICE_SELECTION_CHANGED": "این گزینه در دسترس نیست یا شرایط تغییر کرده است. برای مشاهده قیمت فعلی دوباره طرح را انتخاب کنید.",
   "TARIFF_PURCHASE_DEVICE_TOPUP": "برای خرید به {amount} دیگر نیاز دارید. حساب را شارژ کنید؛ مدت و دستگاه‌های انتخابی حفظ می‌شوند.",
   "TARIFF_PURCHASE_DEVICES_BALANCE_ONLY": "برای دستگاه‌های اضافی از موجودی حساب پرداخت کنید. در صورت نیاز ابتدا حساب را شارژ کنید.",
@@ -7082,5 +7088,11 @@
   "STARS_TOPUP_DESCRIPTION": "شارژ موجودی به مبلغ {amount}",
   "ADMIN_TARIFF_LIMITED_SQUAD_OFF": "خاموش",
   "ADMIN_TARIFF_LIMITED_SQUAD_SUMMARY": "{count} سرور، پایه {gb} گیگابایت",
-  "ADMIN_TARIFF_LIMITED_SQUAD_NO_SERVERS": "بدون سرور، پایه {gb} گیگابایت"
+  "ADMIN_TARIFF_LIMITED_SQUAD_NO_SERVERS": "بدون سرور، پایه {gb} گیگابایت",
+  "SETTINGS_HINT_SUPPORT_HOURS_ENABLED_DESCRIPTION": "ساعات کاری پشتیبانی. تیکت همیشه قابل ثبت است؛ خارج از ساعات، مشتری می‌بیند کی پاسخ می‌گیرد و یادآوری‌های SLA ارسال نمی‌شوند و زمان غیرکاری را حساب نمی‌کنند.",
+  "SETTINGS_HINT_SUPPORT_HOURS_ENABLED_FORMAT": "مقدار بولی.",
+  "SETTINGS_HINT_SUPPORT_HOURS_START_DESCRIPTION": "ساعت شروع کار پشتیبانی (بر اساس TIMEZONE ربات).",
+  "SETTINGS_HINT_SUPPORT_HOURS_START_FORMAT": "عدد صحیح از ۰ تا ۲۳.",
+  "SETTINGS_HINT_SUPPORT_HOURS_END_DESCRIPTION": "ساعت پایان کار پشتیبانی. کمتر از شروع یعنی شیفت شبانه.",
+  "SETTINGS_HINT_SUPPORT_HOURS_END_FORMAT": "عدد صحیح از ۱ تا ۲۴."
 }

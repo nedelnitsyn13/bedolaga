@@ -2349,6 +2349,12 @@
   "TOPUP_RETRY_TOO_HIGH": "❌ 最高充值金额：{maximum} 卢布。\n\n如需继续，请向机器人发送一条消息，输入 {minimum} 至 {maximum} 卢布之间的充值金额。",
   "TOPUP_RETRY_EXAMPLE": "例如，发送：{amount}",
   "TOPUP_RETRY_NO_RANGE": "❌ 此方式没有可手动输入的有效金额（最低 {minimum} 卢布，最高 {maximum} 卢布）。请选择其他支付方式。",
+  "SUPPORT_HOURS_LINE": "🕙 客服工作时间：{start}–{end}（{tz}）",
+  "SUPPORT_CLOSED_NOW": "我们现在不在线——您仍可提交工单，我们将在 {start} 之后回复。",
+  "TICKET_ETA_OPEN": "⏱ 我们将在约 {eta} 内回复。",
+  "TICKET_ETA_CLOSED": "⏱ 客服目前不在线。我们将在 {start}（{tz}）之后回复，通常在 {eta} 内。",
+  "SUPPORT_ETA_MINUTES": "约 {minutes} 分钟",
+  "SUPPORT_ETA_HOURS": "约 {hours} 小时",
   "TARIFF_PURCHASE_DEVICE_SELECTION_CHANGED": "此选项不可用或条件已更改。请重新选择套餐以查看当前价格。",
   "TARIFF_PURCHASE_DEVICE_TOPUP": "还差 {amount}。请充值余额，所选期限和设备数量将保留。",
   "TARIFF_PURCHASE_DEVICES_BALANCE_ONLY": "添加额外设备时请使用余额付款。如有需要，请先充值。",
@@ -7082,5 +7088,11 @@
   "STARS_TOPUP_DESCRIPTION": "充值 {amount}",
   "ADMIN_TARIFF_LIMITED_SQUAD_OFF": "已关闭",
   "ADMIN_TARIFF_LIMITED_SQUAD_SUMMARY": "{count} 台服务器，基础 {gb} GB",
-  "ADMIN_TARIFF_LIMITED_SQUAD_NO_SERVERS": "无服务器，基础 {gb} GB"
+  "ADMIN_TARIFF_LIMITED_SQUAD_NO_SERVERS": "无服务器，基础 {gb} GB",
+  "SETTINGS_HINT_SUPPORT_HOURS_ENABLED_DESCRIPTION": "客服工作时间。工单随时可以提交；非工作时间客户会看到预计回复时间，SLA 提醒不会发送，也不计算非工作时间。",
+  "SETTINGS_HINT_SUPPORT_HOURS_ENABLED_FORMAT": "布尔值。",
+  "SETTINGS_HINT_SUPPORT_HOURS_START_DESCRIPTION": "客服开始工作的小时（按机器人 TIMEZONE）。",
+  "SETTINGS_HINT_SUPPORT_HOURS_START_FORMAT": "0 到 23 的整数。",
+  "SETTINGS_HINT_SUPPORT_HOURS_END_DESCRIPTION": "客服结束工作的小时。小于开始时间表示跨夜班次。",
+  "SETTINGS_HINT_SUPPORT_HOURS_END_FORMAT": "1 到 24 的整数。"
 }

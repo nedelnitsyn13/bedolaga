@@ -147,6 +147,10 @@ class TicketSettingsResponse(BaseModel):
     sla_minutes: int
     sla_check_interval_seconds: int
     sla_reminder_cooldown_minutes: int
+    # Часы работы поддержки (TIMEZONE бота): вне них клиенту пишут «ответим после START».
+    support_hours_enabled: bool = False
+    support_hours_start: int = 10
+    support_hours_end: int = 22
     support_system_mode: str  # tickets, contact, both
     # Cabinet notifications settings
     cabinet_user_notifications_enabled: bool = True
@@ -161,6 +165,9 @@ TICKET_SETTING_KEYS: dict[str, str] = {
     'sla_minutes': 'SUPPORT_TICKET_SLA_MINUTES',
     'sla_check_interval_seconds': 'SUPPORT_TICKET_SLA_CHECK_INTERVAL_SECONDS',
     'sla_reminder_cooldown_minutes': 'SUPPORT_TICKET_SLA_REMINDER_COOLDOWN_MINUTES',
+    'support_hours_enabled': 'SUPPORT_HOURS_ENABLED',
+    'support_hours_start': 'SUPPORT_HOURS_START',
+    'support_hours_end': 'SUPPORT_HOURS_END',
 }
 
 
@@ -173,6 +180,9 @@ class TicketSettingsUpdateRequest(BaseModel):
     sla_reminder_cooldown_minutes: int | None = Field(
         None, ge=1, le=120, description='Reminder cooldown (1-120 minutes)'
     )
+    support_hours_enabled: bool | None = None
+    support_hours_start: int | None = Field(None, ge=0, le=23, description='Час начала работы поддержки (0-23)')
+    support_hours_end: int | None = Field(None, ge=1, le=24, description='Час окончания работы поддержки (1-24)')
     support_system_mode: str | None = Field(None, description='Support mode: tickets, contact, both')
     # Cabinet notifications settings
     cabinet_user_notifications_enabled: bool | None = Field(None, description='Enable user notifications in cabinet')
@@ -294,6 +304,9 @@ async def get_ticket_settings(
         sla_minutes=settings.SUPPORT_TICKET_SLA_MINUTES,
         sla_check_interval_seconds=settings.SUPPORT_TICKET_SLA_CHECK_INTERVAL_SECONDS,
         sla_reminder_cooldown_minutes=settings.SUPPORT_TICKET_SLA_REMINDER_COOLDOWN_MINUTES,
+        support_hours_enabled=settings.SUPPORT_HOURS_ENABLED,
+        support_hours_start=settings.SUPPORT_HOURS_START,
+        support_hours_end=settings.SUPPORT_HOURS_END,
         support_system_mode=SupportSettingsService.get_system_mode(),
         cabinet_user_notifications_enabled=SupportSettingsService.get_cabinet_user_notifications_enabled(),
         cabinet_admin_notifications_enabled=SupportSettingsService.get_cabinet_admin_notifications_enabled(),
@@ -340,6 +353,9 @@ async def update_ticket_settings(
         sla_minutes=settings.SUPPORT_TICKET_SLA_MINUTES,
         sla_check_interval_seconds=settings.SUPPORT_TICKET_SLA_CHECK_INTERVAL_SECONDS,
         sla_reminder_cooldown_minutes=settings.SUPPORT_TICKET_SLA_REMINDER_COOLDOWN_MINUTES,
+        support_hours_enabled=settings.SUPPORT_HOURS_ENABLED,
+        support_hours_start=settings.SUPPORT_HOURS_START,
+        support_hours_end=settings.SUPPORT_HOURS_END,
         support_system_mode=SupportSettingsService.get_system_mode(),
         cabinet_user_notifications_enabled=SupportSettingsService.get_cabinet_user_notifications_enabled(),
         cabinet_admin_notifications_enabled=SupportSettingsService.get_cabinet_admin_notifications_enabled(),

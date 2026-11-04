@@ -327,6 +327,17 @@ async def handle_ticket_message_input(message: types.Message, state: FSMContext,
             f'📅 Создан: {format_local_datetime(ticket.created_at, "%d.%m.%Y %H:%M")}\n'
             + (f'📎 Вложение: {"видео" if media_type == "video" else "фото"}\n' if media_file_id else '')
         )
+        # Когда примерно ответят: по статистике ответов и часам работы поддержки.
+        try:
+            from app.services.support_hours import eta_line, support_status
+
+            # Savepoint: упавший запрос статистики иначе оставил бы транзакцию PostgreSQL
+            # «aborted», и уведомление админов о тикете ниже упало бы следом.
+            async with db.begin_nested():
+                current_status = await support_status(db)
+            creation_text += '\n' + eta_line(texts, current_status, db_user.language)
+        except Exception as eta_error:
+            logger.warning('Не удалось оценить время ответа на тикет', error=str(eta_error))
 
         data_prompt = await state.get_data()
         prompt_chat_id = data_prompt.get('prompt_chat_id')

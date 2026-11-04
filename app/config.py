@@ -110,6 +110,12 @@ class Settings(BaseSettings):
     SUPPORT_TICKET_SLA_MINUTES: int = 60
     SUPPORT_TICKET_SLA_CHECK_INTERVAL_SECONDS: int = 300
     SUPPORT_TICKET_SLA_REMINDER_COOLDOWN_MINUTES: int = 30
+    # Часы работы поддержки (TIMEZONE бота). Тикет оставить можно всегда; вне часов человеку
+    # пишут «ответим после START», а SLA считает только рабочее время. END меньше START — смена
+    # через полночь; START == END — круглосуточно.
+    SUPPORT_HOURS_ENABLED: bool = False
+    SUPPORT_HOURS_START: int = 10  # 0–23
+    SUPPORT_HOURS_END: int = 22  # 1–24
     # Настройки поддержки из админки бота и кабинета. Хранятся в базе (system_settings), а не в файле.
     SUPPORT_ADMIN_TICKET_NOTIFICATIONS_ENABLED: bool = True
     SUPPORT_USER_TICKET_NOTIFICATIONS_ENABLED: bool = True

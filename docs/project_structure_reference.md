@@ -405,7 +405,7 @@
   Функции: `get_user_notifications` — Get ticket notifications for current user., `get_user_unread_count` — Get unread notifications count for current user., `mark_notification_as_read` — Mark a notification as read., `mark_all_notifications_as_read` — Mark all notifications as read for current user., `mark_ticket_notifications_as_read` — Mark all notifications for a specific ticket as read., `get_admin_notifications` — Get ticket notifications for admins., `get_admin_unread_count` — Get unread notifications count for admins., `mark_admin_notification_as_read` — Mark an admin notification as read., `mark_all_admin_notifications_as_read` — Mark all admin notifications as read., `mark_admin_ticket_notifications_as_read` — Mark all admin notifications for a specific ticket as read.
 - `app/cabinet/routes/tickets.py` — Python-модуль
   Классы: нет
-  Функции: `get_tickets` — Get user's support tickets., `create_ticket` — Create a new support ticket., `get_ticket` — Get ticket with all messages., `add_ticket_message` — Add message to existing ticket., `rate_ticket` — Оценить работу поддержки по закрытому тикету (один раз).
+  Функции: `get_support_status` — Часы работы поддержки и примерное время ответа: тикет можно оставить всегда., `get_tickets` — Get user's support tickets., `create_ticket` — Create a new support ticket., `get_ticket` — Get ticket with all messages., `add_ticket_message` — Add message to existing ticket., `rate_ticket` — Оценить работу поддержки по закрытому тикету (один раз).
 - `app/cabinet/routes/unsubscribe.py` — Python-модуль
   Классы: нет
   Функции: `unsubscribe_page` — Ничего не меняет — только отдаёт самоотправляющуюся форму., `unsubscribe_one_click` — Единственное место, где отписка применяется.
@@ -554,7 +554,7 @@
   Классы: `PeriodPrice` (1 методов), `ServerTrafficLimit`, `ServerInfo`, `PromoGroupInfo`, `TariffListItem`, `TariffListResponse`, `TariffDetailResponse`, `ExternalSquadInfoResponse`, `TariffCreateRequest` (1 методов), `TariffUpdateRequest` (1 методов), `TariffSortOrderRequest`, `TariffToggleResponse`, `TariffTrialResponse`, `TariffStatsResponse`, `SyncSquadsResponse`
   Функции: нет
 - `app/cabinet/schemas/tickets.py` — Python-модуль
-  Классы: `TicketMediaItem` (1 методов), `TicketMessageResponse`, `TicketResponse`, `TicketDetailResponse`, `TicketListResponse`, `TicketCreateRequest` (1 методов), `TicketMessageCreateRequest` (1 методов), `TicketCsatRequest`
+  Классы: `TicketMediaItem` (1 методов), `TicketMessageResponse`, `TicketResponse`, `TicketDetailResponse`, `SupportStatusResponse`, `TicketListResponse`, `TicketCreateRequest` (1 методов), `TicketMessageCreateRequest` (1 методов), `TicketCsatRequest`
   Функции: нет
 - `app/cabinet/schemas/traffic.py` — Python-модуль
   Классы: `TrafficNodeInfo`, `SubscriptionTrafficInfo`, `UserTrafficItem`, `TrafficUsageResponse`, `SubscriptionEnrichmentInfo`, `UserTrafficEnrichment`, `TrafficEnrichmentResponse`, `ExportCsvRequest`, `ExportCsvResponse`
@@ -1888,6 +1888,9 @@
 - `app/services/subscription_service.py` — Python-модуль
   Классы: `PropagateSquadsResult`, `SubscriptionReissueResult`, `SubscriptionService` (40 методов)
   Функции: `reset_subscription_with_panel` — Обнулить подписку «как будто не оформляли» и снять доступ в панели RemnaWave,
+- `app/services/support_hours.py` — Python-модуль
+  Классы: `SupportHours` (1 методов), `SupportStatus`
+  Функции: `current_hours`, `is_open`, `next_open` — Ближайший момент, когда поддержка на связи: ``now``, если уже открыто., `working_minutes_between`, `add_working_minutes` — Момент, когда от ``start`` пройдёт ``minutes`` рабочих минут., `typical_reply_minutes` — Медиана рабочих минут до первого ответа поддержки за 30 дней; мало данных — порог SLA., `round_estimate` — По-человечески: до часа — кратно 5 минутам, до трёх часов — получасам, дальше — часам., `support_status`, `expected_reply_at` — Когда примерно ответят тикету, ждущему ответа с ``waiting_since``., `timezone_label`, `format_estimate`, `hours_line` — «🕙 Поддержка работает с 10:00 до 22:00 (МСК)» и, если закрыто, «сейчас не на связи»., `eta_line` — Строка для подтверждения тикета: когда примерно ответят.
 - `app/services/support_settings_service.py` — Python-модуль
   Классы: `SupportSettingsService` (25 методов)
   Функции: нет
@@ -5933,6 +5936,9 @@
 - `tests/services/test_subscription_service_sync.py` — Python-модуль
   Классы: нет
   Функции: `test_sync_picks_create_or_update_by_panel_id`, `test_missing_user_falls_to_create_which_reports_it` — Пользователя нет в базе: не падаем, create сам залогирует и вернёт None.
+- `tests/services/test_support_hours.py` — Python-модуль
+  Классы: нет
+  Функции: `msk`, `fresh_cache`, `test_open_and_closed`, `test_disabled_hours_mean_always_open_and_wall_clock`, `test_night_does_not_count_as_waiting`, `test_expected_reply_moves_to_the_morning`, `test_overnight_shift_and_round_the_clock`, `test_estimates_are_rounded_like_a_human_would`, `test_timezone_label`, `test_eta_texts_for_open_and_closed`, `test_typical_reply_is_the_median_in_working_minutes`, `test_too_little_data_falls_back_to_sla`, `test_sla_checker_skips_night_and_counts_working_minutes`, `test_broken_settings_fall_back_to_defaults`, `test_cabinet_support_status_and_ticket_eta`
 - `tests/services/test_support_settings_in_db.py` — Python-модуль
   Классы: нет
   Функции: `isolated_settings`, `test_keys_are_bot_settings_in_the_support_category`, `test_getters_read_live_settings`, `test_ticket_notification_flags_respect_global_switches`, `test_support_info_text_per_language_with_locale_fallback`, `test_setters_persist_to_db_and_apply_live`, `test_moderators_are_added_and_removed_in_the_db`, `test_legacy_file_is_imported_once_and_never_overrides_the_db`, `test_broken_legacy_file_is_left_to_a_human`
