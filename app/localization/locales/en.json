@@ -7088,5 +7088,11 @@
   "STARS_TOPUP_DESCRIPTION": "Balance top-up of {amount}",
   "ADMIN_TARIFF_LIMITED_SQUAD_OFF": "off",
   "ADMIN_TARIFF_LIMITED_SQUAD_SUMMARY": "{count} servers, base {gb} GB",
-  "ADMIN_TARIFF_LIMITED_SQUAD_NO_SERVERS": "no servers, base {gb} GB"
+  "ADMIN_TARIFF_LIMITED_SQUAD_NO_SERVERS": "no servers, base {gb} GB",
+  "SETTINGS_HINT_SUPPORT_HOURS_ENABLED_DESCRIPTION": "Support working hours. Tickets can be opened at any time; outside hours the customer sees when to expect a reply, and SLA reminders neither fire nor count off-hours.",
+  "SETTINGS_HINT_SUPPORT_HOURS_ENABLED_FORMAT": "Boolean value.",
+  "SETTINGS_HINT_SUPPORT_HOURS_START_DESCRIPTION": "Hour when support starts working (bot TIMEZONE).",
+  "SETTINGS_HINT_SUPPORT_HOURS_START_FORMAT": "Integer from 0 to 23.",
+  "SETTINGS_HINT_SUPPORT_HOURS_END_DESCRIPTION": "Hour when support stops working. Less than the start means an overnight shift.",
+  "SETTINGS_HINT_SUPPORT_HOURS_END_FORMAT": "Integer from 1 to 24."
 }

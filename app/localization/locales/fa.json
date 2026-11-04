@@ -7088,5 +7088,11 @@
   "STARS_TOPUP_DESCRIPTION": "شارژ موجودی به مبلغ {amount}",
   "ADMIN_TARIFF_LIMITED_SQUAD_OFF": "خاموش",
   "ADMIN_TARIFF_LIMITED_SQUAD_SUMMARY": "{count} سرور، پایه {gb} گیگابایت",
-  "ADMIN_TARIFF_LIMITED_SQUAD_NO_SERVERS": "بدون سرور، پایه {gb} گیگابایت"
+  "ADMIN_TARIFF_LIMITED_SQUAD_NO_SERVERS": "بدون سرور، پایه {gb} گیگابایت",
+  "SETTINGS_HINT_SUPPORT_HOURS_ENABLED_DESCRIPTION": "ساعات کاری پشتیبانی. تیکت همیشه قابل ثبت است؛ خارج از ساعات، مشتری می‌بیند کی پاسخ می‌گیرد و یادآوری‌های SLA ارسال نمی‌شوند و زمان غیرکاری را حساب نمی‌کنند.",
+  "SETTINGS_HINT_SUPPORT_HOURS_ENABLED_FORMAT": "مقدار بولی.",
+  "SETTINGS_HINT_SUPPORT_HOURS_START_DESCRIPTION": "ساعت شروع کار پشتیبانی (بر اساس TIMEZONE ربات).",
+  "SETTINGS_HINT_SUPPORT_HOURS_START_FORMAT": "عدد صحیح از ۰ تا ۲۳.",
+  "SETTINGS_HINT_SUPPORT_HOURS_END_DESCRIPTION": "ساعت پایان کار پشتیبانی. کمتر از شروع یعنی شیفت شبانه.",
+  "SETTINGS_HINT_SUPPORT_HOURS_END_FORMAT": "عدد صحیح از ۱ تا ۲۴."
 }

@@ -7088,5 +7088,11 @@
   "STARS_TOPUP_DESCRIPTION": "Поповнення балансу на {amount}",
   "ADMIN_TARIFF_LIMITED_SQUAD_OFF": "вимкнено",
   "ADMIN_TARIFF_LIMITED_SQUAD_SUMMARY": "{count} серв., база {gb} ГБ",
-  "ADMIN_TARIFF_LIMITED_SQUAD_NO_SERVERS": "немає серверів, база {gb} ГБ"
+  "ADMIN_TARIFF_LIMITED_SQUAD_NO_SERVERS": "немає серверів, база {gb} ГБ",
+  "SETTINGS_HINT_SUPPORT_HOURS_ENABLED_DESCRIPTION": "Години роботи підтримки. Тікет можна залишити будь-коли; поза годинами клієнт бачить, коли відповімо, а SLA-нагадування не надсилаються й не враховують неробочий час.",
+  "SETTINGS_HINT_SUPPORT_HOURS_ENABLED_FORMAT": "Булеве значення.",
+  "SETTINGS_HINT_SUPPORT_HOURS_START_DESCRIPTION": "Година початку роботи підтримки (за TIMEZONE бота).",
+  "SETTINGS_HINT_SUPPORT_HOURS_START_FORMAT": "Ціле число від 0 до 23.",
+  "SETTINGS_HINT_SUPPORT_HOURS_END_DESCRIPTION": "Година завершення роботи підтримки. Менше за початок — зміна через північ.",
+  "SETTINGS_HINT_SUPPORT_HOURS_END_FORMAT": "Ціле число від 1 до 24."
 }
