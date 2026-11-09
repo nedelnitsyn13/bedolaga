@@ -410,6 +410,9 @@ class BotConfigurationService:
         'SUPPORT_TICKET_SLA_MINUTES': 'SUPPORT',
         'SUPPORT_TICKET_SLA_CHECK_INTERVAL_SECONDS': 'SUPPORT',
         'SUPPORT_TICKET_SLA_REMINDER_COOLDOWN_MINUTES': 'SUPPORT',
+        'SUPPORT_HOURS_ENABLED': 'SUPPORT',
+        'SUPPORT_HOURS_START': 'SUPPORT',
+        'SUPPORT_HOURS_END': 'SUPPORT',
         'ADMIN_NOTIFICATIONS_ENABLED': 'ADMIN_NOTIFICATIONS',
         'ADMIN_NOTIFICATIONS_RICH_ENABLED': 'ADMIN_NOTIFICATIONS',
         'ADMIN_NOTIFICATIONS_CHAT_ID': 'ADMIN_NOTIFICATIONS',
@@ -1214,6 +1217,27 @@ class BotConfigurationService:
                 'Используйте с осторожностью: средства будут списаны мгновенно, если найдена корзина '
                 'или суточная подписка для возобновления. Подписки на паузе пользователя не возобновляются.'
             ),
+        },
+        'SUPPORT_HOURS_ENABLED': {
+            'description': (
+                'Часы работы поддержки. Тикет можно оставить в любое время; вне часов клиент видит, '
+                'когда ответят, а SLA-напоминания не уходят и не считают нерабочее время.'
+            ),
+            'format': 'Булево значение.',
+            'example': 'true',
+            'dependencies': 'SUPPORT_HOURS_START, SUPPORT_HOURS_END, TIMEZONE',
+        },
+        'SUPPORT_HOURS_START': {
+            'description': 'Час начала работы поддержки (по TIMEZONE бота).',
+            'format': 'Целое число от 0 до 23.',
+            'example': '10',
+            'dependencies': 'SUPPORT_HOURS_ENABLED',
+        },
+        'SUPPORT_HOURS_END': {
+            'description': 'Час окончания работы поддержки. Меньше начала — смена через полночь.',
+            'format': 'Целое число от 1 до 24.',
+            'example': '22',
+            'dependencies': 'SUPPORT_HOURS_ENABLED',
         },
         'SUPPORT_TICKET_SLA_MINUTES': {
             'description': 'Лимит времени для ответа модераторов на тикет в минутах.',

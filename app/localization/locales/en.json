@@ -2349,6 +2349,12 @@
   "TOPUP_RETRY_TOO_HIGH": "❌ Maximum top-up amount: {maximum} RUB.\n\nTo continue, send the bot a new top-up amount between {minimum} RUB and {maximum} RUB.",
   "TOPUP_RETRY_EXAMPLE": "For example, send: {amount}",
   "TOPUP_RETRY_NO_RANGE": "❌ This method has no valid amount for manual input (minimum {minimum} RUB, maximum {maximum} RUB). Choose another payment method.",
+  "SUPPORT_HOURS_LINE": "🕙 Support hours: {start}–{end} ({tz})",
+  "SUPPORT_CLOSED_NOW": "We're offline right now — you can still open a ticket, we'll reply after {start}.",
+  "TICKET_ETA_OPEN": "⏱ We'll reply in about {eta}.",
+  "TICKET_ETA_CLOSED": "⏱ Support is offline right now. We'll reply after {start} ({tz}), usually within {eta}.",
+  "SUPPORT_ETA_MINUTES": "~{minutes} min",
+  "SUPPORT_ETA_HOURS": "~{hours} h",
   "TARIFF_PURCHASE_DEVICE_SELECTION_CHANGED": "This option is unavailable or the terms have changed. Select the plan again to see the current price.",
   "TARIFF_PURCHASE_DEVICE_TOPUP": "You need {amount} more. Top up your balance — your selected period and devices will be kept.",
   "TARIFF_PURCHASE_DEVICES_BALANCE_ONLY": "Pay from your balance when adding devices. Top up first if needed.",
@@ -7082,5 +7088,11 @@
   "STARS_TOPUP_DESCRIPTION": "Balance top-up of {amount}",
   "ADMIN_TARIFF_LIMITED_SQUAD_OFF": "off",
   "ADMIN_TARIFF_LIMITED_SQUAD_SUMMARY": "{count} servers, base {gb} GB",
-  "ADMIN_TARIFF_LIMITED_SQUAD_NO_SERVERS": "no servers, base {gb} GB"
+  "ADMIN_TARIFF_LIMITED_SQUAD_NO_SERVERS": "no servers, base {gb} GB",
+  "SETTINGS_HINT_SUPPORT_HOURS_ENABLED_DESCRIPTION": "Support working hours. Tickets can be opened at any time; outside hours the customer sees when to expect a reply, and SLA reminders neither fire nor count off-hours.",
+  "SETTINGS_HINT_SUPPORT_HOURS_ENABLED_FORMAT": "Boolean value.",
+  "SETTINGS_HINT_SUPPORT_HOURS_START_DESCRIPTION": "Hour when support starts working (bot TIMEZONE).",
+  "SETTINGS_HINT_SUPPORT_HOURS_START_FORMAT": "Integer from 0 to 23.",
+  "SETTINGS_HINT_SUPPORT_HOURS_END_DESCRIPTION": "Hour when support stops working. Less than the start means an overnight shift.",
+  "SETTINGS_HINT_SUPPORT_HOURS_END_FORMAT": "Integer from 1 to 24."
 }

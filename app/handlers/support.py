@@ -6,6 +6,7 @@ from app.config import settings
 from app.database.models import User
 from app.keyboards.inline import get_support_keyboard
 from app.localization.texts import get_texts
+from app.services.support_hours import hours_line
 from app.services.support_settings_service import SupportSettingsService
 from app.utils.photo_message import edit_or_answer_photo
 
@@ -14,8 +15,13 @@ logger = structlog.get_logger(__name__)
 
 
 async def show_support_info(callback: types.CallbackQuery, db_user: User):
-    get_texts(db_user.language)
+    texts = get_texts(db_user.language)
     support_info = SupportSettingsService.get_support_info_text(db_user.language)
+    # Часы работы — под текстом «о поддержке»: тикет оставить можно всегда, но человек
+    # должен знать, что ночью ответят только утром.
+    hours = hours_line(texts, db_user.language)
+    if hours:
+        support_info = f'{support_info}\n\n{hours}' if support_info else hours
     await edit_or_answer_photo(
         callback=callback,
         caption=support_info,

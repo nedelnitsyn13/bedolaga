@@ -2349,6 +2349,12 @@
   "TOPUP_RETRY_TOO_HIGH": "❌ Максимальная сумма пополнения — {maximum} ₽.\n\nЧтобы продолжить, отправьте боту сообщение с суммой пополнения не меньше {minimum} ₽ и не больше {maximum} ₽.",
   "TOPUP_RETRY_EXAMPLE": "Например, отправьте: {amount}",
   "TOPUP_RETRY_NO_RANGE": "❌ У этого способа нет допустимой суммы для ручного ввода (минимум {minimum} ₽, максимум {maximum} ₽). Выберите другой способ оплаты.",
+  "SUPPORT_HOURS_LINE": "🕙 Поддержка работает с {start} до {end} ({tz})",
+  "SUPPORT_CLOSED_NOW": "Сейчас мы не на связи — тикет можно оставить, ответим после {start}.",
+  "TICKET_ETA_OPEN": "⏱ Ответим примерно через {eta}.",
+  "TICKET_ETA_CLOSED": "⏱ Сейчас поддержка не работает. Ответим после {start} ({tz}), обычно в течение {eta}.",
+  "SUPPORT_ETA_MINUTES": "~{minutes} мин",
+  "SUPPORT_ETA_HOURS": "~{hours} ч",
   "TARIFF_PURCHASE_DEVICE_SELECTION_CHANGED": "Этот вариант недоступен или условия изменились. Выберите тариф заново — покажем актуальную стоимость.",
   "TARIFF_PURCHASE_DEVICE_TOPUP": "Для покупки не хватает {amount}. Пополните баланс — выбранные срок и устройства сохранятся.",
   "TARIFF_PURCHASE_DEVICES_BALANCE_ONLY": "С дополнительными устройствами оплатите с баланса. При необходимости сначала пополните его.",
@@ -7082,5 +7088,11 @@
   "STARS_TOPUP_DESCRIPTION": "Пополнение баланса на {amount}",
   "ADMIN_TARIFF_LIMITED_SQUAD_OFF": "выключен",
   "ADMIN_TARIFF_LIMITED_SQUAD_SUMMARY": "{count} серв., база {gb} ГБ",
-  "ADMIN_TARIFF_LIMITED_SQUAD_NO_SERVERS": "нет серверов, база {gb} ГБ"
+  "ADMIN_TARIFF_LIMITED_SQUAD_NO_SERVERS": "нет серверов, база {gb} ГБ",
+  "SETTINGS_HINT_SUPPORT_HOURS_ENABLED_DESCRIPTION": "Часы работы поддержки. Тикет можно оставить в любое время; вне часов клиент видит, когда ответят, а SLA-напоминания не уходят и не считают нерабочее время.",
+  "SETTINGS_HINT_SUPPORT_HOURS_ENABLED_FORMAT": "Булево значение.",
+  "SETTINGS_HINT_SUPPORT_HOURS_START_DESCRIPTION": "Час начала работы поддержки (по TIMEZONE бота).",
+  "SETTINGS_HINT_SUPPORT_HOURS_START_FORMAT": "Целое число от 0 до 23.",
+  "SETTINGS_HINT_SUPPORT_HOURS_END_DESCRIPTION": "Час окончания работы поддержки. Меньше начала — смена через полночь.",
+  "SETTINGS_HINT_SUPPORT_HOURS_END_FORMAT": "Целое число от 1 до 24."
 }
