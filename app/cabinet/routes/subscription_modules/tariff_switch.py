@@ -22,7 +22,11 @@ from app.services.panel_sync import reset_companion_devices
 from app.services.pricing_engine import TariffSwitchPricingUnavailableError, pricing_engine
 from app.services.remnawave_service import RemnaWaveService
 from app.services.subscription_service import SubscriptionService
-from app.services.tariff_switch_policy import remaining_days_for_switch, should_reset_used_traffic
+from app.services.tariff_switch_policy import (
+    lift_traffic_limit_after_switch,
+    remaining_days_for_switch,
+    should_reset_used_traffic,
+)
 
 from ...dependencies import get_cabinet_db, get_current_cabinet_user
 from ...schemas.subscription import TariffPurchaseRequest
@@ -80,7 +84,9 @@ async def preview_tariff_switch(
 
     # Use actual_status for correct status check (handles time-based expiration)
     actual_status = subscription.actual_status
-    if actual_status == 'expired':
+    if actual_status == 'expired' or (
+        actual_status == 'limited' and remaining_days_for_switch(subscription.end_date) == 0
+    ):
         # For expired subscriptions, user should purchase a new tariff, not switch
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -103,7 +109,7 @@ async def preview_tariff_switch(
                 'use_purchase_flow': True,
             },
         )
-    if actual_status not in ('active', 'trial'):
+    if actual_status not in ('active', 'trial', 'limited'):
         # For disabled/pending subscriptions, block switching with generic error
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -269,7 +275,9 @@ async def switch_tariff(
 
     # Use actual_status for correct status check (handles time-based expiration)
     actual_status = subscription.actual_status
-    if actual_status == 'expired':
+    if actual_status == 'expired' or (
+        actual_status == 'limited' and remaining_days_for_switch(subscription.end_date) == 0
+    ):
         # For expired subscriptions, user should purchase a new tariff, not switch
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -292,7 +300,7 @@ async def switch_tariff(
                 'use_purchase_flow': True,
             },
         )
-    if actual_status not in ('active', 'trial'):
+    if actual_status not in ('active', 'trial', 'limited'):
         # For disabled/pending subscriptions, block switching with generic error
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -531,6 +539,10 @@ async def switch_tariff(
         subscription.end_date = datetime.now(UTC) + timedelta(days=new_period_days)
         subscription.pending_panel_expire_at = subscription.end_date
         subscription.is_daily_paused = False
+
+    # Новый тариф дал трафик — снять «трафик кончился», иначе открытый
+    # грейс удержит Telegram-only оверлей в панели.
+    lift_traffic_limit_after_switch(subscription)
 
     subscription.updated_at = datetime.now(UTC)
     if accounting_panel is not None:
