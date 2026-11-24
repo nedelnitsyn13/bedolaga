@@ -530,6 +530,7 @@ class Settings(BaseSettings):
     USER_REMINDERS_QUIET_HOURS_END: int = 10  # До этого часа (TIMEZONE) бот не пишет
     USER_REMINDERS_DAILY_LIMIT_ENABLED: bool = True  # Не больше одного напоминания в сутки на человека
     USER_REMINDERS_MAX_PER_PASS: int = 500  # Потолок сообщений за один проход
+    USER_REMINDERS_ATTRIBUTION_DAYS: int = 3  # Пополнение за столько дней после напоминания — его заслуга
     REFERRAL_PARTNER_SECTION_VISIBLE: bool = True  # Показывать раздел партнёрки в кабинете
 
     # Настройки анализа на подозрительность

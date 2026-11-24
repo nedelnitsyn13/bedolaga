@@ -1314,6 +1314,13 @@ class BotConfigurationService:
             'warning': 'Большое значение растягивает проход: темп 25 сообщений в секунду.',
             'dependencies': 'USER_REMINDERS_CHECK_INTERVAL_MINUTES',
         },
+        'USER_REMINDERS_ATTRIBUTION_DAYS': {
+            'description': 'Пополнение за столько дней после напоминания засчитывается ему в выручку (последнему перед оплатой).',
+            'format': 'Целое число от 1 до 30.',
+            'example': '3',
+            'warning': 'Большое окно приписывает напоминаниям оплаты, которые случились бы и без них.',
+            'dependencies': 'USER_REMINDERS_CHECK_INTERVAL_MINUTES',
+        },
         'MAINTENANCE_MODE': {
             'description': 'Переводит бота в режим технического обслуживания и скрывает действия для пользователей.',
             'format': 'Булево значение.',

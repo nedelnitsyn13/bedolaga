@@ -90,16 +90,18 @@ def _candidates_query(
     never_connected_ids: frozenset[int] | None = None,
 ):
     repeat_cutoff = now - timedelta(days=reminder.repeat_every_days)
+    recently_sent = and_(UserReminderState.last_sent_at.is_not(None), UserReminderState.last_sent_at > repeat_cutoff)
+    # «Брошенная оплата» пишет один раз на каждый брошенный платёж — это проверяет само
+    # условие, — поэтому общий лимит отправок к ней не применяется: иначе после пары
+    # писем человек больше никогда не узнал бы о новом неоплаченном счёте.
+    per_payment = conditions.abandoned_payment_hours is not None
     blocked_by_own_state = exists().where(
         UserReminderState.reminder_id == reminder.id,
         UserReminderState.user_id == User.id,
-        or_(
-            UserReminderState.sends_count >= reminder.max_sends,
-            and_(UserReminderState.last_sent_at.is_not(None), UserReminderState.last_sent_at > repeat_cutoff),
-        ),
+        recently_sent if per_payment else or_(UserReminderState.sends_count >= reminder.max_sends, recently_sent),
     )
     clauses = [
-        *condition_clauses(conditions, now=now, never_connected_ids=never_connected_ids),
+        *condition_clauses(conditions, now=now, never_connected_ids=never_connected_ids, reminder_id=reminder.id),
         User.telegram_id.is_not(None),
         ~blocked_by_own_state,
     ]

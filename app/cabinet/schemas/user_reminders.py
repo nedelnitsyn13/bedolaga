@@ -56,6 +56,11 @@ class ReminderStats(BaseModel):
     dismissed_total: int = 0
     audience_bot: int | None = None
     audience_cabinet: int | None = None
+    # Выручка за 90 дней: пополнения в окне атрибуции после отправки в бот.
+    revenue_kopeks: int = 0
+    paid_users: int = 0
+    payments: int = 0
+    attribution_days: int = 3
 
 
 class ReminderResponse(BaseModel):
