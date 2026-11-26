@@ -2457,6 +2457,17 @@ def get_payment_methods_keyboard(amount_kopeks: int, language: str = DEFAULT_LAN
         )
         has_direct_payment_methods = True
 
+    # Способы, выключенные в «Способах оплаты» кабинета, бот тоже не показывает —
+    # раньше это соблюдалось только для CisPay, и в боте висели отключённые кнопки.
+    from app.services.payment_method_config_service import is_callback_method_shown
+
+    keyboard = [
+        row
+        for row in keyboard
+        if all(is_callback_method_shown(_payment_callback_method(button.callback_data or '')) for button in row)
+    ]
+    has_direct_payment_methods = bool(keyboard)
+
     if settings.is_support_topup_enabled():
         keyboard.append(
             [
