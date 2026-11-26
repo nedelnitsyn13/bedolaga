@@ -556,6 +556,15 @@ def get_available_payment_methods() -> list[dict[str, str]]:
             }
         )
 
+    # Как у кнопок: выключенное в «Способах оплаты» кабинета не перечисляем.
+    from app.services.payment_method_config_service import is_callback_method_shown
+
+    methods = [
+        method
+        for method in methods
+        if is_callback_method_shown(str(method.get('callback') or '').removeprefix('topup_'))
+    ]
+
     if settings.is_support_topup_enabled():
         methods.append(
             {

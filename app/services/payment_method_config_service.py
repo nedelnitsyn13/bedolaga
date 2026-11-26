@@ -76,6 +76,40 @@ def is_display_option_enabled(method_id: str, option: str | None = None) -> bool
     return bool(sub_options.get(option, True))
 
 
+def callback_method_target(callback_method: str) -> tuple[str, str | None]:
+    """Кнопка бота (``topup_<метод>``) → запись «Способов оплаты» и её подвариант.
+
+    ``yookassa`` — это карта, ``yookassa_sbp`` — СБП; ``platega_m11`` — Platega с
+    кодом метода 11; ``lava_card`` / ``donut_sbp_qr`` — метод и подвариант. Метод,
+    у которого есть своя запись (``freekassa_sbp``), берётся целиком.
+    """
+    if callback_method == 'stars':
+        return 'telegram_stars', None
+    if callback_method == 'yookassa':
+        return 'yookassa', 'card'
+    if callback_method == 'yookassa_sbp':
+        return 'yookassa', 'sbp'
+    if callback_method.startswith('platega_m'):
+        return 'platega', callback_method[len('platega_m') :] or None
+    if callback_method.startswith('cashera_m_'):
+        # Коды Cashera не совпадают с подвариантами записи — решает только сам метод.
+        return 'cashera', None
+    if callback_method in _display_availability:
+        return callback_method, None
+    for method_id in sorted(_display_availability, key=len, reverse=True):
+        if callback_method.startswith(f'{method_id}_'):
+            return method_id, callback_method[len(method_id) + 1 :]
+    return callback_method, None
+
+
+def is_callback_method_shown(callback_method: str) -> bool:
+    """Показывать ли боту кнопку способа оплаты: не выключен ли он в кабинете."""
+    if callback_method in ('', 'support'):
+        return True
+    method_id, option = callback_method_target(callback_method)
+    return is_display_option_enabled(method_id, option)
+
+
 # ============ Default method definitions ============
 
 
