@@ -53,6 +53,7 @@ _IS_PAID_MODELS = (
     m.MulenPayPayment,
     m.Pal24Payment,
     m.ParityPayPayment,
+    m.PayHotPayment,
     m.PlategaPayment,
     m.RioPayPayment,
     m.RollyPayPayment,

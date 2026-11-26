@@ -33,6 +33,10 @@ TABLES = [
     Base.metadata.tables['user_promo_groups'],
     # Смена тарифа (с 5.2.0) переносит докупленный трафик и сверяет учёт трафика.
     Base.metadata.tables['traffic_purchases'],
+    # С 5.3.0 смена тарифа проверяет действующий автоплатёж HOT Pay.
+    Base.metadata.tables['payhot_payments'],
+    Base.metadata.tables['payhot_agreements'],
+    Base.metadata.tables['payhot_charge_attempts'],
 ]
 
 
