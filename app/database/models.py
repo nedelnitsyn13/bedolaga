@@ -5790,6 +5790,21 @@ class UserReminderState(Base):
     dismissed_at = Column(AwareDateTime(), nullable=True)
 
 
+class UserReminderSend(Base):
+    """Каждая успешная отправка напоминания в бот — для выручки «что принесло сообщение»."""
+
+    __tablename__ = 'user_reminder_sends'
+    __table_args__ = (
+        Index('ix_user_reminder_sends_user_sent', 'user_id', 'sent_at'),
+        Index('ix_user_reminder_sends_reminder_sent', 'reminder_id', 'sent_at'),
+    )
+
+    id = Column(Integer, primary_key=True)
+    reminder_id = Column(Integer, ForeignKey('user_reminders.id', ondelete='CASCADE'), nullable=False)
+    user_id = Column(Integer, ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
+    sent_at = Column(AwareDateTime(), nullable=False)
+
+
 class SubscriptionRenewalOperation(Base):
     """Durable result of one explicitly identified cabinet renewal."""
 

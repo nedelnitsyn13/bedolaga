@@ -23,6 +23,7 @@ from sqlalchemy import ColumnElement, String, and_, case, exists, false, func, l
 from app.database.auth_methods import OAUTH_PROVIDER_COLUMNS, compute_auth_methods
 from app.database.constants import ALIVE_SUBSCRIPTION_STATUSES
 from app.database.models import Subscription, SubscriptionStatus, User, UserStatus
+from app.services.user_reminders.abandoned import abandoned_payment_sql
 
 
 # Та же граница, что у сегмента low_balance рассылок (app/handlers/admin/messages.py).
@@ -61,6 +62,8 @@ class ReminderConditions(BaseModel):
     inactive_days_min: int | None = Field(None, ge=0, le=3650)
     # Живая подписка, чей аккаунт в панели ни разу не подключался к VPN.
     never_connected: bool | None = None
+    # Создал платёж и не оплатил его за столько часов (см. abandoned.py).
+    abandoned_payment_hours: int | None = Field(None, ge=1, le=72)
 
 
 def parse_conditions(raw: dict | None) -> ReminderConditions:
@@ -142,8 +145,13 @@ def _never_connected_sql(panel_ids: frozenset[int] | None, now: datetime) -> Col
 
 
 def condition_clauses(
-    conditions: ReminderConditions, *, now: datetime, never_connected_ids: frozenset[int] | None = None
+    conditions: ReminderConditions,
+    *,
+    now: datetime,
+    never_connected_ids: frozenset[int] | None = None,
+    reminder_id: int | None = None,
 ) -> list[ColumnElement[bool]]:
+    """``reminder_id`` — для «брошенной оплаты»: не брать платежи, о которых уже писали."""
     clauses: list[ColumnElement[bool]] = [or_(User.status.is_(None), User.status.not_in(_EXCLUDED_STATUSES))]
     if conditions.auth:
         clauses.append(_auth_sql(conditions.auth))
@@ -162,6 +170,8 @@ def condition_clauses(
         )
     if conditions.never_connected:
         clauses.append(_never_connected_sql(never_connected_ids, now))
+    if conditions.abandoned_payment_hours is not None:
+        clauses.append(abandoned_payment_sql(conditions.abandoned_payment_hours, now=now, reminder_id=reminder_id))
     return clauses
 
 
@@ -229,7 +239,9 @@ def matches(
     *,
     now: datetime,
     never_connected_ids: frozenset[int] | None = None,
+    abandoned_payment: bool | None = None,
 ) -> bool:
+    """``abandoned_payment`` — заранее проверенный факт брошенной оплаты (нужна база)."""
     if user.status in _EXCLUDED_STATUSES:
         return False
     if conditions.auth and not _auth_matches(user, conditions.auth):
@@ -246,5 +258,7 @@ def matches(
         if seen and max(seen) > cutoff:
             return False
     if conditions.never_connected and not _never_connected_matches(user, subscriptions, never_connected_ids, now):
+        return False
+    if conditions.abandoned_payment_hours is not None and not abandoned_payment:
         return False
     return True
