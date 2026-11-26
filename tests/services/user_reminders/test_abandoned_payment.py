@@ -113,6 +113,19 @@ async def _who(db, now: datetime = NOW) -> set[int]:
     return set(rows.scalars())
 
 
+def test_every_provider_payment_table_is_covered():
+    # Новая платёжка из оригинала должна попасть и в «брошенную оплату» —
+    # список берём из сверки платежей, где у каждой есть своя проверка «ждёт оплаты».
+    import inspect
+    import re
+
+    from app.database import models
+    from app.services import payment_verification_service
+
+    names = set(re.findall(r'def _is_\w+_pending\(payment: (\w+)\)', inspect.getsource(payment_verification_service)))
+    assert {getattr(models, name) for name in names} <= set(PAYMENT_MODELS)
+
+
 def test_every_payment_table_has_the_columns_the_condition_needs():
     for model in PAYMENT_MODELS:
         columns = set(model.__table__.c.keys())
