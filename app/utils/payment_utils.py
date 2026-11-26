@@ -1,3 +1,5 @@
+import html
+
 from app.config import settings
 from app.localization.texts import get_texts
 
@@ -636,8 +638,17 @@ def get_payment_methods_text(language: str) -> str:
         + '\n\n'
     )
 
+    from app.services.payment_method_config_service import cabinet_label_for_callback
+
     for method in methods:
         method_id = method['id'].upper()
+        # Названо в «Способах оплаты» кабинета — так и пишем, без «через …» из .env.
+        label = cabinet_label_for_callback(str(method.get('callback') or '').removeprefix('topup_'))
+        if label:
+            first = label.split(' ', 1)[0]
+            icon = '' if not any(ch.isalnum() for ch in first) else f'{method["icon"]} '
+            text += f'{icon}<b>{html.escape(label)}</b>\n'
+            continue
         name = texts.t(
             f'PAYMENT_METHOD_{method_id}_NAME',
             f'{method["icon"]} <b>{method["name"]}</b>',

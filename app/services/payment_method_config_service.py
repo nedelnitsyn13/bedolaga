@@ -94,12 +94,42 @@ def callback_method_target(callback_method: str) -> tuple[str, str | None]:
     if callback_method.startswith('cashera_m_'):
         # Коды Cashera не совпадают с подвариантами записи — решает только сам метод.
         return 'cashera', None
-    if callback_method in _display_availability:
+    # Записи «Способов оплаты» из кэша: все три словаря заполняются из одних строк.
+    known = {*_display_availability, *_display_name_overrides, *_display_sort_orders}
+    if callback_method in known:
         return callback_method, None
-    for method_id in sorted(_display_availability, key=len, reverse=True):
+    for method_id in sorted(known, key=len, reverse=True):
         if callback_method.startswith(f'{method_id}_'):
             return method_id, callback_method[len(method_id) + 1 :]
     return callback_method, None
+
+
+def _sub_option_name(method_id: str, option: str) -> str | None:
+    """Подпись подварианта так, как её показывает кабинет («Карта», «🏦 СБП (QR)»)."""
+    method = _get_method_defaults(include_disabled_sub_options=True).get(method_id) or {}
+    for item in method.get('available_sub_options') or ():
+        if str(item.get('id')) == option:
+            return str(item.get('name') or '').strip() or None
+    return None
+
+
+def cabinet_label_for_callback(callback_method: str) -> str | None:
+    """Название способа оплаты для бота по «Способам оплаты» кабинета, без эмодзи.
+
+    Своё название у записи — оно целиком. Подвариант платёжки, переименованной в
+    кабинете, — «Карта (Название из кабинета)». Ничего не задано — None, и бот
+    подписывает кнопку как раньше, по .env.
+    """
+    if callback_method in ('', 'support'):
+        return None
+    method_id, option = callback_method_target(callback_method)
+    parent_name = _display_name_overrides.get(method_id)
+    if not parent_name:
+        return None
+    if callback_method in _display_name_overrides or option is None:
+        return parent_name
+    sub_name = _sub_option_name(method_id, option)
+    return f'{sub_name} ({parent_name})' if sub_name else parent_name
 
 
 def is_callback_method_shown(callback_method: str) -> bool:
