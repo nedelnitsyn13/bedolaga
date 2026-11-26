@@ -11,7 +11,15 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.bot_factory import create_bot
-from app.database.crud.user_reminder import count_audience, get_reminder, list_reminders, reminder_stats
+from app.database.crud.user_reminder import (
+    ReminderRevenue,
+    attribution_window,
+    count_audience,
+    get_reminder,
+    list_reminders,
+    reminder_revenue,
+    reminder_stats,
+)
 from app.database.models import User, UserReminder
 from app.services.user_reminders.conditions import ReminderConditions, needs_panel, parse_conditions
 from app.services.user_reminders.texts import render_bot_message, validate_texts
@@ -64,8 +72,21 @@ async def _audience(
     )
 
 
+async def _stats(db: AsyncSession) -> dict:
+    counters = await reminder_stats(db)
+    try:
+        async with db.begin_nested():
+            revenue = await reminder_revenue(db)
+    except SQLAlchemyError as error:
+        # Выручка — подсказка, а не повод уронить список напоминаний.
+        logger.warning('Не удалось посчитать выручку напоминаний', error=str(error))
+        revenue = {}
+    return {'counters': counters, 'revenue': revenue}
+
+
 async def _response(db: AsyncSession, reminder: UserReminder, stats: dict | None = None) -> ReminderResponse:
-    counters = (stats or {}).get(reminder.id, {})
+    counters = (stats or {}).get('counters', {}).get(reminder.id, {})
+    revenue = (stats or {}).get('revenue', {}).get(reminder.id) or ReminderRevenue()
     try:
         # Savepoint: упавший подсчёт (так падало условие по способу входа из-за
         # vk_id) в PostgreSQL иначе оставляет транзакцию «aborted», и 500 отдаёт
@@ -98,6 +119,10 @@ async def _response(db: AsyncSession, reminder: UserReminder, stats: dict | None
                 dismissed_total=counters.get('dismissed_total', 0),
                 audience_bot=audience.bot,
                 audience_cabinet=audience.cabinet,
+                revenue_kopeks=revenue.revenue_kopeks,
+                paid_users=revenue.users,
+                payments=revenue.payments,
+                attribution_days=attribution_window().days,
             ),
         }
     )
@@ -128,7 +153,7 @@ async def list_reminders_route(
     admin: User = Depends(require_permission('user_reminders:read')),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
-    stats = await reminder_stats(db)
+    stats = await _stats(db)
     return [await _response(db, reminder, stats) for reminder in await list_reminders(db)]
 
 
@@ -148,7 +173,7 @@ async def get_reminder_route(
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     reminder = await _require(db, reminder_id)
-    return await _response(db, reminder, await reminder_stats(db))
+    return await _response(db, reminder, await _stats(db))
 
 
 @router.post('', response_model=ReminderResponse, status_code=status.HTTP_201_CREATED)
@@ -177,7 +202,7 @@ async def update_reminder(
     _apply(reminder, payload)
     await db.commit()
     await db.refresh(reminder)
-    return await _response(db, reminder, await reminder_stats(db))
+    return await _response(db, reminder, await _stats(db))
 
 
 @router.post('/{reminder_id}/toggle', response_model=ReminderResponse)
@@ -192,7 +217,7 @@ async def toggle_reminder(
     await db.commit()
     await db.refresh(reminder)
     logger.info('Напоминание переключено', reminder_id=reminder.id, is_active=reminder.is_active, admin_id=admin.id)
-    return await _response(db, reminder, await reminder_stats(db))
+    return await _response(db, reminder, await _stats(db))
 
 
 @router.delete('/{reminder_id}', status_code=status.HTTP_204_NO_CONTENT)
