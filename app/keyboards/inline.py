@@ -1757,12 +1757,25 @@ def _payment_callback_method(data: str) -> str:
     return data[len('topup_') :] if data.startswith('topup_') else ''
 
 
+def _leading_emoji(text: str) -> str:
+    """Эмодзи в начале подписи кнопки («💳 Карта» → «💳»), без букв и цифр."""
+    head = text.lstrip().split(' ', 1)[0]
+    return head if head and not any(ch.isalnum() for ch in head) else ''
+
+
+def _with_leading_emoji(original: str, label: str) -> str:
+    if _leading_emoji(label):
+        return label
+    emoji = _leading_emoji(original)
+    return f'{emoji} {label}' if emoji else label
+
+
 def _apply_payment_name_overrides(
     keyboard: list[list[InlineKeyboardButton]],
     language: str = DEFAULT_LANGUAGE,
 ) -> None:
     """Apply configured names without erasing the distinction between YooKassa rails."""
-    from app.services.payment_method_config_service import get_display_name_override
+    from app.services.payment_method_config_service import cabinet_label_for_callback, get_display_name_override
 
     texts = get_texts(language)
     for row in keyboard:
@@ -1775,6 +1788,12 @@ def _apply_payment_name_overrides(
                 elif method == 'yookassa':
                     override = texts.t('PAYMENT_CARD_PROVIDER').format(provider=override)
                 row[idx] = button.model_copy(update={'text': override})
+                continue
+            # Подварианты («Карта (Lava)», Platega по кодам) — с названием платёжки из
+            # кабинета; эмодзи кнопки сохраняем, если в названии своего нет.
+            label = cabinet_label_for_callback(method) if method else None
+            if label:
+                row[idx] = button.model_copy(update={'text': _with_leading_emoji(button.text, label)})
 
 
 def _apply_payment_method_order(keyboard: list[list[InlineKeyboardButton]]) -> None:

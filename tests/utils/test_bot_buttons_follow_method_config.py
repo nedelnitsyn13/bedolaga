@@ -100,3 +100,45 @@ def test_callback_maps_to_record_and_sub_option(monkeypatch, callback, target) -
 
 def test_support_is_always_shown() -> None:
     assert is_callback_method_shown('support') is True
+
+
+def _buttons(monkeypatch, names: dict[str, str]) -> dict[str, str]:
+    monkeypatch.setattr(config_service, '_display_availability', {})
+    monkeypatch.setattr(config_service, '_display_name_overrides', names)
+    markup = get_payment_methods_keyboard(10000, 'ru')
+    return {
+        button.callback_data.split('|')[1]: button.text
+        for row in markup.inline_keyboard
+        for button in row
+        if button.callback_data and button.callback_data.startswith('topup_amount|')
+    }
+
+
+def test_sub_option_buttons_take_the_cabinet_name(monkeypatch) -> None:
+    buttons = _buttons(monkeypatch, {'lava': 'Банковская карта', 'cryptobot': 'Крипта'})
+    assert buttons['lava_card'].endswith('Карта (Банковская карта)')
+    assert buttons['lava_sbp'].endswith('СБП (Банковская карта)')
+    assert buttons['cryptobot'] == 'Крипта'
+
+
+def test_without_cabinet_names_buttons_stay_as_before(monkeypatch) -> None:
+    before = _buttons(monkeypatch, {})
+    assert 'Lava' in before['lava_card']
+
+
+def test_text_list_uses_cabinet_names(monkeypatch) -> None:
+    from app.utils.payment_utils import get_payment_methods_text
+
+    monkeypatch.setattr(config_service, '_display_availability', {})
+    monkeypatch.setattr(config_service, '_display_name_overrides', {'cryptobot': 'Крипта <USDT>'})
+    text = get_payment_methods_text('ru')
+    assert '<b>Крипта &lt;USDT&gt;</b>' in text
+
+
+def test_label_helper(monkeypatch) -> None:
+    monkeypatch.setattr(config_service, '_display_availability', dict.fromkeys(('lava', 'platega'), (True, None)))
+    monkeypatch.setattr(config_service, '_display_name_overrides', {'lava': 'Банк', 'platega': 'Резерв'})
+    assert config_service.cabinet_label_for_callback('lava') == 'Банк'
+    assert config_service.cabinet_label_for_callback('lava_sbp') == 'СБП (Банк)'
+    assert config_service.cabinet_label_for_callback('platega_m2') == '🏦 СБП (QR) (Резерв)'
+    assert config_service.cabinet_label_for_callback('cryptobot') is None
